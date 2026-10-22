@@ -1,0 +1,16 @@
+/* Bổ sung nhỏ cho nhóm Tổng quan / Kho / Công nợ / Báo cáo / Người bán / Danh mục / Cài đặt (ngoài class prototype). */
+a.li, a.cell-link { text-decoration: none; color: inherit; }
+a.link-btn, a.btn { text-decoration: none; }
+.tbl a.cell-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.li.dim .main b, .li.dim .main .s { opacity: .6; }
+.mhead.dim { opacity: .6; }
+.btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.field-err { color: var(--bad); font-size: 12.5px; font-weight: 400; }
+.input.invalid { border-color: var(--bad); }
+.ledger-bal { font-family: var(--mono); font-size: 11.5px; color: var(--faint); }
+.bars .b i.neg { background: var(--bad); }
+.confirm-text { text-align: center; margin: 0; }
+/* Dòng màu trong thẻ model là Link (prototype dùng button) — cùng kiểu */
+.mcard .vrow a { box-sizing: border-box; color: inherit; text-decoration: none; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 2px; border-bottom: 1px solid var(--line-2); font-size: 13.5px; }
+.mcard .vrow a:last-child { border-bottom: 0; }
+.mcard .vrow a:focus-visible { outline: 2px solid var(--accent); }

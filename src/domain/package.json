@@ -1,0 +1,7 @@
+{
+  "name": "kho-coi-domain",
+  "private": true,
+  "type": "module",
+  "description": "Pure domain core (money + stock). No dependencies.",
+  "scripts": { "test": "node --test \"**/*.test.ts\"" }
+}

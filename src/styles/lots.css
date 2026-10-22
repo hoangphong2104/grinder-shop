@@ -1,0 +1,9 @@
+/* Nhóm màn Lô nhập — bổ sung nhỏ ngoài app.css (ảnh thật trong ô ảnh tin, xem trước ảnh quét, dòng hàng của form). */
+.lot-shot { align-self: center; overflow: hidden; text-align: center; padding: 4px; }
+a.lot-shot { padding: 0; }
+.lot-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.scan-preview { max-height: 220px; max-width: 100%; border-radius: 8px; border: 1px solid var(--line); object-fit: contain; align-self: center; }
+.lot-line { display: flex; flex-direction: column; gap: 10px; }
+.lot-line + .lot-line { border-top: 1px dashed var(--line); padding-top: 12px; }
+.lot-line .lrow .link-btn { padding: 0 4px; font-size: 12px; }
+.f .err-text { font-weight: 400; }
