@@ -3,7 +3,7 @@ import { useStore } from '../data/store.tsx'
 import Login from '../screens/Login.tsx'
 import Home from '../screens/Home.tsx'
 import Kho from '../screens/Kho.tsx'
-import VariantDetail from '../screens/VariantDetail.tsx'
+import UnitDetail from '../screens/UnitDetail.tsx'
 import Lots from '../screens/Lots.tsx'
 import LotDetail from '../screens/LotDetail.tsx'
 import LotNew from '../screens/LotNew.tsx'
@@ -18,6 +18,7 @@ import Customers from '../screens/Customers.tsx'
 import Catalog from '../screens/Catalog.tsx'
 import Settings from '../screens/Settings.tsx'
 import MoreMenu from '../screens/MoreMenu.tsx'
+import Notes from '../screens/Notes.tsx'
 
 export default function App() {
   const { session, data, loading, error, reload } = useStore()
@@ -30,7 +31,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/kho" element={<Kho />} />
-          <Route path="/kho/:id" element={<VariantDetail />} />
+          <Route path="/kho/:id" element={<UnitDetail />} />
           <Route path="/lo" element={<Lots />} />
           <Route path="/lo/new" element={<LotNew />} />
           <Route path="/lo/:id" element={<LotDetail />} />
@@ -46,6 +47,7 @@ export default function App() {
           <Route path="/khach" element={<Customers />} />
           <Route path="/danhmuc" element={<Catalog />} />
           <Route path="/caidat" element={<Settings />} />
+          <Route path="/ghichu" element={<Notes />} />
           <Route path="/them" element={<MoreMenu />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

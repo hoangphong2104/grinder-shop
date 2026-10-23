@@ -1,5 +1,5 @@
 // Nhãn + chip màu theo trạng thái (prototype v2.2: xanh lá = xong / còn hàng, cam = đang về / chờ, xanh dương = cần làm, đỏ = nợ / hết / lỗi).
-import type { LotStatusDb, OrderStatusDb, VariantStockRow } from '../data/types.ts'
+import type { LotStatusDb, ModelStockRow, OrderStatusDb, UnitStatusDb } from '../data/types.ts'
 
 export const LOT_FLOW: LotStatusDb[] = ['ordered', 'cn_shipping', 'at_forwarder', 'vn_shipping', 'received']
 export const LOT_LABEL: Record<LotStatusDb, string> = {
@@ -11,9 +11,16 @@ const ORDER_TONE: Record<OrderStatusDb, string> = { preorder: 'way', confirmed: 
 
 export const LotChip = ({ s }: { s: LotStatusDb }) => <span className={`pill ${LOT_TONE[s]}`}>{LOT_LABEL[s]}</span>
 export const OrderChip = ({ s }: { s: OrderStatusDb }) => <span className={`pill ${ORDER_TONE[s]}`}>{ORDER_LABEL[s]}</span>
-export function StockChip({ v, waitingLot }: { v: VariantStockRow; waitingLot?: string }) {
-  if (v.sellable <= 0) return <span className="pill bad">Hết hàng</span>
-  if (v.free_on_hand <= 0 && v.incoming > 0) return <span className="pill way">Chờ {waitingLot ?? 'lô'}</span>
-  if (v.is_low_stock) return <span className="pill hold">Sắp hết</span>
-  return <span className="pill ok">Còn {v.sellable} bán được</span>
+// CR-001 A5: trạng thái từng chiếc
+export const UNIT_LABEL: Record<UnitStatusDb, string> = { incoming: 'Đang về', in_stock: 'Trong kho', reserved: 'Đã giữ', sold: 'Đã bán', cancelled: 'Huỷ' }
+const UNIT_TONE: Record<UnitStatusDb, string> = { incoming: 'way', in_stock: 'ok', reserved: 'hold', sold: 'neu', cancelled: 'neu' }
+/** holder = mã đơn đang giữ (vd. D-005) → "Đã giữ cho D-005". */
+export const UnitChip = ({ s, holder }: { s: UnitStatusDb; holder?: string }) =>
+  <span className={`pill ${UNIT_TONE[s]}`}>{s === 'reserved' && holder ? `Đã giữ cho ${holder}` : s === 'sold' && holder ? `Đã bán · ${holder}` : UNIT_LABEL[s]}</span>
+/** Chip tồn theo model (A9). */
+export function ModelStockChip({ m }: { m: ModelStockRow }) {
+  if (m.sellable_count <= 0) return <span className="pill bad">Hết hàng</span>
+  if (m.in_stock_count <= 0 && m.incoming_count > 0) return <span className="pill way">Chờ hàng về</span>
+  if (m.is_low_stock) return <span className="pill hold">Sắp hết</span>
+  return <span className="pill ok">Còn {m.sellable_count} bán được</span>
 }

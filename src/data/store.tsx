@@ -11,28 +11,29 @@ const EMPTY_BAL = { total_payable_vnd: 0, total_transferred_vnd: 0, total_adjust
 async function fetchAll(): Promise<DbData> {
   const q = <T,>(p: PromiseLike<{ data: T | null; error: unknown }>) =>
     Promise.resolve(p).then(({ data, error }) => { if (error) throw error; return data as T })
-  const [models, variants, sellers, lots, lotLines, txns, customers, orders, orderLines, payments, settings, stock, lotSummary, orderSummary, balance, suggestions] =
+  const [models, units, sellers, lots, txns, customers, orders, orderLines, payments, settings, unitView, modelStock, lotSummary, orderSummary, balance, suggestions, notes] =
     await Promise.all([
       q(supabase.from('models').select('*').order('sort_order').order('created_at')),
-      q(supabase.from('variants').select('*').order('created_at')),
+      q(supabase.from('units').select('*').order('code')),
       q(supabase.from('sellers').select('*').order('created_at')),
       q(supabase.from('lots').select('*').order('created_at')),
-      q(supabase.from('lot_lines').select('*').order('line_no')),
       q(supabase.from('intermediary_txns').select('*').order('txn_date').order('created_at')),
       q(supabase.from('customers').select('*').order('created_at')),
       q(supabase.from('orders').select('*').order('created_at')),
       q(supabase.from('order_lines').select('*').order('line_no')),
       q(supabase.from('payments').select('*').order('paid_at').order('created_at')),
       q(supabase.from('settings').select('*').maybeSingle()),
-      q(supabase.from('v_variant_stock').select('*')),
+      q(supabase.from('v_units').select('*').order('code')),
+      q(supabase.from('v_model_stock').select('*').order('sort_order')),
       q(supabase.from('v_lot_summary').select('*')),
       q(supabase.from('v_order_summary').select('*')),
       q(supabase.from('v_intermediary_balance').select('*').maybeSingle()),
       q(supabase.from('v_suggestions').select('*').maybeSingle()),
+      q(supabase.from('notes').select('*')),
     ])
   const code = (rows: { id: string }[], p: string) => Object.fromEntries(rows.map((r, i) => [r.id, `${p}-${String(i + 1).padStart(3, '0')}`]))
   return {
-    models, variants, sellers, lots, lotLines, txns, customers, orders, orderLines, payments, settings, stock, lotSummary, orderSummary,
+    models, units, sellers, lots, txns, customers, orders, orderLines, payments, settings, unitView, modelStock, lotSummary, orderSummary, notes,
     balance: balance ?? EMPTY_BAL,
     suggestions: suggestions ?? { last_exchange_rate: null, last_ship_fee_per_unit_vnd: null },
     lotCode: code(lots, 'L'), orderCode: code(orders, 'D'),

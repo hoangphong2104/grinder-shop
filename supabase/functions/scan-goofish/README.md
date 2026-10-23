@@ -1,15 +1,15 @@
 # Edge Function `scan-goofish`
 
-Đọc 1 tin rao Goofish (闲鱼) từ **ảnh chụp màn hình** hoặc **chữ copy** bằng Google Gemini (gói miễn phí), rồi trả về dữ liệu **điền sẵn** cho form lô (F2). Hợp đồng: `2.0-design/approved/system-design-lite-v1.md` §5.2.
+Đọc 1 tin rao Goofish (闲鱼) từ **ảnh chụp màn hình** hoặc **chữ copy** bằng Google Gemini (gói miễn phí), rồi trả về dữ liệu **điền sẵn** cho form lô (F2). Hợp đồng: `2.0-design/approved/system-design-lite-v1.md` §5.2, **cập nhật cho DB schema v2 / CR-001** (`supabase/v2/001_schema_v2.sql`): không còn bảng `variants` ⇒ AI chỉ đoán **model**, không đoán màu / biến thể; thêm `qty_guess`.
 
 - **BR-13:** AI chỉ điền sẵn. Function không ghi bảng nghiệp vụ nào, chỉ ghi `ai_scan_log` (`ai_scan_reserve` / `ai_scan_finish`). Lô chỉ được tạo khi bấm Lưu (`save_lot`).
 - **NFR-10:** dùng JWT của người dùng (RLS áp dụng), không dùng `service_role`. `GEMINI_API_KEY` chỉ nằm trong Secrets của Supabase.
-- **NFR-11:** chỉ gửi cho Gemini ảnh / chữ của tin rao và danh mục model / biến thể (tên + tên gọi khác). Không đọc bảng khách / đơn / công nợ.
+- **NFR-11:** chỉ gửi cho Gemini ảnh / chữ của tin rao và danh mục **model đang bán** (`models.is_active = true`: tên, hãng, tiền tố mã `code_prefix`, tên gọi khác `aliases`). Không đọc bảng khách / đơn / chiếc (`units`) / công nợ.
 
 | File | Nội dung |
 |---|---|
 | `index.ts` | Toàn bộ function, gồm 1 file để dán thẳng vào trình soạn thảo trên Dashboard |
-| `test.ts` | 19 test (Deno), giả lập `fetch` cho Supabase và Gemini, không gọi mạng thật |
+| `test.ts` | 22 test (Deno), giả lập `fetch` cho Supabase và Gemini, không gọi mạng thật |
 
 ---
 
@@ -34,11 +34,11 @@ hoặc `"input": { "kind": "text", "text": "<chữ copy, ≤ 20.000 ký tự>" }
     "listing_title":   { "value": "1Zpresso K-Ultra 手摇磨豆机 全新", "confidence": 0.95 },
     "price_cny":       { "value": 1010, "confidence": 0.93 },
     "seller_nickname": { "value": "咖啡小王", "confidence": 0.9 },
-    "seller_region":   { "value": "浙江", "confidence": 0.85 },
-    "model_id":        { "value": "<uuid>", "confidence": 0.92, "matched_text": "K-Ultra" },
-    "variant_id":      { "value": null, "confidence": 0.4 }
+    "seller_region":   { "value": null, "confidence": 0.6 },
+    "model_id":        { "value": "<uuid models.id>", "confidence": 0.92, "matched_text": "K-Ultra" }
   },
-  "flags": ["variant_id"],
+  "flags": ["seller_region"],
+  "qty_guess": null,
   "condition_text": "全新未拆",
   "notes": "Có giá gạch ngang ¥1.299 — đã lấy giá hiện tại ¥1.010.",
   "seller_match": { "seller_id": "<uuid>", "nickname": "咖啡小王", "is_avoided": false },
@@ -46,6 +46,12 @@ hoặc `"input": { "kind": "text", "text": "<chữ copy, ≤ 20.000 ký tự>" }
   "usage": { "scans_this_month": 12, "cap": 100 }
 }
 ```
+
+**Thay đổi so với v1 (schema v2 / CR-001):**
+
+- **Bỏ `fields.variant_id`** (cả trong response, responseSchema gửi Gemini, validate và `flags`). Client v0.2 không được đọc trường này nữa. Nếu AI vẫn trả `variant_id` thì bị bỏ qua.
+- **Thêm `qty_guess`** (cấp gốc, cạnh `flags`): `{ "value": <số nguyên 2..50>, "confidence": <0..1> }` khi tin **ghi rõ nhiều chiếc** (vd. "两台", "2台", "一对", "x2"), ngược lại `null`. Chỉ trả khi `confidence` ≥ `settings.ai_confidence_threshold`; 1 chiếc / không ghi / số sai ⇒ `null`. Không bao giờ nằm trong `flags`. Gợi ý cho ô **số lượng N** của form lô (A2); người dùng vẫn tự xác nhận. Khi > 1 chiếc, `notes` nói giá là tổng hay giá/chiếc — `price_cny` vẫn là số hiển thị trên tin.
+- `fields.model_id` giữ nguyên dạng `{ value: uuid | null, confidence, matched_text }`. Các trường khác, `seller_match`, `duplicate_lot_ids` (lô cùng `lots.goofish_item_id`, trừ lô đã huỷ), `usage`, mã lỗi: **không đổi**.
 
 **Lỗi:** `{ "ok": false, "error": { "code": "...", "message": "<tiếng Việt>" } }`
 
@@ -65,10 +71,10 @@ hoặc `"input": { "kind": "text", "text": "<chữ copy, ≤ 20.000 ký tự>" }
 
 **Những chỗ §5.2 chưa rõ, đã chọn như sau:**
 
-1. **Có `flags` khi nào:** độ tin cậy < `settings.ai_confidence_threshold` **hoặc** giá trị bị validate loại (giá sai, mã ngoài danh mục, biến thể không thuộc model). Trường bị flag luôn có `value: null`. Trường bị loại có `confidence: 0`. Nếu AI trả `null` với độ tin cậy cao (vd. tin không ghi nơi gửi), trường đó **không** bị flag.
+1. **Có `flags` khi nào:** (chỉ các khoá trong `fields`) độ tin cậy < `settings.ai_confidence_threshold` **hoặc** giá trị bị validate loại (giá sai, mã model ngoài danh mục). Trường bị flag luôn có `value: null`. Trường bị loại có `confidence: 0`. Nếu AI trả `null` với độ tin cậy cao (vd. tin không ghi nơi gửi), trường đó **không** bị flag.
 2. **`SCAN_CAP_REACHED`:** `used` / `cap` nằm phẳng trong `error` (`error.used`, `error.cap`).
-3. **Gửi danh mục cho Gemini bằng mã ngắn (`M1`, `V1`…)** thay cho uuid trong prompt và enum, kèm `"NONE"`. Code đổi lại thành uuid. Client vẫn nhận `model_id` / `variant_id` là uuid như §5.2. Cách này giúp AI không phải chép lại uuid dài.
-4. **Biến thể phải thuộc model đã chọn**, xét sau khi áp ngưỡng cho model. Nếu model bị null thì biến thể cũng bị null và flag.
+3. **Gửi danh mục cho Gemini bằng mã ngắn (`M1`, `M2`…)** thay cho uuid trong prompt và enum, kèm `"NONE"`. Mỗi dòng: `M1 = model "K Ultra" by 1Zpresso [shop code: KU] (also called: KU, K-Ultra)`. Code đổi lại thành uuid. Client vẫn nhận `model_id` là uuid. Cách này giúp AI không phải chép lại uuid dài.
+4. **Tin bán nhiều model khác nhau cùng lúc:** AI trả `model_id = NONE` (độ tin cậy thấp) và ghi vào `notes`; người dùng tự tách nhóm dòng trong form lô.
 5. **Validate tự viết** (hàm `cleanAiOutput`), không dùng zod, để giữ ít phụ thuộc. Phạm vi kiểm tra đúng như §5.2 bước 8.
 6. **Text:** chuẩn hoá khoảng trắng trước, sau đó nếu vẫn > 20.000 ký tự thì trả **400** (không tự cắt).
 7. **`output_tokens` = `candidatesTokenCount + thoughtsTokenCount`**, vì token "thinking" cũng tính quota. `cost_usd` luôn = 0.
@@ -99,7 +105,7 @@ hoặc `"input": { "kind": "text", "text": "<chữ copy, ≤ 20.000 ký tự>" }
 3. Xoá code mẫu, dán **toàn bộ** nội dung `index.ts`, rồi bấm **Deploy function**. Không cần dán `test.ts`.
 4. **Edge Functions → Secrets** (hoặc *Project Settings → Edge Functions*) → thêm `GEMINI_API_KEY`, `ALLOWED_USER_IDS`, `SCAN_MODEL` (+ `SCAN_MODEL_FALLBACK` nếu muốn) → Save. Secret có hiệu lực ngay, không cần deploy lại.
 5. **Xác thực JWT:** mở function → tab **Details / Settings** → giữ **bật** "Enforce JWT verification" (mặc định). Function vẫn tự kiểm lại bằng `auth.getUser()` và `ALLOWED_USER_IDS`. *Ngoại lệ:* nếu project dùng **JWT signing keys mới** và gateway từ chối cả token hợp lệ (401 không phải JSON của function), thì có thể tắt tuỳ chọn này. Function vẫn an toàn vì tự xác thực.
-6. Migration `001_init.sql` phải đã chạy (có `ai_scan_reserve`, `ai_scan_finish`, bucket `private-images`). Tài khoản phải đã đăng nhập app ít nhất 1 lần (`bootstrap_user` tạo `settings` + 3 model).
+6. Schema v2 (`supabase/v2/setup-v2.sql` / `001_schema_v2.sql`) phải đã chạy (có `models.code_prefix`, `ai_scan_reserve`, `ai_scan_finish`, bucket `private-images`). **Deploy lại function này sau khi cài schema v2** — bản cũ còn đọc bảng `variants` nên sẽ trả `INTERNAL`. Tài khoản phải đã đăng nhập app ít nhất 1 lần (`bootstrap_user` tạo `settings` + 3 model).
 
 *Cách CLI (nếu sau này dùng):* `supabase functions deploy scan-goofish` và `supabase secrets set GEMINI_API_KEY=… ALLOWED_USER_IDS=… SCAN_MODEL=…`. Nếu cần tắt JWT check thì thêm `[functions.scan-goofish] verify_jwt = false` vào `supabase/config.toml`.
 
@@ -164,6 +170,7 @@ Trước khi dùng thật (ADR-06): thử khoảng 10 ảnh Goofish thật, ghi 
 ```bash
 deno test --allow-env --no-config supabase/functions/scan-goofish/test.ts
 deno check --no-config supabase/functions/scan-goofish/index.ts
+deno lint --no-config supabase/functions/scan-goofish/
 ```
 
-Test giả lập `fetch` cho Auth / PostgREST / Storage / Gemini. Các trường hợp được kiểm: validate output AI, ngưỡng tin cậy, biến thể sai model, request hợp lệ / sai path / user lạ / thiếu JWT, 429 thì thử fallback rồi trả `AI_QUOTA_EXHAUSTED` và finish với 0 token, `finishReason ≠ STOP`, Gemini 5xx, `SCAN_CAP_REACHED`, CORS. Test **không** chạy với Supabase / Gemini thật.
+Test giả lập `fetch` cho Auth / PostgREST / Storage / Gemini. Các trường hợp được kiểm: validate output AI, ngưỡng tin cậy, không còn `variant_id` (cả khi AI vẫn trả), `qty_guess` (hợp lệ / 1 chiếc / số lẻ / dưới ngưỡng / thiếu), danh mục gửi AI (tên, hãng, tiền tố, alias; chỉ model đang bán), không đọc `variants` / `units`, truy vấn lô trùng, request hợp lệ / sai path / user lạ / thiếu JWT, 429 thì thử fallback rồi trả `AI_QUOTA_EXHAUSTED` và finish với 0 token, `finishReason ≠ STOP`, Gemini 5xx, `SCAN_CAP_REACHED`, CORS. Test **không** chạy với Supabase / Gemini thật.

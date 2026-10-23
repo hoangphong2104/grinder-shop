@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase.ts'
 import { Shell } from '../ui/Shell.tsx'
 import { Sheet, useToast } from '../ui/feedback.tsx'
 import { dmy, parseNum, todayVn, tr, vnd } from '../ui/format.ts'
-import { CONFLICT_MSG, lotLinesText, useDesk, writeError } from './overview/common.tsx'
+import { CONFLICT_MSG, lotModelsText, useDesk, writeError } from './overview/common.tsx'
 
 const KIND_LABEL = { payable: 'Phải trả', transfer: 'Đã chuyển', adjustment: 'Điều chỉnh' } as const
 /** Ảnh hưởng tới dư nợ: phải trả +, đã chuyển −, điều chỉnh theo dấu (BR-12). */
@@ -47,7 +47,7 @@ export default function Debt() {
           </dl>
           <button className="btn btn-primary btn-block" onClick={() => setForm('transfer')}>Ghi đã chuyển tiền</button>
           <button className="btn btn-ghost btn-block" onClick={() => setForm('adjustment')}>Ghi điều chỉnh</button>
-          <p className="hint">Mỗi lô tự ghi “phải trả” = giá web × tỷ giá + phí ship (BR-12). Phí ship nhập sau sẽ tự cộng thêm. Điều chỉnh dùng khi trung gian tính khác (phí, chênh tỷ giá…).</p>
+          <p className="hint">Mỗi lô tự ghi “phải trả” = Σ giá web các chiếc × tỷ giá + phí ship (BR-12, không theo giá nhập sửa tay). Phí ship nhập sau sẽ tự cộng thêm. Điều chỉnh dùng khi trung gian tính khác (phí, chênh tỷ giá…).</p>
         </div>
         <div>
           <p className="section-title">Sổ giao dịch <span className="muted">{rows.length}</span></p>
@@ -62,7 +62,7 @@ export default function Debt() {
                 return (
                   <Link key={t.id} className="shot item" to={`/lo/${t.lot_id}`}>
                     <span className="t">{dmy(t.txn_date)} · Phải trả</span>
-                    <span className="b">{d.lotCode[t.lot_id]} · {lotLinesText(d, t.lot_id)}</span>
+                    <span className="b">{d.lotCode[t.lot_id]} · {lotModelsText(d, t.lot_id)}</span>
                     {amount}
                     <span className="f">{l?.ship_fee_vnd == null && l?.status !== 'cancelled' ? <span className="req">{sub}</span> : sub}</span>
                   </Link>

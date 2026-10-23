@@ -5,11 +5,11 @@ import { useData, useStore } from '../data/store.tsx'
 import { Brandmark, Icon } from './icons.tsx'
 import { Sheet } from './feedback.tsx'
 
-export type Section = 'home' | 'kho' | 'lo' | 'don' | 'congno' | 'baocao' | 'nguoiban' | 'khach' | 'danhmuc' | 'caidat' | ''
+export type Section = 'home' | 'kho' | 'lo' | 'don' | 'ghichu' | 'congno' | 'baocao' | 'nguoiban' | 'khach' | 'danhmuc' | 'caidat' | ''
 export const NAV: [string, string, Section, string][] = [
-  ['/', 'Tổng quan', 'home', 'home'], ['/kho', 'Kho', 'kho', 'box'], ['/lo', 'Lô nhập', 'lo', 'truck'], ['/don', 'Đơn bán', 'don', 'receipt'],
+  ['/', 'Tổng quan', 'home', 'home'], ['/kho', 'Kho', 'kho', 'box'], ['/lo', 'Lô nhập', 'lo', 'truck'], ['/don', 'Đơn bán', 'don', 'receipt'], ['/ghichu', 'Ghi chú', 'ghichu', 'note'],
   ['/congno', 'Công nợ trung gian', 'congno', 'wallet'], ['/baocao', 'Báo cáo', 'baocao', 'chart'],
-  ['/nguoiban', 'Người bán Goofish', 'nguoiban', 'store'], ['/khach', 'Khách', 'khach', 'user'], ['/danhmuc', 'Model & màu', 'danhmuc', 'tag'], ['/caidat', 'Cài đặt', 'caidat', 'gear'],
+  ['/nguoiban', 'Người bán Goofish', 'nguoiban', 'store'], ['/khach', 'Khách', 'khach', 'user'], ['/danhmuc', 'Model', 'danhmuc', 'tag'], ['/caidat', 'Cài đặt', 'caidat', 'gear'],
 ]
 
 export function Shell({ section, title, back, actions, savebar, children }: {
@@ -36,8 +36,8 @@ export function Shell({ section, title, back, actions, savebar, children }: {
         </div>
         {NAV.map((n, i) => (
           <span key={n[0]} style={{ display: 'contents' }}>
-            {i === 4 && <div className="grp-t">Tiền</div>}
-            {i === 6 && <div className="grp-t">Danh bạ</div>}
+            {i === 5 && <div className="grp-t">Tiền</div>}
+            {i === 7 && <div className="grp-t">Danh bạ</div>}
             <Link to={n[0]} aria-current={n[2] === section ? 'page' : undefined}><Icon name={n[3]} />{n[1]}{cnt[n[2]] ? <span className="n">{cnt[n[2]]}</span> : null}</Link>
           </span>
         ))}
@@ -61,7 +61,7 @@ export function Shell({ section, title, back, actions, savebar, children }: {
         <nav className="tabs" aria-label="Tab">
           {NAV.slice(0, 2).map(tab)}
           <button className="tab-fab" onClick={() => setFab(true)} aria-label="Thêm mới"><span className="fab"><Icon name="plus" strokeWidth={2} /></span></button>
-          {NAV.slice(2, 4).map(tab)}
+          {NAV.slice(2, 5).map(tab)}
         </nav>
       )}
       {fab && (

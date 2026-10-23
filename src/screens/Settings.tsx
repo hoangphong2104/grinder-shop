@@ -135,7 +135,7 @@ export default function Settings() {
         <p className="section-title">Dữ liệu</p>
         <div className="list">
           <button className="li" id="export-xlsx" onClick={doExport} disabled={exporting}>
-            <div className="main"><b>Xuất Excel</b><div className="s">Lô nhập, dòng lô, đơn bán, thu tiền, tồn kho, công nợ trung gian (.xlsx)</div></div>
+            <div className="main"><b>Xuất Excel</b><div className="s">Lô nhập, từng chiếc cối, đơn bán, dòng đơn, thu tiền, tồn theo model, công nợ trung gian, ghi chú (.xlsx)</div></div>
             <Icon name="chev" size={16} />
           </button>
         </div>

@@ -1,7 +1,7 @@
 {
-  "name": "kho-coi-domain",
+  "name": "grinder-shop-domain",
   "private": true,
   "type": "module",
-  "description": "Pure domain core (money + stock). No dependencies.",
+  "description": "Pure domain core (CR-001: per-unit cost, status, orders, debt). No dependencies.",
   "scripts": { "test": "node --test \"**/*.test.ts\"" }
 }

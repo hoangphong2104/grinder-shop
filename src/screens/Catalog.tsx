@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { useData, useStore } from '../data/store.tsx'
-import type { ModelRow, VariantRow } from '../data/types.ts'
+import type { ModelRow } from '../data/types.ts'
 import { supabase } from '../lib/supabase.ts'
 import { Shell } from '../ui/Shell.tsx'
 import { Sheet, useToast } from '../ui/feedback.tsx'
@@ -8,93 +8,48 @@ import { GrinderArt, shapeOf } from '../ui/icons.tsx'
 import { parseNum, vnd } from '../ui/format.ts'
 import { updateVersioned, useDesk, writeError } from './overview/common.tsx'
 
-type Edit =
-  | { t: 'model'; m?: ModelRow }
-  | { t: 'variant'; modelId: string; v?: VariantRow }
+/** Mã chiếc kế tiếp dự kiến (DB bỏ qua mã đã có / đã bỏ nên có thể nhảy số). */
+const nextCode = (m: Pick<ModelRow, 'code_prefix' | 'next_seq'>) => `${m.code_prefix}-${m.next_seq < 1000 ? String(m.next_seq).padStart(3, '0') : m.next_seq}`
+const normPrefix = (s: string) => s.toUpperCase().replace(/\s+/g, '')
+const PREFIX_RE = /^[A-Z0-9]{1,10}$/
 
-// SC_14 Model & biến thể: tên AI nhận, giá bán, ngưỡng sắp hết; thêm / sửa / ẩn; xoá chỉ khi chưa dùng (BR-14).
+// SC_14 Model (CR-001 A1: không còn biến thể màu): tên, hãng, tiền tố mã, giá bán mặc định, ngưỡng sắp hết, tên gọi khác cho AI;
+// thêm / sửa / ẩn; xoá chỉ khi chưa có chiếc cối nào (BR-14).
 export default function Catalog() {
   const d = useData()
   const desk = useDesk()
-  const [edit, setEdit] = useState<Edit | null>(null)
+  const [edit, setEdit] = useState<{ m?: ModelRow } | null>(null)
   const close = useCallback(() => setEdit(null), [])
-  const sellable = new Map(d.stock.map((s) => [s.variant_id, s.sellable]))
+  const stock = new Map(d.modelStock.map((s) => [s.model_id, s]))
+  const unitCount = (id: string) => d.units.filter((u) => u.model_id === id).length
 
   return (
-    <Shell section="danhmuc" title="Model & biến thể" back={desk ? undefined : '/them'}>
+    <Shell section="danhmuc" title="Model" back={desk ? undefined : '/them'}
+      actions={<button className="btn btn-ghost btn-sm only-desk" onClick={() => setEdit({})}>+ Thêm model</button>}>
       {d.models.length === 0 && <div className="empty">Chưa có model nào — bấm “+ Thêm model”.</div>}
-      {d.models.map((m) => (
-        <div key={m.id} className="stack">
-          <div className={`row mhead ${m.is_active ? '' : 'dim'}`} style={{ gap: 12 }}>
-            <span className="gpic"><GrinderArt shape={shapeOf(m.name)} /></span>
-            <div className="grow">
-              <div style={{ fontSize: 18 }}>{m.name} {!m.is_active && <span className="pill">Đã ẩn</span>}</div>
-              <div className="small muted">{m.brand} · AI nhận tên: {m.aliases.length ? m.aliases.join(', ') : '(chưa có)'}</div>
-            </div>
-            <button className="btn btn-ghost btn-sm" onClick={() => setEdit({ t: 'model', m })}>Sửa</button>
-          </div>
-          <div className="list">
-            {d.variants.filter((v) => v.model_id === m.id).map((v) => (
-              <button key={v.id} className={`li ${v.is_active ? '' : 'dim'}`} onClick={() => setEdit({ t: 'variant', modelId: m.id, v })}>
+      {d.models.length > 0 && (
+        <div className="list">
+          {d.models.map((m) => {
+            const s = stock.get(m.id)
+            return (
+              <button key={m.id} className={`li ${m.is_active ? '' : 'dim'}`} onClick={() => setEdit({ m })}>
+                <span className="gpic"><GrinderArt shape={shapeOf(m.name)} /></span>
                 <div className="main">
-                  <b>{v.name}</b> {!v.is_active && <span className="pill">Đã ẩn</span>}
-                  <div className="s">Giá bán {vnd(v.list_price_vnd)} · cảnh báo khi còn ≤ {v.low_stock_threshold}</div>
+                  <b>{m.name}</b> <span className="pill">{m.code_prefix}</span> {!m.is_active && <span className="pill">Đã ẩn</span>}
+                  <div className="s">{m.brand} · giá bán mặc định {vnd(m.default_list_price_vnd)} · “Sắp hết” khi còn ≤ {m.low_stock_threshold}</div>
+                  <div className="s">Chiếc tiếp theo: <span className="num">{nextCode(m)}</span> · AI nhận tên: {m.aliases.length ? m.aliases.join(', ') : '(chưa có)'}</div>
                 </div>
-                <span className="v">{sellable.get(v.id) ?? 0} có thể bán</span>
+                <span className="v">{s?.sellable_count ?? 0} bán được<br /><span className="small">{unitCount(m.id)} chiếc đã nhập</span></span>
               </button>
-            ))}
-            <button className="li" onClick={() => setEdit({ t: 'variant', modelId: m.id })}>
-              <div className="main"><b>+ Thêm biến thể</b><div className="s">Màu / phiên bản</div></div>
-            </button>
-          </div>
+            )
+          })}
         </div>
-      ))}
-      <button className="btn btn-ghost btn-block" onClick={() => setEdit({ t: 'model' })}>+ Thêm model</button>
-      <p className="hint" style={{ textAlign: 'center' }}>Model / biến thể đã có lô hoặc đơn chỉ ẩn được, không xoá (BR-14). Ẩn = không hiện ở Kho và ô chọn hàng; số liệu cũ giữ nguyên.</p>
-      {edit?.t === 'model' && <ModelSheet m={edit.m} onClose={close} />}
-      {edit?.t === 'variant' && <VariantSheet modelId={edit.modelId} v={edit.v} onClose={close} />}
+      )}
+      <button className="btn btn-ghost btn-block" onClick={() => setEdit({})}>+ Thêm model</button>
+      <p className="hint" style={{ textAlign: 'center' }}>Mỗi chiếc cối nhập về được cấp mã = tiền tố + số thứ tự (VD: KU-007). Model đã có chiếc chỉ ẩn được, không xoá (BR-14). Ẩn = không hiện ở ô chọn model khi nhập lô; chiếc cũ giữ nguyên.</p>
+      {edit && <ModelSheet m={edit.m} onClose={close} />}
     </Shell>
   )
-}
-
-/** Nút ẩn/hiện + xoá (có bước xác nhận) dùng chung cho 2 sheet. */
-function useRemoval(table: 'models' | 'variants', row: ModelRow | VariantRow | undefined, what: string, onClose: () => void) {
-  const { reload } = useStore()
-  const toast = useToast()
-  const [confirmDel, setConfirmDel] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState('')
-  async function toggleActive() {
-    if (!row) return
-    setBusy(true); setErr('')
-    try {
-      await updateVersioned(table, row.id, row.version, { is_active: !row.is_active }, what)
-      await reload(); toast(row.is_active ? `Đã ẩn ${row.name}` : `Đã hiện lại ${row.name}`); onClose()
-    } catch (e) { setErr((e as Error).message); await reload() } finally { setBusy(false) }
-  }
-  async function remove() {
-    if (!row) return
-    setBusy(true); setErr('')
-    const { data, error } = await supabase.from(table).delete().eq('id', row.id).select('id')
-    if (error || !data?.length) {
-      setBusy(false); setConfirmDel(false)
-      setErr(error ? writeError(error, what) : 'Không xoá được — dữ liệu đã đổi, thử lại.')
-      await reload(); return
-    }
-    await reload(); setBusy(false); toast(`Đã xoá ${row.name}`); onClose()
-  }
-  const ui = row && (
-    <>
-      {confirmDel && <p className="warn-box">Xoá vĩnh viễn “{row.name}”? Chỉ xoá được khi chưa có lô / đơn{table === 'models' ? ' và không còn màu nào' : ''}. Không hoàn tác được.</p>}
-      <div className="btn-row">
-        <button className="btn btn-ghost" disabled={busy} onClick={toggleActive}>{row.is_active ? 'Ẩn' : 'Hiện lại'}</button>
-        {confirmDel
-          ? <button className="btn btn-danger" disabled={busy} onClick={remove}>{busy ? 'Đang xoá…' : 'Xoá vĩnh viễn'}</button>
-          : <button className="btn btn-danger" disabled={busy} onClick={() => setConfirmDel(true)}>Xoá</button>}
-      </div>
-    </>
-  )
-  return { ui, err, setErr, busy, setBusy }
 }
 
 function ModelSheet({ m, onClose }: { m?: ModelRow; onClose: () => void }) {
@@ -103,18 +58,32 @@ function ModelSheet({ m, onClose }: { m?: ModelRow; onClose: () => void }) {
   const toast = useToast()
   const [name, setName] = useState(m?.name ?? '')
   const [brand, setBrand] = useState(m?.brand ?? '1Zpresso')
+  const [prefix, setPrefix] = useState(m?.code_prefix ?? '')
+  const [price, setPrice] = useState(m?.default_list_price_vnd != null ? String(m.default_list_price_vnd) : '')
+  const [low, setLow] = useState(String(m?.low_stock_threshold ?? 1))
   const [alias, setAlias] = useState(m?.aliases.join(', ') ?? '')
-  const [nameErr, setNameErr] = useState('')
-  const rm = useRemoval('models', m, 'Model', onClose)
+  const [errs, setErrs] = useState<{ name?: string; prefix?: string; price?: string; low?: string; form?: string }>({})
+  const [busy, setBusy] = useState(false)
+  const [confirmDel, setConfirmDel] = useState(false)
+  const used = m ? d.units.filter((u) => u.model_id === m.id).length : 0
+  const pfx = normPrefix(prefix)
+  const prefixChanged = !!m && pfx !== m.code_prefix
 
   async function save() {
-    const n = name.trim()
-    if (!n) { setNameErr('Nhập tên model (VD: X Ultra).'); return }
-    if (n.length > 80) { setNameErr('Tên tối đa 80 ký tự.'); return }
-    if (d.models.some((x) => x.id !== m?.id && x.name.toLowerCase() === n.toLowerCase())) { setNameErr('Đã có model tên này.'); return }
-    setNameErr(''); rm.setErr(''); rm.setBusy(true)
+    const n = name.trim(), p = price.trim() ? parseNum(price) : null, l = parseNum(low)
+    const e: typeof errs = {}
+    if (!n) e.name = 'Nhập tên model (VD: K Ultra).'
+    else if (n.length > 80) e.name = 'Tên tối đa 80 ký tự.'
+    else if (d.models.some((x) => x.id !== m?.id && x.name.toLowerCase() === n.toLowerCase())) e.name = 'Đã có model tên này.'
+    if (!PREFIX_RE.test(pfx)) e.prefix = 'Tiền tố 1–10 ký tự, chỉ chữ không dấu và số (VD: KU, ZP6).'
+    else if (d.models.some((x) => x.id !== m?.id && x.code_prefix === pfx)) e.prefix = 'Tiền tố này đã dùng cho model khác.'
+    if (price.trim() && (p == null || p < 0 || !Number.isInteger(p))) e.price = 'Nhập giá bằng đồng (VD: 5.400.000) hoặc để trống.'
+    if (l == null || l < 0 || !Number.isInteger(l)) e.low = 'Nhập số nguyên ≥ 0.'
+    setErrs(e)
+    if (e.name || e.prefix || e.price || e.low) return
+    setBusy(true)
     const aliases = [...new Set(alias.split(',').map((s) => s.trim()).filter(Boolean))]
-    const row = { name: n, brand: brand.trim() || '1Zpresso', aliases }
+    const row = { name: n, brand: brand.trim() || '1Zpresso', code_prefix: pfx, default_list_price_vnd: p, low_stock_threshold: l, aliases }
     try {
       if (m) await updateVersioned('models', m.id, m.version, row, 'Model')
       else {
@@ -122,78 +91,76 @@ function ModelSheet({ m, onClose }: { m?: ModelRow; onClose: () => void }) {
         const { error } = await supabase.from('models').insert({ ...row, sort_order: sort })
         if (error) throw new Error(writeError(error, 'Model'))
       }
-      await reload(); toast(m ? 'Đã lưu model' : `Đã thêm model ${n}`); onClose()
-    } catch (e) { rm.setErr((e as Error).message); await reload() } finally { rm.setBusy(false) }
+      await reload(); toast(m ? `Đã lưu model ${n}` : `Đã thêm model ${n}`); onClose()
+    } catch (err) { setErrs({ form: (err as Error).message }); await reload() } finally { setBusy(false) }
+  }
+
+  async function toggleActive() {
+    if (!m) return
+    setBusy(true); setErrs({})
+    try {
+      await updateVersioned('models', m.id, m.version, { is_active: !m.is_active }, 'Model')
+      await reload(); toast(m.is_active ? `Đã ẩn ${m.name}` : `Đã hiện lại ${m.name}`); onClose()
+    } catch (e) { setErrs({ form: (e as Error).message }); await reload() } finally { setBusy(false) }
+  }
+
+  async function remove() {
+    if (!m) return
+    setBusy(true); setErrs({})
+    const { data, error } = await supabase.from('models').delete().eq('id', m.id).select('id')
+    if (error || !data?.length) {
+      setBusy(false); setConfirmDel(false)
+      setErrs({ form: error ? writeError(error, `Model ${m.name}`) : 'Không xoá được — dữ liệu đã đổi, thử lại.' })
+      await reload(); return
+    }
+    await reload(); setBusy(false); toast(`Đã xoá ${m.name}`); onClose()
   }
 
   return (
     <Sheet title={m ? `Sửa model · ${m.name}` : 'Thêm model'} onClose={onClose}
-      footer={<button className="btn btn-primary btn-block" onClick={save} disabled={rm.busy}>{rm.busy ? 'Đang lưu…' : 'Lưu'}</button>}>
+      footer={<button className="btn btn-primary btn-block" id="nm-save" onClick={save} disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu'}</button>}>
       <label className="f">Tên model
-        <input className={`input ${nameErr ? 'invalid' : ''}`} id="nm-name" maxLength={80} placeholder="VD: X Ultra" value={name} onChange={(e) => setName(e.target.value)} />
-        {nameErr && <span className="field-err">{nameErr}</span>}
-      </label>
-      <label className="f">Hãng
-        <input className="input" id="nm-brand" maxLength={60} value={brand} onChange={(e) => setBrand(e.target.value)} />
-      </label>
-      <label className="f">Tên gọi khác (cho AI nhận, cách nhau dấu phẩy)
-        <input className="input" id="nm-alias" placeholder="VD: XU, X-Ultra" value={alias} onChange={(e) => setAlias(e.target.value)} />
-      </label>
-      {rm.ui}
-      {rm.err && <p className="err-text">{rm.err}</p>}
-    </Sheet>
-  )
-}
-
-function VariantSheet({ modelId, v, onClose }: { modelId: string; v?: VariantRow; onClose: () => void }) {
-  const d = useData()
-  const { reload } = useStore()
-  const toast = useToast()
-  const model = d.models.find((x) => x.id === modelId)
-  const [name, setName] = useState(v?.name ?? '')
-  const [price, setPrice] = useState(v?.list_price_vnd != null ? String(v.list_price_vnd) : '')
-  const [low, setLow] = useState(String(v?.low_stock_threshold ?? 1))
-  const [errs, setErrs] = useState<{ name?: string; price?: string; low?: string }>({})
-  const rm = useRemoval('variants', v, 'Biến thể', onClose)
-
-  async function save() {
-    const n = name.trim(), p = price.trim() ? parseNum(price) : null, l = parseNum(low)
-    const e: typeof errs = {}
-    if (!n) e.name = 'Nhập tên màu / phiên bản (VD: Đen).'
-    else if (d.variants.some((x) => x.model_id === modelId && x.id !== v?.id && x.name.toLowerCase() === n.toLowerCase())) e.name = 'Model này đã có màu tên này.'
-    if (price.trim() && (p == null || p < 0 || !Number.isInteger(p))) e.price = 'Nhập giá bán bằng đồng (VD: 5.400.000) hoặc để trống.'
-    if (l == null || l < 0 || !Number.isInteger(l)) e.low = 'Nhập số nguyên ≥ 0.'
-    setErrs(e)
-    if (e.name || e.price || e.low) return
-    rm.setErr(''); rm.setBusy(true)
-    const row = { name: n, list_price_vnd: p, low_stock_threshold: l }
-    try {
-      if (v) await updateVersioned('variants', v.id, v.version, row, 'Biến thể')
-      else {
-        const { error } = await supabase.from('variants').insert({ ...row, model_id: modelId })
-        if (error) throw new Error(writeError(error, 'Biến thể'))
-      }
-      await reload(); toast(v ? 'Đã lưu' : `Đã thêm ${model?.name ?? ''} · ${n}`); onClose()
-    } catch (err) { rm.setErr((err as Error).message); await reload() } finally { rm.setBusy(false) }
-  }
-
-  return (
-    <Sheet title={v ? `Sửa · ${model?.name ?? ''} ${v.name}` : `Thêm biến thể · ${model?.name ?? ''}`} onClose={onClose}
-      footer={<button className="btn btn-primary btn-block" onClick={save} disabled={rm.busy}>{rm.busy ? 'Đang lưu…' : 'Lưu'}</button>}>
-      <label className="f">Tên (màu / phiên bản)
-        <input className={`input ${errs.name ? 'invalid' : ''}`} id="nv-name" maxLength={80} value={name} onChange={(e) => setName(e.target.value)} />
+        <input className={`input ${errs.name ? 'invalid' : ''}`} id="nm-name" maxLength={80} placeholder="VD: K Ultra" value={name} onChange={(e) => setName(e.target.value)} />
         {errs.name && <span className="field-err">{errs.name}</span>}
       </label>
-      <label className="f">Giá bán niêm yết (₫)
-        <input className={`input money ${errs.price ? 'invalid' : ''}`} id="nv-price" inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value)} />
-        {errs.price && <span className="field-err">{errs.price}</span>}
+      <div className="two">
+        <label className="f">Hãng
+          <input className="input" id="nm-brand" maxLength={60} value={brand} onChange={(e) => setBrand(e.target.value)} />
+        </label>
+        <label className="f">Tiền tố mã chiếc
+          <input className={`input ${errs.prefix ? 'invalid' : ''}`} id="nm-prefix" maxLength={10} placeholder="VD: KU" autoCapitalize="characters"
+            value={prefix} onChange={(e) => setPrefix(normPrefix(e.target.value))} />
+          {errs.prefix && <span className="field-err">{errs.prefix}</span>}
+        </label>
+      </div>
+      {PREFIX_RE.test(pfx) && <p className="hint" style={{ margin: 0 }}>Chiếc tiếp theo: <b className="num">{nextCode({ code_prefix: pfx, next_seq: m?.next_seq ?? 1 })}</b></p>}
+      {prefixChanged && used > 0 && <p className="warn-box">Đổi tiền tố chỉ áp cho chiếc nhập sau. {used} chiếc đã có giữ mã cũ ({m?.code_prefix}-…); số thứ tự tiếp tục, không đánh lại.</p>}
+      <div className="two">
+        <label className="f">Giá bán mặc định (₫)
+          <input className={`input money ${errs.price ? 'invalid' : ''}`} id="nm-price" inputMode="numeric" placeholder="điền sẵn cho chiếc mới" value={price} onChange={(e) => setPrice(e.target.value)} />
+          {errs.price && <span className="field-err">{errs.price}</span>}
+        </label>
+        <label className="f">“Sắp hết” khi bán được còn ≤
+          <input className={`input money ${errs.low ? 'invalid' : ''}`} id="nm-low" inputMode="numeric" value={low} onChange={(e) => setLow(e.target.value)} />
+          {errs.low && <span className="field-err">{errs.low}</span>}
+        </label>
+      </div>
+      <label className="f">Tên gọi khác (cho AI nhận, cách nhau dấu phẩy)
+        <input className="input" id="nm-alias" placeholder="VD: KU, K-Ultra" value={alias} onChange={(e) => setAlias(e.target.value)} />
       </label>
-      <label className="f">Cảnh báo “Sắp hết” khi có thể bán còn ≤
-        <input className={`input money ${errs.low ? 'invalid' : ''}`} id="nv-low" inputMode="numeric" value={low} onChange={(e) => setLow(e.target.value)} />
-        {errs.low && <span className="field-err">{errs.low}</span>}
-      </label>
-      {rm.ui}
-      {rm.err && <p className="err-text">{rm.err}</p>}
+      {m && (
+        <>
+          {confirmDel && <p className="warn-box">Xoá vĩnh viễn model “{m.name}”? Chỉ xoá được khi chưa có chiếc cối nào. Không hoàn tác được.</p>}
+          {!confirmDel && used > 0 && <p className="hint" style={{ margin: 0 }}>Model đã có {used} chiếc — không xoá được, chỉ ẩn (BR-14).</p>}
+          <div className="btn-row">
+            <button className="btn btn-ghost" id="nm-toggle" disabled={busy} onClick={toggleActive}>{m.is_active ? 'Ẩn' : 'Hiện lại'}</button>
+            {confirmDel
+              ? <button className="btn btn-danger" id="nm-del-confirm" disabled={busy} onClick={remove}>{busy ? 'Đang xoá…' : 'Xoá vĩnh viễn'}</button>
+              : <button className="btn btn-danger" id="nm-del" disabled={busy} onClick={() => setConfirmDel(true)}>Xoá</button>}
+          </div>
+        </>
+      )}
+      {errs.form && <p className="err-text">{errs.form}</p>}
     </Sheet>
   )
 }

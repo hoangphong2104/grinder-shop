@@ -1,11 +1,14 @@
 // Edge Function `scan-goofish` — đọc tin rao Goofish (闲鱼) bằng Google Gemini (gói miễn phí) và trả về
-// dữ liệu ĐIỀN SẴN cho form lô. Hợp đồng: system-design-lite-v1 §5.2 (request / response / mã lỗi).
+// dữ liệu ĐIỀN SẴN cho form lô. Hợp đồng: system-design-lite-v1 §5.2 (request / response / mã lỗi),
+// cập nhật theo DB schema v2 / CR-001: bỏ bảng `variants` ⇒ bỏ `variant_id`, AI chỉ đoán model;
+// thêm `qty_guess` (số chiếc nếu tin ghi rõ nhiều chiếc, vd. "两台").
 //
 // Nguyên tắc:
 //  - BR-13: AI chỉ điền sẵn. Function KHÔNG ghi bảng nghiệp vụ nào, chỉ ghi `ai_scan_log` qua
 //    `ai_scan_reserve` / `ai_scan_finish`. Lô chỉ được tạo khi người dùng bấm Lưu (`save_lot`).
 //  - NFR-10: dùng JWT của người dùng (RLS áp dụng), KHÔNG dùng service_role. Key Gemini chỉ là secret.
-//  - NFR-11: chỉ gửi cho Gemini ảnh / chữ của tin rao + danh mục model / biến thể. Không đọc khách / đơn.
+//  - NFR-11: chỉ gửi cho Gemini ảnh / chữ của tin rao + danh mục model đang bán (tên, hãng, tiền tố mã,
+//    tên gọi khác). Không đọc khách / đơn / chiếc (units).
 //  - NFR-18: log chỉ scan_id, model, token, mã lỗi — không log ảnh / nội dung tin / key.
 //
 // Cấu trúc file: hằng số & lỗi → tiện ích thuần (test được) → gọi Gemini → handler → Deno.serve.
@@ -27,7 +30,7 @@ export const DEFAULT_THRESHOLD = 0.7;
 export const DEFAULT_ALLOWED_ORIGINS = ["https://hoangphong2104.github.io", "http://localhost:5173"];
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const MAX_MODELS = 100; // giới hạn danh mục đưa vào prompt (đủ dư cho 1 shop)
-const MAX_VARIANTS = 400;
+export const MAX_QTY = 50; // qty_guess hợp lệ: số nguyên 2..MAX_QTY (1 chiếc = mặc định ⇒ null)
 
 // Giới hạn độ dài chuỗi (§5.2 bước 8)
 const LIMITS = { title: 300, nickname: 100, region: 100, notes: 300, condition: 200, matched: 100 };
@@ -91,13 +94,16 @@ export class ScanError extends Error {
 export type ScanInput = { kind: "image"; image_path: string } | { kind: "text"; text: string };
 export type ScanRequest = { input: ScanInput; goofish_url: string | null };
 
-export type CatalogModel = { id: string; name: string; aliases: string[] };
-export type CatalogVariant = { id: string; model_id: string; name: string };
-/** Danh mục kèm mã ngắn (M1, V1…) dùng trong prompt — tránh để AI phải chép lại uuid. */
-export type Catalog = {
-  models: (CatalogModel & { code: string })[];
-  variants: (CatalogVariant & { code: string })[];
+/** Model đang bán (schema v2: bảng `models`, chỉ `is_active = true`). */
+export type CatalogModel = {
+  id: string;
+  name: string;
+  brand: string | null;
+  code_prefix: string | null;
+  aliases: string[];
 };
+/** Danh mục kèm mã ngắn (M1, M2…) dùng trong prompt — tránh để AI phải chép lại uuid. */
+export type Catalog = { models: (CatalogModel & { code: string })[] };
 
 export type Field<T> = { value: T | null; confidence: number };
 export type ScanFields = {
@@ -106,11 +112,13 @@ export type ScanFields = {
   seller_nickname: Field<string>;
   seller_region: Field<string>;
   model_id: Field<string> & { matched_text: string | null };
-  variant_id: Field<string>;
 };
+/** Số chiếc trong tin (chỉ khi tin ghi rõ ≥ 2 chiếc và đủ tin cậy), ngược lại null. */
+export type QtyGuess = { value: number; confidence: number } | null;
 export type CleanResult = {
   fields: ScanFields;
   flags: (keyof ScanFields)[];
+  qty_guess: QtyGuess;
   condition_text: string | null;
   notes: string | null;
 };
@@ -190,29 +198,37 @@ export function toBase64(bytes: Uint8Array): string {
   return btoa(bin);
 }
 
-/** Gán mã ngắn M1.. / V1.. cho danh mục; bỏ biến thể của model không có trong danh sách. */
-export function buildCatalog(models: CatalogModel[], variants: CatalogVariant[]): Catalog {
-  const ms = models.slice(0, MAX_MODELS).map((m, i) => ({ ...m, code: `M${i + 1}` }));
-  const modelIds = new Set(ms.map((m) => m.id));
-  const vs = variants
-    .filter((v) => modelIds.has(v.model_id))
-    .slice(0, MAX_VARIANTS)
-    .map((v, i) => ({ ...v, code: `V${i + 1}` }));
-  return { models: ms, variants: vs };
+/** Chuẩn hoá 1 dòng `models` từ PostgREST (thiếu / sai kiểu ⇒ giá trị an toàn). */
+export function toCatalogModel(row: Record<string, unknown>): CatalogModel {
+  const str = (x: unknown) => (typeof x === "string" && x.trim() ? x : null);
+  return {
+    id: String(row.id),
+    name: typeof row.name === "string" ? row.name : "",
+    brand: str(row.brand),
+    code_prefix: str(row.code_prefix),
+    aliases: Array.isArray(row.aliases) ? row.aliases.filter((a): a is string => typeof a === "string") : [],
+  };
+}
+
+/** Gán mã ngắn M1.. cho danh mục model (tối đa MAX_MODELS). */
+export function buildCatalog(models: CatalogModel[]): Catalog {
+  return { models: models.slice(0, MAX_MODELS).map((m, i) => ({ ...m, code: `M${i + 1}` })) };
 }
 
 const oneLine = (s: string, max = 80) => s.replace(/\s+/g, " ").trim().slice(0, max);
 
-/** Danh mục dạng chữ đưa vào prompt (chỉ tên model / tên gọi khác / tên biến thể). */
+/** Danh mục dạng chữ đưa vào prompt (chỉ tên model / hãng / tiền tố mã / tên gọi khác). */
 export function catalogText(cat: Catalog): string {
-  if (cat.models.length === 0) return "CATALOGUE: (empty — always answer NONE for model_id and variant_id)";
-  const lines = ["CATALOGUE (the ONLY allowed choices for model_id / variant_id):"];
+  if (cat.models.length === 0) return "CATALOGUE: (empty — always answer NONE for model_id)";
+  const lines = ["CATALOGUE (the ONLY allowed choices for model_id):"];
   for (const m of cat.models) {
+    const brand = m.brand ? oneLine(m.brand, 60) : "";
+    const prefix = m.code_prefix ? oneLine(m.code_prefix, 10) : "";
     const aliases = m.aliases.map((a) => oneLine(a, 40)).filter(Boolean).join(", ");
-    lines.push(`${m.code} = model "${oneLine(m.name)}"${aliases ? ` (also called: ${aliases})` : ""}`);
-    for (const v of cat.variants.filter((x) => x.model_id === m.id)) {
-      lines.push(`  ${v.code} = variant "${oneLine(v.name)}" of ${m.code}`);
-    }
+    lines.push(
+      `${m.code} = model "${oneLine(m.name)}"${brand ? ` by ${brand}` : ""}` +
+        `${prefix ? ` [shop code: ${prefix}]` : ""}${aliases ? ` (also called: ${aliases})` : ""}`,
+    );
   }
   return lines.join("\n");
 }
@@ -246,12 +262,9 @@ export function buildResponseSchema(cat: Catalog): Record<string, unknown> {
         },
         required: ["value", "confidence", "matched_text"],
       },
-      variant_id: {
+      qty_guess: {
         type: "OBJECT",
-        properties: {
-          value: { type: "STRING", format: "enum", enum: [...cat.variants.map((v) => v.code), "NONE"] },
-          confidence: conf,
-        },
+        properties: { value: { type: "INTEGER", nullable: true }, confidence: conf },
         required: ["value", "confidence"],
       },
       condition_text: { type: "STRING", nullable: true },
@@ -264,7 +277,7 @@ export function buildResponseSchema(cat: Catalog): Record<string, unknown> {
       "seller_nickname",
       "seller_region",
       "model_id",
-      "variant_id",
+      "qty_guess",
       "condition_text",
       "notes",
     ],
@@ -275,7 +288,7 @@ export function buildResponseSchema(cat: Catalog): Record<string, unknown> {
       "seller_nickname",
       "seller_region",
       "model_id",
-      "variant_id",
+      "qty_guess",
       "condition_text",
       "notes",
     ],
@@ -284,7 +297,7 @@ export function buildResponseSchema(cat: Catalog): Record<string, unknown> {
 
 /** Dàn ý prompt §5.2 (viết bằng tiếng Anh, có thuật ngữ tiếng Trung của 闲鱼). */
 export const SYSTEM_PROMPT =
-  `You extract data from ONE second-hand listing on Goofish / 闲鱼 (Xianyu) for a shop that resells 1Zpresso hand coffee grinders.
+  `You extract data from ONE second-hand listing on Goofish / 闲鱼 (Xianyu) for a shop that resells hand coffee grinders (mostly 1Zpresso).
 The input is either a phone screenshot of the listing or text copied from the listing web page. It is usually in Chinese.
 
 Fields:
@@ -292,10 +305,10 @@ Fields:
 - price_cny: the CURRENT selling price in CNY (the large number next to ¥ / 价格 / 当前价). Ignore crossed-out or reference prices (原价, 划线价, 新品价, 入手价, 买的时候), shipping fees (运费, 包邮), counts like "N人想要" / 浏览, and deposit amounts. If several current prices appear (e.g. a price range or per-variant prices), choose the listed selling price shown as the main price and lower the confidence (≤ 0.6). Return a plain number (e.g. 1010 or 1010.5), no currency sign.
 - seller_nickname: the seller's nickname / display name (卖家昵称), verbatim. Not the buyer, not a commenter.
 - seller_region: 发货地 or IP属地 (e.g. "浙江", "上海"), verbatim. null if absent.
-- model_id: the grinder model, chosen ONLY from the codes in CATALOGUE by matching the model name or one of its aliases ("also called"). matched_text = the exact words in the listing that matched. If the model is not in the catalogue, unclear, or not a 1Zpresso grinder, answer "NONE" with low confidence.
-- variant_id: chosen ONLY from the variant codes listed under the chosen model (e.g. colour / edition). Answer "NONE" if not stated or unclear.
+- model_id: the grinder model, chosen ONLY from the codes in CATALOGUE by matching the model name (and brand) or one of its aliases ("also called"). The "shop code" is the shop's own short prefix; it often equals the common shorthand (e.g. ZP6, KU) but is weaker evidence than the name or an alias. matched_text = the exact words in the listing that matched. If the model is not in the catalogue, unclear, a different brand, or several different models are sold together, answer "NONE" with low confidence (and mention it in notes). Colours / editions do not matter.
+- qty_guess: the number of grinder units sold in this listing, ONLY when the listing clearly states more than one (e.g. "两台", "2台", "两个", "一对", "x2", "共3台"). null with low confidence when it is one unit or not stated. Do not count accessories, "N人想要", views or stock counts of a shop listing where the buyer picks one.
 - condition_text: short condition phrase as written (e.g. "全新未拆", "9成新", "轻微使用痕迹"). null if absent.
-- notes: at most 2 short sentences IN VIETNAMESE for the shop owner about anything that affects the data, e.g. a crossed-out original price was ignored, several prices were present, shipping included (包邮), price negotiable, item possibly sold (已售出 / 已卖出). null if nothing notable.
+- notes: at most 2 short sentences IN VIETNAMESE for the shop owner about anything that affects the data, e.g. a crossed-out original price was ignored, several prices were present, the price is for all units together or per unit (when qty_guess > 1), shipping included (包邮), price negotiable, item possibly sold (已售出 / 已卖出). null if nothing notable.
 
 Confidence (0..1) for every field: 1 = clearly readable and unambiguous; 0.7-0.9 = readable but some doubt; below 0.7 = a guess. Use a low confidence when value is null because the field could not be found.
 
@@ -344,14 +357,28 @@ const FIELD_KEYS: (keyof ScanFields)[] = [
   "seller_nickname",
   "seller_region",
   "model_id",
-  "variant_id",
 ];
+
+/**
+ * qty_guess: chỉ nhận số nguyên 2..MAX_QTY (hoặc chuỗi chữ số) với confidence ≥ ngưỡng; còn lại ⇒ null.
+ * Trường tuỳ chọn: thiếu / sai KHÔNG làm hỏng cả kết quả và KHÔNG gắn flag.
+ */
+export function cleanQtyGuess(x: unknown, threshold: number): QtyGuess {
+  if (!isObj(x)) return null;
+  const v = x.value;
+  const n = typeof v === "number" ? v : typeof v === "string" && /^\s*\d{1,3}\s*$/.test(v) ? Number(v) : NaN;
+  if (!Number.isInteger(n) || n < 2 || n > MAX_QTY) return null;
+  const confidence = clamp01(x.confidence);
+  if (confidence < threshold) return null;
+  return { value: n, confidence };
+}
 
 /**
  * Lớp validate bắt buộc (§5.2 bước 8–9) cho JSON AI trả về.
  * - Chuỗi trim + cắt độ dài; giá ¥ hợp lệ; confidence kẹp [0,1].
- * - model / variant: map mã ngắn → uuid, chỉ nhận mã có trong danh mục; biến thể phải thuộc model đã chọn.
+ * - model: map mã ngắn → uuid, chỉ nhận mã có trong danh mục model đang bán.
  * - Giá trị sai ⇒ null + confidence 0 + flag. Confidence < ngưỡng ⇒ null + flag (BR-13).
+ * - Trường lạ AI tự thêm (vd. `variant_id` kiểu cũ) bị bỏ qua.
  * Ném ScanError AI_UNREADABLE nếu không phải tin Goofish hoặc JSON sai cấu trúc.
  */
 export function cleanAiOutput(raw: unknown, cat: Catalog, threshold: number): CleanResult {
@@ -383,18 +410,17 @@ export function cleanAiOutput(raw: unknown, cat: Catalog, threshold: number): Cl
   const seller_region = pick("seller_region", (v) => cleanStr(v, LIMITS.region));
 
   // Mã ngắn → uuid. "NONE" / null ⇒ null; mã lạ (ngoài danh mục) ⇒ từ chối.
-  const byCode = <X extends { code: string; id: string }>(list: X[]) => (v: unknown): string | null | undefined => {
+  const byCode = (v: unknown): string | null | undefined => {
     if (v === null || v === undefined || v === "NONE" || v === "") return null;
     if (typeof v !== "string") return undefined;
-    const hit = list.find((x) => x.code === v.trim() || x.id === v.trim());
+    const hit = cat.models.find((x) => x.code === v.trim() || x.id === v.trim());
     return hit ? hit.id : undefined;
   };
-  const modelField = pick("model_id", byCode(cat.models));
+  const modelField = pick("model_id", byCode);
   const matchedRaw = get("model_id")?.matched_text;
   const model_id = { ...modelField, matched_text: cleanStr(matchedRaw, LIMITS.matched) };
-  const variant_id = pick("variant_id", byCode(cat.variants));
 
-  const fields: ScanFields = { listing_title, price_cny, seller_nickname, seller_region, model_id, variant_id };
+  const fields: ScanFields = { listing_title, price_cny, seller_nickname, seller_region, model_id };
 
   // Bước 9: ngưỡng tin cậy ⇒ null + flag.
   const flags: (keyof ScanFields)[] = [];
@@ -406,19 +432,10 @@ export function cleanAiOutput(raw: unknown, cat: Catalog, threshold: number): Cl
     }
   }
 
-  // Biến thể phải thuộc model đã chọn (sau khi áp ngưỡng cho model).
-  if (fields.variant_id.value !== null) {
-    const v = cat.variants.find((x) => x.id === fields.variant_id.value);
-    if (!v || v.model_id !== fields.model_id.value) {
-      fields.variant_id.value = null;
-      fields.variant_id.confidence = 0;
-      if (!flags.includes("variant_id")) flags.push("variant_id");
-    }
-  }
-
   return {
     fields,
     flags,
+    qty_guess: cleanQtyGuess(raw.qty_guess, threshold),
     condition_text: cleanStr(raw.condition_text, LIMITS.condition),
     notes: cleanStr(raw.notes, LIMITS.notes),
   };
@@ -731,18 +748,14 @@ export function createHandler(deps: Deps): (req: Request) => Promise<Response> {
         content = { text: `<listing_text>\n${safe}\n</listing_text>` };
       }
 
-      // ---- Bước 5: danh mục đang bán (KHÔNG đọc khách / đơn — NFR-11)
-      const [mRes, vRes, sRes] = await Promise.all([
-        sb.from("models").select("id, name, aliases").eq("is_active", true)
+      // ---- Bước 5: danh mục model đang bán (schema v2: không còn bảng variants; KHÔNG đọc khách / đơn — NFR-11)
+      const [mRes, sRes] = await Promise.all([
+        sb.from("models").select("id, name, brand, code_prefix, aliases").eq("is_active", true)
           .order("sort_order").order("name").limit(MAX_MODELS),
-        sb.from("variants").select("id, model_id, name").eq("is_active", true).order("name").limit(MAX_VARIANTS),
         sb.from("settings").select("ai_confidence_threshold, ai_scan_monthly_cap").maybeSingle(),
       ]);
-      if (mRes.error || vRes.error || sRes.error) throw new ScanError("INTERNAL");
-      const catalog = buildCatalog(
-        (mRes.data ?? []).map((m) => ({ id: m.id, name: m.name, aliases: Array.isArray(m.aliases) ? m.aliases : [] })),
-        vRes.data ?? [],
-      );
+      if (mRes.error || sRes.error) throw new ScanError("INTERNAL");
+      const catalog = buildCatalog((mRes.data ?? []).map((m) => toCatalogModel(m as Record<string, unknown>)));
       const thresholdRaw = Number(sRes.data?.ai_confidence_threshold);
       const threshold = Number.isFinite(thresholdRaw) ? clamp01(thresholdRaw) : DEFAULT_THRESHOLD;
       const capRaw = Number(sRes.data?.ai_scan_monthly_cap);
@@ -806,6 +819,7 @@ export function createHandler(deps: Deps): (req: Request) => Promise<Response> {
         model: usedModel,
         fields: clean.fields,
         flags: clean.flags,
+        qty_guess: clean.qty_guess,
         condition_text: clean.condition_text,
         notes: clean.notes,
         seller_match: sellerMatch,

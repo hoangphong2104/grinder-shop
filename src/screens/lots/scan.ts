@@ -1,5 +1,7 @@
 // AI quét tin Goofish (F2, BR-13): thu nhỏ ảnh → upload bucket private → gọi Edge Function scan-goofish
 // theo hợp đồng System Design §5.2. Mọi lỗi ⇒ ném Error có câu tiếng Việt; form vẫn nhập tay được.
+// v0.2 (CR-001): Edge Function chỉ đoán model (fields.model_id) — bỏ fields.variant_id (bản cũ còn gửi thì bỏ qua);
+// thêm qty_guess ở gốc (số chiếc trong tin, 2..50; null khi 1 chiếc / không chắc — không bao giờ bị flag).
 import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase.ts'
 import { errorMessage } from '../../data/errors.ts'
@@ -17,8 +19,12 @@ export interface ScanResponse {
   model: string
   fields: {
     listing_title?: ScanField<string>; price_cny?: ScanField<number>; seller_nickname?: ScanField<string>
-    seller_region?: ScanField<string>; model_id?: ScanField<string>; variant_id?: ScanField<string>
+    seller_region?: ScanField<string>; model_id?: ScanField<string>
+    /** Bản Edge Function cũ (v0.1) — không dùng nữa, có thể vắng. */
+    variant_id?: ScanField<string>
   }
+  /** Số chiếc AI đoán trong tin (2..50); null khi 1 chiếc / không chắc / dưới ngưỡng. */
+  qty_guess?: { value: number; confidence: number } | null
   flags?: string[]
   condition_text?: string | null
   notes?: string | null

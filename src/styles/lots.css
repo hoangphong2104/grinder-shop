@@ -7,3 +7,11 @@ a.lot-shot { padding: 0; }
 .lot-line + .lot-line { border-top: 1px dashed var(--line); padding-top: 12px; }
 .lot-line .lrow .link-btn { padding: 0 4px; font-size: 12px; }
 .f .err-text { font-weight: 400; }
+/* v0.2: tiêu đề + đếm trạng thái của danh sách chiếc trong lô; nhóm chiếc / chiếc cũ trong form lô. */
+.lot-units-head { justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.lot-units-head .section-title { margin: 0; }
+.lot-unit { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; align-items: end; }
+.lot-unit + .lot-unit { border-top: 1px dashed var(--line); padding-top: 10px; }
+.lot-unit .uhead { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lot-unit.removed .uhead b { text-decoration: line-through; opacity: .6; }
+.lot-codes { font-family: var(--mono); font-size: 12.5px; }

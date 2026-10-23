@@ -17,19 +17,11 @@ const m = await import("./index.ts");
 const UID = "a0478118-6be3-4fe8-b2bd-b6b49011ca84";
 const KU = "11111111-1111-4111-8111-111111111111";
 const ZP6 = "22222222-2222-4222-8222-222222222222";
-const KU_BLACK = "33333333-3333-4333-8333-333333333333";
-const ZP6_SILVER = "44444444-4444-4444-8444-444444444444";
 
-const catalog = m.buildCatalog(
-  [
-    { id: KU, name: "K Ultra", aliases: ["KU", "K-Ultra"] },
-    { id: ZP6, name: "ZP6 Special", aliases: ["ZP6"] },
-  ],
-  [
-    { id: KU_BLACK, model_id: KU, name: "Đen" },
-    { id: ZP6_SILVER, model_id: ZP6, name: "Bạc" },
-  ],
-);
+const catalog = m.buildCatalog([
+  { id: KU, name: "K Ultra", brand: "1Zpresso", code_prefix: "KU", aliases: ["KU", "K-Ultra"] },
+  { id: ZP6, name: "ZP6 Special", brand: "1Zpresso", code_prefix: "ZP6", aliases: ["ZP6"] },
+]);
 
 function aiOut(over: Record<string, unknown> = {}) {
   return {
@@ -37,9 +29,9 @@ function aiOut(over: Record<string, unknown> = {}) {
     listing_title: { value: "  1Zpresso K-Ultra 手摇磨豆机 全新 ", confidence: 0.95 },
     price_cny: { value: 1010, confidence: 0.93 },
     seller_nickname: { value: "咖啡小王", confidence: 0.9 },
-    seller_region: { value: "浙江", confidence: 0.85 },
+    seller_region: { value: "浙江", confidence: 0.6 },
     model_id: { value: "M1", confidence: 0.92, matched_text: "K-Ultra" },
-    variant_id: { value: "V1", confidence: 0.4 },
+    qty_guess: { value: null, confidence: 0.2 },
     condition_text: "全新未拆",
     notes: "Có giá gạch ngang ¥1.299 — đã lấy giá hiện tại.",
     ...over,
@@ -54,10 +46,34 @@ Deno.test("cleanAiOutput: map mã → uuid, trim, ngưỡng tin cậy ⇒ null +
   assertEquals(r.fields.price_cny.value, 1010);
   assertEquals(r.fields.model_id.value, KU);
   assertEquals(r.fields.model_id.matched_text, "K-Ultra");
-  assertEquals(r.fields.variant_id.value, null); // 0.4 < 0.7
-  assertEquals(r.fields.variant_id.confidence, 0.4);
-  assertEquals(r.flags, ["variant_id"]);
+  assertEquals(r.fields.seller_region.value, null); // 0.6 < 0.7
+  assertEquals(r.fields.seller_region.confidence, 0.6);
+  assertEquals(r.flags, ["seller_region"]);
+  assertEquals(r.qty_guess, null);
   assertEquals(r.condition_text, "全新未拆");
+  assertEquals(Object.keys(r.fields), ["listing_title", "price_cny", "seller_nickname", "seller_region", "model_id"]);
+});
+
+Deno.test("cleanAiOutput: bỏ qua variant_id kiểu cũ nếu AI vẫn trả về", () => {
+  const r = m.cleanAiOutput(aiOut({ variant_id: { value: "V1", confidence: 0.99 } }), catalog, 0.7);
+  assert(!("variant_id" in r.fields), "không được có fields.variant_id");
+  assert(!(r.flags as string[]).includes("variant_id"));
+  assertEquals(r.fields.model_id.value, KU);
+});
+
+Deno.test("cleanAiOutput: qty_guess — chỉ nhận số nguyên 2..MAX_QTY đủ tin cậy, không gắn flag", () => {
+  const q = (qty: unknown) => m.cleanAiOutput(aiOut({ qty_guess: qty }), catalog, 0.7).qty_guess;
+  assertEquals(q({ value: 2, confidence: 0.9 }), { value: 2, confidence: 0.9 });
+  assertEquals(q({ value: "3", confidence: 0.8 }), { value: 3, confidence: 0.8 });
+  assertEquals(q({ value: 1, confidence: 0.95 }), null); // 1 chiếc = mặc định
+  assertEquals(q({ value: 2.5, confidence: 0.95 }), null);
+  assertEquals(q({ value: m.MAX_QTY + 1, confidence: 0.95 }), null);
+  assertEquals(q({ value: 2, confidence: 0.5 }), null); // dưới ngưỡng
+  assertEquals(q({ value: null, confidence: 0 }), null);
+  assertEquals(q(undefined), null); // thiếu trường ⇒ không hỏng kết quả
+  const r = m.cleanAiOutput(aiOut({ qty_guess: "两台" }), catalog, 0.7);
+  assertEquals(r.qty_guess, null);
+  assertEquals(r.flags, ["seller_region"]);
 });
 
 Deno.test("cleanAiOutput: giá sai / mã ngoài danh mục / confidence ngoài [0,1]", () => {
@@ -76,13 +92,6 @@ Deno.test("cleanAiOutput: giá sai / mã ngoài danh mục / confidence ngoài [
   assert(r.flags.includes("price_cny"));
   assert(r.flags.includes("model_id"));
   assert(r.flags.includes("seller_region"));
-});
-
-Deno.test("cleanAiOutput: biến thể không thuộc model đã chọn ⇒ null + flag", () => {
-  const r = m.cleanAiOutput(aiOut({ variant_id: { value: "V2", confidence: 0.95 } }), catalog, 0.7);
-  assertEquals(r.fields.model_id.value, KU);
-  assertEquals(r.fields.variant_id.value, null);
-  assertEquals(r.flags, ["variant_id"]);
 });
 
 Deno.test("cleanAiOutput: không phải tin Goofish ⇒ AI_UNREADABLE", () => {
@@ -136,12 +145,32 @@ Deno.test("parseItemId / monthStartVnIso / detectImageMime", () => {
   assertEquals(m.detectImageMime(new Uint8Array([1, 2, 3])), null);
 });
 
-Deno.test("buildResponseSchema: enum = mã danh mục + NONE", () => {
+Deno.test("buildResponseSchema: enum model = mã danh mục + NONE; không còn variant_id; có qty_guess", () => {
   const s = m.buildResponseSchema(catalog) as {
-    properties: Record<string, { properties: { value: { enum: string[] } } }>;
+    properties: Record<string, { properties: { value: { enum?: string[]; type: string } } }>;
+    required: string[];
   };
   assertEquals(s.properties.model_id.properties.value.enum, ["M1", "M2", "NONE"]);
-  assertEquals(s.properties.variant_id.properties.value.enum, ["V1", "V2", "NONE"]);
+  assert(!("variant_id" in s.properties));
+  assert(!s.required.includes("variant_id"));
+  assertEquals(s.properties.qty_guess.properties.value.type, "INTEGER");
+  assert(s.required.includes("qty_guess"));
+});
+
+Deno.test("catalogText: tên + hãng + tiền tố mã + tên gọi khác; danh mục rỗng ⇒ NONE", () => {
+  const t = m.catalogText(catalog);
+  assert(t.includes('M1 = model "K Ultra" by 1Zpresso [shop code: KU] (also called: KU, K-Ultra)'), t);
+  assert(t.includes('M2 = model "ZP6 Special" by 1Zpresso [shop code: ZP6] (also called: ZP6)'), t);
+  assert(!/variant/i.test(t));
+  assert(m.catalogText(m.buildCatalog([])).includes("always answer NONE for model_id"));
+  // dòng PostgREST thiếu cột ⇒ giá trị an toàn
+  assertEquals(m.toCatalogModel({ id: KU, name: "K Ultra", aliases: null }), {
+    id: KU,
+    name: "K Ultra",
+    brand: null,
+    code_prefix: null,
+    aliases: [],
+  });
 });
 
 // ---------------------------------------------------------------- handler (fetch giả lập)
@@ -196,10 +225,10 @@ function makeFetch(opts: {
     if (path === "/rest/v1/rpc/ai_scan_reserve") return opts.reserve ? opts.reserve() : jsonRes("scan-0001");
     if (path === "/rest/v1/rpc/ai_scan_finish") return new Response(null, { status: 204 });
     if (path === "/rest/v1/models") {
-      return jsonRes([{ id: KU, name: "K Ultra", aliases: ["KU"] }, { id: ZP6, name: "ZP6 Special", aliases: [] }]);
-    }
-    if (path === "/rest/v1/variants") {
-      return jsonRes([{ id: KU_BLACK, model_id: KU, name: "Đen" }, { id: ZP6_SILVER, model_id: ZP6, name: "Bạc" }]);
+      return jsonRes([
+        { id: KU, name: "K Ultra", brand: "1Zpresso", code_prefix: "KU", aliases: ["KU"] },
+        { id: ZP6, name: "ZP6 Special", brand: "1Zpresso", code_prefix: "ZP6", aliases: [] },
+      ]);
     }
     if (path === "/rest/v1/settings") {
       const row = { ai_confidence_threshold: 0.7, ai_scan_monthly_cap: 100 };
@@ -251,8 +280,9 @@ Deno.test("handler: thành công (text) — đúng hợp đồng §5.2 + ai_scan
   assertEquals(b.scan_id, "scan-0001");
   assertEquals(b.model, "gemini-test-primary");
   assertEquals(b.fields.model_id, { value: KU, confidence: 0.92, matched_text: "K-Ultra" });
-  assertEquals(b.fields.variant_id.value, null);
-  assertEquals(b.flags, ["variant_id"]);
+  assert(!("variant_id" in b.fields), "response không còn fields.variant_id");
+  assertEquals(b.flags, ["seller_region"]);
+  assertEquals(b.qty_guess, null);
   assertEquals(b.seller_match, { seller_id: "seller-1", nickname: "咖啡小王", is_avoided: true });
   assertEquals(b.duplicate_lot_ids, ["lot-dup-1"]);
   assertEquals(b.usage, { scans_this_month: 12, cap: 100 });
@@ -262,8 +292,18 @@ Deno.test("handler: thành công (text) — đúng hợp đồng §5.2 + ai_scan
   const g = gem.body as { contents: { parts: { text?: string }[] }[]; generationConfig: Record<string, unknown> };
   assertEquals(g.generationConfig.responseMimeType, "application/json");
   assert(g.contents[0].parts[1].text!.startsWith("<listing_text>"));
-  // NFR-11: không đọc bảng khách / đơn
-  assert(!calls.some((c) => /\/rest\/v1\/(customers|orders|order_lines|payments)/.test(c.url)));
+  // NFR-11: không đọc bảng khách / đơn / chiếc; schema v2: không còn bảng variants
+  assert(!calls.some((c) => /\/rest\/v1\/(customers|orders|order_lines|payments|units|variants)/.test(c.url)));
+  // danh mục: chỉ model đang bán, đúng cột v2
+  const mq = new URL(calls.find((c) => new URL(c.url).pathname === "/rest/v1/models")!.url).searchParams;
+  assertEquals(mq.get("select"), "id,name,brand,code_prefix,aliases");
+  assertEquals(mq.get("is_active"), "eq.true");
+  const catPart = g.contents[0].parts[0].text!;
+  assert(catPart.includes('M1 = model "K Ultra" by 1Zpresso [shop code: KU]'), catPart);
+  // lô trùng: theo goofish_item_id, bỏ lô đã huỷ
+  const lq = new URL(calls.find((c) => new URL(c.url).pathname === "/rest/v1/lots")!.url).searchParams;
+  assertEquals(lq.get("goofish_item_id"), "eq.1027765536701");
+  assertEquals(lq.get("status"), "neq.cancelled");
   const fin = calls.find((c) => c.url.endsWith("/rpc/ai_scan_finish"))!;
   assertEquals(fin.body, {
     p_scan_id: "scan-0001",
@@ -274,6 +314,15 @@ Deno.test("handler: thành công (text) — đúng hợp đồng §5.2 + ai_scan
     p_cost_usd: 0,
     p_error_code: null,
   });
+});
+
+Deno.test('handler: tin ghi "两台" ⇒ trả qty_guess', async () => {
+  const { fetch } = makeFetch({ gemini: () => geminiOk(aiOut({ qty_guess: { value: 2, confidence: 0.9 } })) });
+  const h = m.createHandler({ env: makeEnv(), fetch, log: silent });
+  const b = await (await h(post(textBody))).json();
+  assertEquals(b.ok, true);
+  assertEquals(b.qty_guess, { value: 2, confidence: 0.9 });
+  assert(!b.flags.includes("qty_guess"));
 });
 
 Deno.test("handler: ảnh — tải từ Storage, gửi inlineData base64", async () => {

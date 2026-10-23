@@ -1,41 +1,42 @@
-// SC_09 Đơn bán mới (/don/new) và Sửa đơn chưa gửi (/don/:id/sua).
-// Lưu qua RPC save_order (BR-07 do DB quyết trạng thái). Khách mới: tạo dòng customers trước (bảng ghi trực tiếp được);
-// tiền cọc: ghi 1 khoản payments kind 'deposit' sau khi đơn đã lưu (save_order không nhận cọc).
+// SC_09 Đơn bán mới (/don/new) và Sửa đơn chưa gửi (/don/:id/sua) — CR-001: mỗi dòng = 1 chiếc cụ thể (A6).
+// Lưu 1 lệnh RPC save_order: tạo khách mới (p_order.new_customer) + đơn + cọc (p_order.deposit_vnd) trong cùng
+// transaction; DB quyết trạng thái (có chiếc Đang về ⇒ Đặt trước, tất cả Trong kho ⇒ Đã chốt).
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useData, useStore } from '../data/store.tsx'
 import { errorMessage } from '../data/errors.ts'
-import type { DbData, OrderStatusDb, ShipPayerDb } from '../data/types.ts'
-import { supabase } from '../lib/supabase.ts'
-import { useToast } from '../ui/feedback.tsx'
+import type { DbData, OrderStatusDb, ShipPayerDb, UnitViewRow } from '../data/types.ts'
+import { Sheet, useToast } from '../ui/feedback.tsx'
 import { Shell } from '../ui/Shell.tsx'
 import { ORDER_LABEL } from '../ui/status.tsx'
 import { parseNum, todayVn, vnd } from '../ui/format.ts'
-import { makeLookup } from './orders/common.ts'
+import { fold, makeLookup, unitAvailability } from './orders/common.ts'
+import '../styles/orders.css'
 
-interface LineDraft { key: number; variantId: string; qty: string; price: string }
+interface LineDraft { unitId: string; price: string }
 interface Draft {
   custId: string; newName: string; newFb: string; newPhone: string; newAddr: string
   lines: LineDraft[]; shipFee: string; shipPayer: ShipPayerDb; deposit: string; date: string; note: string
 }
 type Errs = Partial<Record<string, string>>
-const MAX_LINES = 20
-let lineSeq = 1
+const MAX_LINES = 50 // save_order: TOO_MANY_LINES khi > 50
+const fmt = (n: number | null | undefined) => (n != null ? n.toLocaleString('vi-VN') : '')
 
-function initDraft(d: DbData, orderId: string | null, presetCust: string | null): Draft {
+function initDraft(d: DbData, orderId: string | null, presetCust: string | null, presetUnit: string | null = null): Draft {
   const o = orderId ? d.orders.find((x) => x.id === orderId) : undefined
   if (o) {
     return {
       custId: o.customer_id, newName: '', newFb: '', newPhone: '', newAddr: '',
-      lines: d.orderLines.filter((x) => x.order_id === o.id).map((x) => ({ key: lineSeq++, variantId: x.variant_id, qty: String(x.qty), price: x.unit_price_vnd.toLocaleString('vi-VN') })),
-      shipFee: o.ship_fee_vnd ? o.ship_fee_vnd.toLocaleString('vi-VN') : '', shipPayer: o.ship_fee_payer, deposit: '', date: o.order_date, note: o.note ?? '',
+      lines: d.orderLines.filter((x) => x.order_id === o.id && !x.cancelled).map((x) => ({ unitId: x.unit_id, price: fmt(x.unit_price_vnd) })),
+      shipFee: o.ship_fee_vnd ? fmt(o.ship_fee_vnd) : '', shipPayer: o.ship_fee_payer, deposit: '', date: o.order_date, note: o.note ?? '',
     }
   }
   const cust = presetCust && d.customers.some((c) => c.id === presetCust && !c.is_hidden) ? presetCust : ''
+  // ?chiec=<unitId> (nút "Bán" ở Kho / chi tiết chiếc): điền sẵn chiếc nếu còn bán được (A6)
+  const u = presetUnit ? d.unitView.find((x) => x.unit_id === presetUnit && (x.status === 'in_stock' || x.status === 'incoming')) : undefined
   return {
     custId: cust, newName: '', newFb: '', newPhone: '', newAddr: '',
-    lines: [{ key: lineSeq++, variantId: '', qty: '1', price: '' }],
-    shipFee: '', shipPayer: d.settings?.default_ship_fee_payer ?? 'customer', deposit: '', date: todayVn(), note: '',
+    lines: u ? [{ unitId: u.unit_id, price: u.list_price_vnd != null ? fmt(u.list_price_vnd) : '' }] : [], shipFee: '', shipPayer: d.settings?.default_ship_fee_payer ?? 'customer', deposit: '', date: todayVn(), note: '',
   }
 }
 
@@ -48,13 +49,14 @@ export default function OrderNew() {
 function OrderForm({ editId }: { editId: string | null }) {
   const [sp] = useSearchParams()
   const d = useData()
-  const { rpc, reload } = useStore()
+  const { rpc } = useStore()
   const toast = useToast()
   const nav = useNavigate()
   const lk = useMemo(() => makeLookup(d), [d])
-  const [f, setF] = useState<Draft>(() => initDraft(d, editId, sp.get('khach')))
+  const [f, setF] = useState<Draft>(() => initDraft(d, editId, sp.get('khach'), sp.get('chiec')))
   const [errs, setErrs] = useState<Errs>({})
   const [busy, setBusy] = useState(false)
+  const [picking, setPicking] = useState(false)
 
   const order = editId ? lk.order(editId) : undefined
   const back = editId ? `/don/${editId}` : '/don'
@@ -63,132 +65,104 @@ function OrderForm({ editId }: { editId: string | null }) {
   }
   if (order && order.status !== 'preorder' && order.status !== 'confirmed') {
     return <Shell section="don" title={`Sửa ${d.orderCode[order.id]}`} back={back}>
-      <div className="warn-box"><span>Đơn đã {order.status === 'cancelled' ? 'huỷ' : 'gửi'} — không sửa được hàng / giá. Mã vận đơn và ghi chú sửa ở chi tiết đơn.</span></div>
+      <div className="warn-box"><span>Đơn đã {order.status === 'cancelled' ? 'huỷ' : 'gửi'} — không sửa được chiếc / giá. Mã vận đơn và ghi chú sửa ở chi tiết đơn.</span></div>
       <Link className="btn btn-ghost btn-block" to={back}>Về chi tiết đơn</Link>
     </Shell>
   }
 
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setF((p) => ({ ...p, [k]: v }))
-  const setLine = (key: number, patch: Partial<LineDraft>) => setF((p) => ({ ...p, lines: p.lines.map((l) => (l.key === key ? { ...l, ...patch } : l)) }))
+  const setPrice = (unitId: string, price: string) => setF((p) => ({ ...p, lines: p.lines.map((l) => (l.unitId === unitId ? { ...l, price } : l)) }))
+  const removeLine = (unitId: string) => setF((p) => ({ ...p, lines: p.lines.filter((l) => l.unitId !== unitId) }))
+  const toggleUnit = (u: UnitViewRow) => setF((p) => (p.lines.some((l) => l.unitId === u.unit_id)
+    ? { ...p, lines: p.lines.filter((l) => l.unitId !== u.unit_id) }
+    : p.lines.length >= MAX_LINES ? p : { ...p, lines: [...p.lines, { unitId: u.unit_id, price: fmt(u.list_price_vnd) }] }))
 
-  // SL của chính đơn đang sửa đang được giữ ⇒ cộng lại khi tính (save_order loại đơn này khỏi "Đã giữ").
-  const ownQty = (vid: string) => (editId ? d.orderLines.filter((x) => x.order_id === editId && x.variant_id === vid).reduce((a, x) => a + x.qty, 0) : 0)
-  const avail = (vid: string) => {
-    const st = lk.stock(vid)
-    const own = ownQty(vid)
-    return { free: (st?.free_on_hand ?? 0) + own, sellable: (st?.sellable ?? 0) + own, incoming: st?.incoming ?? 0, avg: st?.avg_cost_vnd ?? 0 }
-  }
-
-  // Danh sách chọn: biến thể đang bán (+ biến thể đã có trong đơn đang sửa dù đã ẩn), theo thứ tự model.
-  const modelOrder = new Map(d.models.map((m, i) => [m.id, i]))
-  const usedVids = new Set(f.lines.map((l) => l.variantId))
-  const variantOpts = d.stock
-    .filter((s) => s.is_active || usedVids.has(s.variant_id))
-    .sort((a, b) => (modelOrder.get(a.model_id) ?? 0) - (modelOrder.get(b.model_id) ?? 0) || a.variant_name.localeCompare(b.variant_name, 'vi'))
   const custOpts = d.customers
     .filter((c) => !c.is_hidden || c.id === f.custId)
     .sort((a, b) => a.fb_name.localeCompare(b.fb_name, 'vi'))
   const selCust = f.custId ? lk.cust(f.custId) : undefined
 
-  // Từng dòng: SL, giá (trống = giá niêm yết).
+  // Từng dòng: chiếc (v_units), nơi đang ở (A6), giá chốt.
   const rows = f.lines.map((l) => {
-    const st = l.variantId ? lk.stock(l.variantId) : undefined
-    const q = parseNum(l.qty)
-    const price = parseNum(l.price) ?? st?.list_price_vnd ?? null
-    return { l, st, q: q != null && Number.isInteger(q) && q > 0 ? q : 0, price }
+    const u = lk.unit(l.unitId)
+    const where = u ? unitAvailability(u, editId) : null
+    return { l, u, where, price: parseNum(l.price) }
   })
+  // Chiếc vừa bị máy khác giữ / bán / lô huỷ trong lúc đang nhập (realtime) ⇒ chặn lưu.
+  const lost = rows.filter((r) => !r.u || !r.where)
+  const incomingLots = [...new Set(rows.filter((r) => r.where === 'incoming').map((r) => r.u!.lot_id))]
 
-  // BR-07 xem trước — gộp SL theo biến thể.
-  const need = new Map<string, number>()
-  for (const r of rows) if (r.st && r.q > 0) need.set(r.l.variantId, (need.get(r.l.variantId) ?? 0) + r.q)
+  // A6 xem trước (DB quyết lại lúc lưu).
   let preview: { st: OrderStatusDb | 'block'; msg: string } | null = null
-  if (need.size) {
-    const over = [...need].filter(([vid, q]) => q > avail(vid).sellable)
-    const notReady = [...need].filter(([vid, q]) => q > avail(vid).free)
-    if (over.length) {
-      preview = { st: 'block', msg: `Vượt số có thể bán — ${over.map(([vid]) => `${lk.vName(vid)} (${Math.max(0, avail(vid).sellable)})`).join('; ')}. Nhập thêm lô trước.` }
-    } else if (notReady.length) {
-      const single = need.size === 1
-      preview = {
-        st: 'preorder',
-        msg: single
-          ? `Không đủ hàng sẵn (còn ${Math.max(0, avail(notReady[0][0]).free)} chưa giữ), đang về ${avail(notReady[0][0]).incoming} → đơn sẽ là “Đặt trước”, chờ hàng về.`
-          : `Không đủ hàng sẵn: ${notReady.map(([vid]) => `${lk.vName(vid)} (còn ${Math.max(0, avail(vid).free)} chưa giữ, đang về ${avail(vid).incoming})`).join('; ')} → đơn sẽ là “Đặt trước”, chờ hàng về.`,
-      }
-    } else {
-      const [vid] = [...need.keys()]
-      preview = { st: 'confirmed', msg: need.size === 1 ? `Có sẵn ${avail(vid).free} chiếc chưa giữ → đơn sẽ là “Đã chốt”.` : 'Đủ hàng có sẵn chưa giữ → đơn sẽ là “Đã chốt”.' }
+  if (lost.length) {
+    preview = {
+      st: 'block',
+      msg: `Không còn chọn được: ${lost.map((r) => {
+        const u = r.u
+        if (!u) return 'một chiếc đã bị xoá'
+        if (u.lot_status === 'cancelled') return `${u.code} (lô đã huỷ)`
+        const by = u.holding_order_id ? d.orderCode[u.holding_order_id] ?? 'đơn khác' : 'đơn khác'
+        return `${u.code} (${u.status === 'sold' ? `đã bán · ${by}` : `đã giữ cho ${by}`})`
+      }).join(', ')} — bỏ chiếc này khỏi đơn.`,
     }
+  } else if (rows.length) {
+    preview = incomingLots.length
+      ? { st: 'preorder', msg: `→ Đặt trước, chờ ${incomingLots.map((id) => d.lotCode[id] ?? 'lô').join(', ')} về. Khi lô nhận vào kho, đơn tự chuyển Đã chốt.` }
+      : { st: 'confirmed', msg: '→ Đã chốt — mọi chiếc đều đang trong kho.' }
   }
 
   // Tiền xem trước (số chính thức do DB tính sau khi lưu).
   const ship = parseNum(f.shipFee) ?? 0
   const dep = parseNum(f.deposit) ?? 0
-  const priced = rows.filter((r) => r.st && r.q > 0)
-  const allPriced = priced.length > 0 && priced.every((r) => r.price != null)
-  const goods = allPriced ? priced.reduce((a, r) => a + r.q * (r.price ?? 0), 0) : null
+  const allPriced = rows.length > 0 && rows.every((r) => r.price != null)
+  const goods = allPriced ? rows.reduce((a, r) => a + (r.price ?? 0), 0) : null
   const total = goods != null ? goods + (f.shipPayer === 'customer' ? ship : 0) : null
   const paidBefore = editId ? lk.sum(editId)?.paid_vnd ?? 0 : 0
-  const avgKnown = priced.every((r) => (r.st?.avg_cost_vnd ?? 0) > 0)
-  const profit = allPriced && avgKnown
-    ? priced.reduce((a, r) => a + r.q * ((r.price ?? 0) - (r.st?.avg_cost_vnd ?? 0)), 0) - (f.shipPayer === 'shop' ? ship : 0)
+  const costKnown = rows.every((r) => r.u)
+  const profit = allPriced && costKnown
+    ? rows.reduce((a, r) => a + (r.price ?? 0) - (r.u?.cost_vnd ?? 0), 0) - (f.shipPayer === 'shop' ? ship : 0)
     : null
+  const provisional = rows.some((r) => r.u?.cost_is_provisional)
 
   function validate(): Errs {
     const e: Errs = {}
     if (!f.custId && !f.newName.trim()) e['o-name'] = 'Nhập tên Facebook của khách.'
     if (f.custId && !selCust) e['o-cust'] = 'Khách không còn — chọn lại.'
-    f.lines.forEach((l) => {
-      if (!l.variantId) e[`o-variant-${l.key}`] = 'Chọn model · biến thể.'
-      const q = parseNum(l.qty)
-      if (q == null || !Number.isInteger(q) || q < 1 || q > 1000) e[`o-qty-${l.key}`] = 'Số lượng là số nguyên 1–1000.'
-      const st = l.variantId ? lk.stock(l.variantId) : undefined
-      const p = parseNum(l.price)
-      if (l.price.trim() && (p == null || p < 0 || !Number.isInteger(p))) e[`o-price-${l.key}`] = 'Giá chốt là số đồng ≥ 0.'
-      else if (p == null && st && st.list_price_vnd == null) e[`o-price-${l.key}`] = 'Biến thể chưa có giá niêm yết — nhập giá chốt.'
-    })
+    if (!f.lines.length) e['o-units'] = 'Chọn ít nhất 1 chiếc — bấm "+ Chọn chiếc".'
+    for (const r of rows) {
+      const p = r.price
+      if (!r.l.price.trim()) e[`o-price-${r.l.unitId}`] = 'Nhập giá chốt cho chiếc này.'
+      else if (p == null || p < 0 || !Number.isInteger(p)) e[`o-price-${r.l.unitId}`] = 'Giá chốt là số đồng ≥ 0.'
+    }
     if (f.shipFee.trim() && (parseNum(f.shipFee) == null || ship < 0 || !Number.isInteger(ship))) e['o-ship'] = 'Phí ship là số đồng ≥ 0.'
-    if (f.deposit.trim() && (parseNum(f.deposit) == null || dep < 0 || !Number.isInteger(dep))) e['o-dep'] = 'Tiền cọc là số đồng ≥ 0.'
+    if (!editId && f.deposit.trim() && (parseNum(f.deposit) == null || dep < 0 || !Number.isInteger(dep))) e['o-dep'] = 'Tiền cọc là số đồng ≥ 0.'
     if (!f.date) e['o-date'] = 'Chọn ngày.'
-    if (preview?.st === 'block') e.form = 'Vượt số có thể bán (BR-07) — giảm số lượng hoặc nhập thêm lô.'
+    if (preview?.st === 'block') e.form = preview.msg
     return e
   }
 
   async function save() {
     const e = validate()
     setErrs(e)
-    if (Object.keys(e).length) { toast(e.form ?? 'Kiểm tra lại các ô báo đỏ.'); return }
+    if (Object.keys(e).length) { toast(e.form ?? e['o-units'] ?? 'Kiểm tra lại các ô báo đỏ.'); return }
     setBusy(true)
     try {
-      // 1. Khách mới → tạo trước; giữ id trong form để bấm lưu lại không tạo trùng.
-      let custId = f.custId
-      if (!custId) {
-        const { data: row, error } = await supabase.from('customers')
-          .insert({ fb_name: f.newName.trim(), fb_url: f.newFb.trim() || null, phone: f.newPhone.trim() || null, address: f.newAddr.trim() || null })
-          .select('id').single()
-        if (error) throw new Error(errorMessage(error))
-        custId = row.id as string
-        setF((p) => ({ ...p, custId }))
-      }
-      // 2. Đơn + dòng (BR-07 trong DB).
+      const cust = f.custId
+        ? { customer_id: f.custId }
+        : { new_customer: { fb_name: f.newName.trim(), fb_url: f.newFb.trim() || null, phone: f.newPhone.trim() || null, address: f.newAddr.trim() || null } }
       const res = await rpc<{ order_id: string; status: OrderStatusDb }>('save_order', {
         p_order_id: editId,
         p_order: {
-          customer_id: custId, order_date: f.date, ship_fee_vnd: ship, ship_fee_payer: f.shipPayer,
+          ...cust, order_date: f.date, ship_fee_vnd: ship, ship_fee_payer: f.shipPayer,
           tracking_no: order?.tracking_no ?? null, note: f.note.trim() || null,
+          // Cọc chỉ khi tạo (sửa đơn mà gửi cọc ⇒ DEPOSIT_ONLY_ON_CREATE).
+          ...(editId ? {} : { deposit_vnd: dep, deposit_paid_at: f.date }),
         },
-        p_lines: rows.map((r) => ({ variant_id: r.l.variantId, qty: r.q, unit_price_vnd: r.price })),
+        p_lines: rows.map((r) => ({ unit_id: r.l.unitId, unit_price_vnd: r.price })),
         p_expected_version: order?.version ?? null,
       })
       const code = editId ? d.orderCode[editId] : `D-${String(d.orders.length + 1).padStart(3, '0')}`
-      // 3. Cọc (chỉ khi tạo mới).
-      let depMsg = ''
-      if (!editId && dep > 0) {
-        const { error } = await supabase.from('payments').insert({ order_id: res.order_id, paid_at: f.date, kind: 'deposit', amount_vnd: dep })
-        if (error) depMsg = ' · CHƯA ghi được cọc, ghi lại ở chi tiết đơn'
-        await reload()
-      }
-      toast(`Đã lưu ${code} · ${ORDER_LABEL[res.status]}${depMsg}`)
+      toast(`Đã lưu ${code} · ${ORDER_LABEL[res.status]}${!editId && dep > 0 ? ` · cọc ${vnd(dep)}` : ''}`)
       nav(`/don/${res.order_id}`, { replace: true })
     } catch (err) {
       toast(err instanceof Error ? err.message : errorMessage(err))
@@ -223,37 +197,31 @@ function OrderForm({ editId }: { editId: string | null }) {
             <label className="f full" htmlFor="o-addr">Địa chỉ giao<input className="input" id="o-addr" value={f.newAddr} onChange={(e) => set('newAddr', e.target.value)} maxLength={500} /></label>
           </>}
 
-        <p className="section-title full">Hàng</p>
-        {f.lines.map((l, i) => {
-          const st = l.variantId ? lk.stock(l.variantId) : undefined
-          return (
-            <div key={l.key} className="full form-grid" style={{ gap: 10 }}>
-              <label className="f" htmlFor={`o-variant-${l.key}`}>
-                <span className="lrow"><span>Model · biến thể <span className="req">*</span>{f.lines.length > 1 ? ` (dòng ${i + 1})` : ''}</span>
-                  {f.lines.length > 1 && <button type="button" className="link-btn" style={{ padding: 0 }} onClick={() => setF((p) => ({ ...p, lines: p.lines.filter((x) => x.key !== l.key) }))}>Xoá dòng</button>}</span>
-                <select className="input" id={`o-variant-${l.key}`} value={l.variantId} onChange={(e) => setLine(l.key, { variantId: e.target.value, price: '' })} aria-invalid={!!errs[`o-variant-${l.key}`]}>
-                  <option value="">Chọn…</option>
-                  {variantOpts.map((s) => <option key={s.variant_id} value={s.variant_id}>{s.model_name} · {s.variant_name} — có thể bán {s.sellable + ownQty(s.variant_id)}</option>)}
-                </select>
-                <Err k={`o-variant-${l.key}`} />
-              </label>
-              <div className="two">
-                <label className="f" htmlFor={`o-qty-${l.key}`}>Số lượng
-                  <input className="input money" id={`o-qty-${l.key}`} inputMode="numeric" value={l.qty} onChange={(e) => setLine(l.key, { qty: e.target.value })} aria-invalid={!!errs[`o-qty-${l.key}`]} />
-                  <Err k={`o-qty-${l.key}`} />
-                </label>
-                <label className="f" htmlFor={`o-price-${l.key}`}>Giá chốt / chiếc
-                  <input className="input money" id={`o-price-${l.key}`} inputMode="numeric" value={l.price} onChange={(e) => setLine(l.key, { price: e.target.value })}
-                    placeholder={st?.list_price_vnd != null ? st.list_price_vnd.toLocaleString('vi-VN') : ''} aria-invalid={!!errs[`o-price-${l.key}`]} />
-                  <Err k={`o-price-${l.key}`} />
-                </label>
-              </div>
+        <p className="section-title full">Chiếc bán{rows.length ? ` · ${rows.length}` : ''}</p>
+        {rows.length === 0 && <div className="empty full">Chưa chọn chiếc nào — bấm “+ Chọn chiếc”.</div>}
+        {rows.map((r) => (
+          <div key={r.l.unitId} className="full ord-line">
+            <div className="lrow">
+              <span className="ord-unit">
+                <b className="num">{r.u?.code ?? '?'}</b> · {r.u?.model_name ?? 'Không tìm thấy chiếc'}
+                {r.where === 'in_stock' && <span className="pill ok">Trong kho</span>}
+                {r.where === 'incoming' && <span className="pill way">Đang về ({d.lotCode[r.u!.lot_id] ?? 'lô'})</span>}
+                {!r.where && <span className="pill bad">Không còn chọn được</span>}
+              </span>
+              <button type="button" className="link-btn" onClick={() => removeLine(r.l.unitId)} aria-label={`Bỏ ${r.u?.code ?? 'chiếc'}`}>Bỏ</button>
             </div>
-          )
-        })}
+            <label className="f" htmlFor={`o-price-${r.l.unitId}`}>Giá chốt
+              <input className="input money" id={`o-price-${r.l.unitId}`} inputMode="numeric" value={r.l.price} onChange={(e) => setPrice(r.l.unitId, e.target.value)}
+                placeholder={fmt(r.u?.list_price_vnd)} aria-invalid={!!errs[`o-price-${r.l.unitId}`]} />
+              <Err k={`o-price-${r.l.unitId}`} />
+              {r.u && <span className="hint">Giá bán dự kiến {vnd(r.u.list_price_vnd)} · giá nhập {vnd(r.u.cost_vnd)}{r.u.cost_is_provisional ? ' (tạm tính, chưa có ship lô)' : ''}</span>}
+            </label>
+          </div>
+        ))}
         {f.lines.length < MAX_LINES && (
-          <button type="button" className="btn btn-ghost full" onClick={() => setF((p) => ({ ...p, lines: [...p.lines, { key: lineSeq++, variantId: '', qty: '1', price: '' }] }))}>+ Thêm dòng</button>
+          <button type="button" id="o-units" className="btn btn-ghost full" onClick={() => setPicking(true)}>+ Chọn chiếc</button>
         )}
+        {errs['o-units'] && <span className="err-text full">{errs['o-units']}</span>}
         {preview && (
           <div className={`${preview.st === 'block' ? 'warn-box' : 'note-box'} full`}>
             <span>{preview.msg}</span>
@@ -287,14 +255,86 @@ function OrderForm({ editId }: { editId: string | null }) {
         <label className="f full" htmlFor="o-note">Ghi chú<input className="input" id="o-note" value={f.note} onChange={(e) => set('note', e.target.value)} maxLength={2000} /></label>
 
         <div className="calc full">
-          <div className="ln"><span>Khách phải trả</span><span>{vnd(total)}</span></div>
+          <div className="ln"><span>Tiền hàng ({rows.length} chiếc)</span><span>{vnd(goods)}</span></div>
+          <div className="ln"><span>Ship {f.shipPayer === 'customer' ? 'khách trả (thu hộ)' : 'shop chịu'}</span><span>{vnd(ship)}</span></div>
+          <div className="ln total"><span>Khách phải trả</span><span>{vnd(total)}</span></div>
           {editId
             ? <div className="ln"><span>Đã thu</span><span>{vnd(paidBefore)}</span></div>
             : <div className="ln"><span>Cọc</span><span>{vnd(dep)}</span></div>}
           <div className="ln total"><span>Còn phải thu</span><span>{total != null ? vnd(total - (editId ? paidBefore : dep)) : '—'}</span></div>
-          <div className="ln"><span>Lãi dự kiến (theo giá vốn BQ hiện tại)</span><span>{profit != null ? vnd(profit) : '—'}</span></div>
+          <div className="ln"><span>Lãi dự kiến</span><span>{profit != null ? vnd(profit) : '—'}</span></div>
+          <div className="formula">= Σ(giá chốt − giá nhập ₫ hiện tại){f.shipPayer === 'shop' ? ' − ship shop chịu' : ''}{provisional ? ' · có chiếc giá nhập tạm tính' : ''}</div>
         </div>
       </div>
+
+      {picking && <UnitPicker d={d} editId={editId} chosen={new Set(f.lines.map((l) => l.unitId))} full={f.lines.length >= MAX_LINES}
+        onToggle={toggleUnit} onClose={() => setPicking(false)} />}
     </Shell>
+  )
+}
+
+/** Sheet chọn chiếc: lọc theo model (chip) + tìm theo mã / số seri; chỉ chiếc chọn được theo A6. */
+function UnitPicker({ d, editId, chosen, full, onToggle, onClose }: {
+  d: DbData; editId: string | null; chosen: Set<string>; full: boolean; onToggle: (u: UnitViewRow) => void; onClose: () => void
+}) {
+  const [model, setModel] = useState<string>('')
+  const [q, setQ] = useState('')
+  const avail = useMemo(() => {
+    const modelOrder = new Map(d.models.map((m, i) => [m.id, i]))
+    return d.unitView
+      .filter((u) => unitAvailability(u, editId) != null)
+      // Trong kho trước, rồi Đang về; trong nhóm theo thứ tự model rồi mã.
+      .sort((a, b) => Number(b.is_received) - Number(a.is_received)
+        || (modelOrder.get(a.model_id) ?? 0) - (modelOrder.get(b.model_id) ?? 0) || a.code.localeCompare(b.code))
+  }, [d.unitView, d.models, editId])
+  const models = useMemo(() => {
+    const m = new Map<string, { name: string; n: number }>()
+    for (const u of avail) {
+      const x = m.get(u.model_id) ?? { name: u.model_name, n: 0 }
+      x.n += 1
+      m.set(u.model_id, x)
+    }
+    return [...m]
+  }, [avail])
+  const qq = fold(q.trim())
+  const list = avail.filter((u) => (!model || u.model_id === model)
+    && (!qq || fold(u.code).includes(qq) || fold(u.serial_no ?? '').includes(qq) || fold(u.model_name).includes(qq)))
+
+  return (
+    <Sheet title="Chọn chiếc" onClose={onClose}
+      footer={<button className="btn btn-primary btn-block" onClick={onClose}>Xong{chosen.size ? ` · đã chọn ${chosen.size}` : ''}</button>}>
+      <input className="input" id="up-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm mã (KU-007) hoặc số seri" aria-label="Tìm chiếc" />
+      {models.length > 1 && (
+        <div className="chips" role="group" aria-label="Lọc theo model">
+          <button type="button" className="chip" aria-pressed={!model} onClick={() => setModel('')}>Tất cả<span className="c">{avail.length}</span></button>
+          {models.map(([id, m]) => <button key={id} type="button" className="chip" aria-pressed={model === id} onClick={() => setModel(id)}>{m.name}<span className="c">{m.n}</span></button>)}
+        </div>
+      )}
+      {full && <p className="hint">Đơn đã đủ {MAX_LINES} chiếc — tối đa {MAX_LINES} chiếc / đơn.</p>}
+      {avail.length === 0
+        ? <div className="empty">Không còn chiếc nào Trong kho / Đang về chưa giữ. <Link to="/lo/new">Nhập lô Goofish</Link> trước.</div>
+        : list.length === 0
+          ? <div className="empty">Không có chiếc khớp — đổi model hoặc từ khoá.</div>
+          : (
+            <div className="list up-list">
+              {list.map((u) => {
+                const on = chosen.has(u.unit_id)
+                return (
+                  <button key={u.unit_id} type="button" className="li" aria-pressed={on} disabled={!on && full} onClick={() => onToggle(u)}>
+                    <span className={`up-check ${on ? 'on' : ''}`} aria-hidden="true" />
+                    <span className="main">
+                      <b className="num">{u.code}</b> · {u.model_name}
+                      <span className="s">
+                        {u.is_received ? <span className="pill ok">Trong kho</span> : <span className="pill way">Đang về ({d.lotCode[u.lot_id] ?? 'lô'})</span>}
+                        {u.serial_no ? ` · seri ${u.serial_no}` : ''}
+                      </span>
+                    </span>
+                    <span className="v">{vnd(u.list_price_vnd)}</span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+    </Sheet>
   )
 }

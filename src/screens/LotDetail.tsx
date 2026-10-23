@@ -1,15 +1,17 @@
-// SC_05 Chi tiết lô: bước trạng thái, chuyển bước / nhận vào kho, khối tiền (số do DB tính), phí ship, thông tin tin Goofish, huỷ.
+// SC_05 Chi tiết lô: bước trạng thái, chuyển bước / nhận vào kho, khối tiền (v_lot_summary — số do DB tính), phí ship,
+// danh sách chiếc của lô (v_units, CR-001), thông tin tin Goofish, huỷ.
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useData, useStore } from '../data/store.tsx'
 import { supabase } from '../lib/supabase.ts'
 import { Shell } from '../ui/Shell.tsx'
 import { Sheet, useToast } from '../ui/feedback.tsx'
 import { Icon } from '../ui/icons.tsx'
-import { LOT_FLOW, LOT_LABEL } from '../ui/status.tsx'
+import type { DbData, UnitViewRow } from '../data/types.ts'
+import { LOT_FLOW, LOT_LABEL, UnitChip } from '../ui/status.tsx'
 import { cny, dmy, vnd } from '../ui/format.ts'
 import { errorMessage } from '../data/errors.ts'
-import { isOpen, lineGoodsVnd, linesOf, nextStatus, sellerOf, summaryOf, UnitCost, variantName } from './lots/common.tsx'
+import { isOpen, modelsText, nextStatus, sellerOf, summaryOf, UnitCost, UnitCounts, unitsOfLot, useIsDesk } from './lots/common.tsx'
 import { useLotFlow } from './lots/LotFlow.tsx'
 import '../styles/lots.css'
 
@@ -45,6 +47,7 @@ export default function LotDetail() {
   const { id = '' } = useParams()
   const d = useData()
   const flow = useLotFlow()
+  const desk = useIsDesk()
   const [noteOpen, setNoteOpen] = useState(false)
   const closeNote = useCallback(() => setNoteOpen(false), [])
   const l = d.lots.find((x) => x.id === id)
@@ -57,11 +60,12 @@ export default function LotDetail() {
     )
   }
 
-  const s = sellerOf(d, l), sum = summaryOf(d, l.id), lines = linesOf(d, l.id)
+  const s = sellerOf(d, l), sum = summaryOf(d, l.id), units = unitsOfLot(d, l.id)
   const open = isOpen(l.status), next = nextStatus(l.status)
   const idx = LOT_FLOW.indexOf(l.status)
-  const totalQty = sum?.total_qty ?? lines.reduce((a, x) => a + x.qty, 0)
+  const totalQty = sum?.total_qty ?? units.length
   const href = goofishHref(l.goofish_url, l.goofish_item_id)
+  const provisional = sum?.cost_is_provisional ?? l.ship_fee_vnd == null
 
   return (
     <Shell section="lo" title={d.lotCode[l.id] ?? 'Lô'} back="/lo"
@@ -81,17 +85,14 @@ export default function LotDetail() {
             <button className="btn btn-ghost btn-block" onClick={() => flow.receive(l)}>Nhận vào kho ngay</button>
           )}
           <div className="calc">
-            {lines.map((x) => (
-              <div className="ln" key={x.id}><span>{x.qty} × {variantName(d, x.variant_id)} @ {cny(Number(x.price_cny))}</span><span>{vnd(lineGoodsVnd(l, x))}</span></div>
-            ))}
+            <div className="ln"><span>Hàng</span><span>{modelsText(d, sum)}</span></div>
+            <div className="ln"><span>Tiền hàng ({cny(Number(sum?.total_cny ?? 0))} × tỷ giá)</span><span>{vnd(sum?.goods_vnd ?? 0)}</span></div>
             <div className="ln"><span>Tỷ giá</span><span>{Number(l.exchange_rate).toLocaleString('vi-VN')} ₫/¥</span></div>
             <div className="ln"><span>Phí ship về VN (cả lô)</span><span>{l.ship_fee_vnd == null ? <span className="req">chưa nhập</span> : vnd(l.ship_fee_vnd)}</span></div>
+            <div className="ln"><span>Ship / chiếc ({totalQty} chiếc)</span><span>{sum?.ship_per_unit_vnd != null ? vnd(sum.ship_per_unit_vnd) : '—'}</span></div>
             <div className="ln total"><span>Phải trả trung gian</span><span>{vnd(sum?.payable_vnd ?? 0)}</span></div>
-            {lines.map((x) => (
-              <div className="ln" key={x.id}><span>Giá vốn / chiếc · {d.variants.find((v) => v.id === x.variant_id)?.name ?? '?'}</span><span><UnitCost l={l} x={x} /></span></div>
-            ))}
-            <div className="formula">= giá web ¥ × tỷ giá + ship lô ÷ {totalQty} chiếc</div>
-            {l.ship_fee_vnd == null && l.status !== 'cancelled' && <div className="formula">Giá vốn đang tạm tính — chưa gồm phí ship về VN.</div>}
+            <div className="formula">Giá nhập ₫ / chiếc = giá ¥ của chiếc × tỷ giá + ship lô ÷ {totalQty} chiếc (sửa tay được từng chiếc)</div>
+            {provisional && l.status !== 'cancelled' && <div className="formula">Giá nhập ₫ đang tạm tính — chưa gồm phí ship về VN.</div>}
           </div>
           {l.status !== 'cancelled' && (
             <button className="btn btn-ghost btn-block" onClick={() => flow.shipFee(l)}>{l.ship_fee_vnd == null ? 'Nhập phí ship về VN' : 'Sửa phí ship'}</button>
@@ -114,9 +115,72 @@ export default function LotDetail() {
           {open && <button className="btn btn-danger btn-block" onClick={() => flow.cancel(l)}>Huỷ lô</button>}
         </div>
       </div>
+
+      <div className="row lot-units-head">
+        <p className="section-title">Các chiếc trong lô ({units.length})</p>
+        <UnitCounts sum={sum} />
+      </div>
+      {!units.length
+        ? <div className="empty">Lô chưa có chiếc nào{open ? <> — bấm <Link className="link-btn" to={`/lo/${l.id}/sua`}>Sửa lô</Link> để thêm nhóm chiếc.</> : '.'}</div>
+        : desk ? <UnitTable d={d} units={units} /> : <UnitList d={d} units={units} />}
+      {l.status === 'received' && units.length > 0 && <p className="hint">Sửa giá nhập ₫ (sửa tay), giá bán dự kiến, số seri từng chiếc: bấm vào chiếc (A10).</p>}
+
       {flow.sheets}
       {noteOpen && <NoteSheet lotId={l.id} onClose={closeNote} />}
     </Shell>
+  )
+}
+
+const holderCode = (d: DbData, u: UnitViewRow) => (u.holding_order_id ? d.orderCode[u.holding_order_id] : undefined)
+
+/** Bảng chiếc (máy tính): mã → chi tiết chiếc; chip giữ/bán → đơn. */
+function UnitTable({ d, units }: { d: DbData; units: UnitViewRow[] }) {
+  const nav = useNavigate()
+  return (
+    <div className="tbl-wrap">
+      <table className="tbl">
+        <thead><tr><th>Mã</th><th>Model</th><th className="r">Giá ¥</th><th className="r">Giá nhập ₫</th><th className="r">Giá bán dự kiến</th><th>Trạng thái</th></tr></thead>
+        <tbody>
+          {units.map((u) => {
+            const go = () => nav(`/kho/${u.unit_id}`)
+            const h = holderCode(d, u)
+            return (
+              <tr key={u.unit_id} data-act="go" tabIndex={0} onClick={go} onKeyDown={(e) => { if (e.key === 'Enter') go() }}>
+                <td><Link className="link-btn" to={`/kho/${u.unit_id}`} onClick={(e) => e.stopPropagation()}>{u.code}</Link>{u.serial_no ? <span className="muted small"> · {u.serial_no}</span> : null}</td>
+                <td>{u.model_name}</td>
+                <td className="r">{cny(Number(u.price_cny))}</td>
+                <td className="r"><UnitCost u={u} /></td>
+                <td className="r">{u.list_price_vnd != null ? vnd(u.list_price_vnd) : '—'}</td>
+                <td>
+                  {u.holding_order_id
+                    ? <Link to={`/don/${u.holding_order_id}`} onClick={(e) => e.stopPropagation()} aria-label={`Mở đơn ${h ?? ''}`}><UnitChip s={u.status} holder={h} /></Link>
+                    : <UnitChip s={u.status} />}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/** Danh sách chiếc (điện thoại): mỗi dòng mở chi tiết chiếc. */
+function UnitList({ d, units }: { d: DbData; units: UnitViewRow[] }) {
+  return (
+    <div className="list">
+      {units.map((u) => (
+        <Link key={u.unit_id} className="li" to={`/kho/${u.unit_id}`}>
+          <div className="main">
+            <b>{u.code}</b> <span className="muted small">{u.model_name}</span>
+            <div className="s">{cny(Number(u.price_cny))} · nhập <UnitCost u={u} /></div>
+            <div className="s">Bán dự kiến {u.list_price_vnd != null ? vnd(u.list_price_vnd) : '—'}</div>
+          </div>
+          <UnitChip s={u.status} holder={holderCode(d, u)} />
+          <Icon name="chev" size={16} />
+        </Link>
+      ))}
+    </div>
   )
 }
 

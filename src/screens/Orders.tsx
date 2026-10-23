@@ -24,7 +24,7 @@ function OrderRowItem({ s, lk, code }: { s: OrderSummaryRow; lk: Lookup; code: s
   return (
     <Link className="shot" to={`/don/${s.order_id}`}>
       <span className="t">{code} · {dmy(s.order_date)} · {s.customer_name}</span>
-      <span className="b">{lk.linesText(s.order_id)}</span>
+      <span className="b">{lk.unitsText(s)}</span>
       <span className="r"><OrderChip s={s.status} /><MoneyPill s={s} /></span>
       <span className="f num">{vnd(lk.total(s))}</span>
     </Link>
@@ -35,7 +35,7 @@ function OrderCard({ s, lk, code }: { s: OrderSummaryRow; lk: Lookup; code: stri
   return (
     <Link className="kcard" to={`/don/${s.order_id}`}>
       <span className="t">{code} · {s.customer_name}</span>
-      <span className="s">{lk.linesText(s.order_id)}</span>
+      <span className="s">{lk.unitsText(s)}</span>
       <span className="m"><span>{dmy(s.order_date)}</span><span>{tr(lk.total(s))}</span></span>
       {s.receivable_vnd > 0
         ? <span className="pill bad">còn thu {tr(s.receivable_vnd)}</span>
@@ -110,7 +110,7 @@ export default function Orders() {
       body = (
         <div className="tbl-wrap">
           <table className="tbl">
-            <thead><tr><th>Đơn</th><th>Ngày</th><th>Khách</th><th>Hàng</th><th>Trạng thái</th><th className="r">Tổng</th><th className="r">Đã thu</th><th className="r">Còn thu</th><th className="r">Lãi</th></tr></thead>
+            <thead><tr><th>Đơn</th><th>Ngày</th><th>Khách</th><th>Chiếc</th><th>Trạng thái</th><th className="r">Tổng</th><th className="r">Đã thu</th><th className="r">Còn thu</th><th className="r">Lãi</th></tr></thead>
             <tbody>
               {os.map((s) => {
                 const p = lk.profit(s.order_id)
@@ -119,7 +119,7 @@ export default function Orders() {
                     <td><Link to={`/don/${s.order_id}`} onClick={(e) => e.stopPropagation()} style={{ color: 'inherit' }}>{d.orderCode[s.order_id]}</Link></td>
                     <td>{dmy(s.order_date)}</td>
                     <td>{s.customer_name}</td>
-                    <td>{lk.linesText(s.order_id)}</td>
+                    <td>{lk.unitsText(s)}</td>
                     <td><OrderChip s={s.status} /></td>
                     <td className="r">{vnd(lk.total(s))}</td>
                     <td className="r">{vnd(s.paid_vnd)}</td>

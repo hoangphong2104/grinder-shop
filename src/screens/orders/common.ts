@@ -1,7 +1,7 @@
-// Tra cứu + tính phụ dùng chung cho nhóm màn Đơn bán / Khách.
-// Số tiền chính thức lấy từ view v_order_summary; ở đây chỉ ghép tên và ƯỚC lãi đơn chưa gửi (BQ hiện tại).
+// Tra cứu + tính phụ dùng chung cho nhóm màn Đơn bán / Khách (CR-001: đơn = danh sách chiếc cụ thể).
+// Số tiền chính thức lấy từ view v_order_summary / v_units; ở đây chỉ ghép tên và ƯỚC lãi đơn chưa gửi.
 import { useEffect, useState } from 'react'
-import type { CustomerRow, DbData, OrderLineRow, OrderRow, OrderStatusDb, OrderSummaryRow, PaymentKindDb, VariantRow, VariantStockRow } from '../../data/types.ts'
+import type { CustomerRow, DbData, OrderLineRow, OrderRow, OrderStatusDb, OrderSummaryRow, PaymentKindDb, UnitViewRow } from '../../data/types.ts'
 
 /** true khi màn hình ≥ 960px (bảng trên máy tính, thẻ trên điện thoại). */
 export function useIsDesk(): boolean {
@@ -20,57 +20,61 @@ export const PAY_LABEL: Record<PaymentKindDb, string> = { payment: 'Thanh toán'
 export const OPEN_STATUSES: OrderStatusDb[] = ['preorder', 'confirmed', 'shipped']
 export const isSentStatus = (s: OrderStatusDb) => s === 'shipped' || s === 'completed'
 
+/** Bỏ dấu + chữ thường để tìm kiếm ("Đen" ~ "den"). */
+export const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase()
+
 export interface Lookup {
   order: (id: string) => OrderRow | undefined
   sum: (orderId: string) => OrderSummaryRow | undefined
+  /** Dòng đơn (mỗi dòng 1 chiếc) theo line_no. */
   lines: (orderId: string) => OrderLineRow[]
   cust: (id: string) => CustomerRow | undefined
-  variant: (id: string) => VariantRow | undefined
-  stock: (variantId: string) => VariantStockRow | undefined
-  /** "K Ultra · Đen" */
-  vName: (variantId: string) => string
-  /** "1 × K Ultra · Đen, 2 × …" */
-  linesText: (orderId: string) => string
+  /** Chiếc cối (v_units) theo unit id. */
+  unit: (unitId: string) => UnitViewRow | undefined
+  /** "KU-007, JU-003" */
+  unitsText: (s: OrderSummaryRow) => string
   /** Khách phải trả = tiền hàng + ship khách trả (thu hộ — Q-015). */
   total: (s: OrderSummaryRow) => number
-  /** Lãi: đơn đã gửi = số DB (giá vốn đã chốt); chưa gửi = ước theo BQ hiện tại; Huỷ = null. */
+  /** Lãi: đơn đã gửi = số DB; chưa gửi = ước theo giá nhập ₫ hiện tại (A8); Huỷ = null. */
   profit: (orderId: string) => { value: number | null; est: boolean }
 }
 
 export function makeLookup(d: DbData): Lookup {
   const by = <T extends { id: string }>(rows: T[]) => new Map(rows.map((r) => [r.id, r]))
-  const orders = by(d.orders), customers = by(d.customers), variants = by(d.variants), models = by(d.models)
+  const orders = by(d.orders), customers = by(d.customers)
+  const units = new Map(d.unitView.map((u) => [u.unit_id, u]))
   const sums = new Map(d.orderSummary.map((s) => [s.order_id, s]))
-  const stock = new Map(d.stock.map((s) => [s.variant_id, s]))
   const linesBy = new Map<string, OrderLineRow[]>()
   for (const l of d.orderLines) {
     const a = linesBy.get(l.order_id)
     if (a) a.push(l); else linesBy.set(l.order_id, [l])
   }
-  const vName = (vid: string) => {
-    const v = variants.get(vid)
-    if (!v) return '?'
-    return `${models.get(v.model_id)?.name ?? '?'} · ${v.name}`
-  }
-  const lines = (oid: string) => linesBy.get(oid) ?? []
   return {
     order: (id) => orders.get(id),
     sum: (id) => sums.get(id),
-    lines,
+    lines: (oid) => linesBy.get(oid) ?? [],
     cust: (id) => customers.get(id),
-    variant: (id) => variants.get(id),
-    stock: (id) => stock.get(id),
-    vName,
-    linesText: (oid) => lines(oid).map((x) => `${x.qty} × ${vName(x.variant_id)}`).join(', '),
+    unit: (id) => units.get(id),
+    unitsText: (s) => (s.unit_codes?.length ? s.unit_codes.join(', ') : '—'),
     total: (s) => s.goods_vnd + s.ship_charged_vnd,
     profit: (oid) => {
       const s = sums.get(oid)
       if (!s || s.status === 'cancelled') return { value: null, est: false }
       if (s.profit_vnd != null) return { value: s.profit_vnd, est: false }
-      const margin = lines(oid).reduce((a, x) => a + x.qty * (x.unit_price_vnd - (x.unit_cost_vnd ?? stock.get(x.variant_id)?.avg_cost_vnd ?? 0)), 0)
-      return { value: margin - (s.ship_fee_payer === 'shop' ? s.ship_fee_vnd : 0), est: true }
+      // cost_vnd của view = Σ giá nhập ₫ hiệu lực hiện tại của các chiếc ⇒ cùng công thức với lãi khi đã gửi.
+      return { value: s.goods_vnd - s.cost_vnd - (s.ship_fee_payer === 'shop' ? s.ship_fee_vnd : 0), est: true }
     },
   }
+}
+
+/**
+ * A6 — chiếc chọn được cho đơn: Trong kho hoặc Đang về và chưa đơn nào giữ; khi sửa đơn,
+ * các chiếc của chính đơn đó cũng chọn được. Trả về nơi chiếc đang ở, hoặc null nếu không chọn được.
+ */
+export function unitAvailability(u: UnitViewRow, editId: string | null): 'in_stock' | 'incoming' | null {
+  if (u.lot_status === 'cancelled') return null
+  if (u.holding_order_id && u.holding_order_id !== editId) return null
+  return u.is_received ? 'in_stock' : 'incoming'
 }
 
 /** Sắp đơn mới nhất trước (ngày đơn, rồi thứ tự tạo). */

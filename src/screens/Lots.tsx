@@ -1,4 +1,5 @@
 // SC_04 Lô nhập — "Theo trạng thái" (bảng 5 cột trên máy tính / chip bước + thẻ trên điện thoại) hoặc "Danh sách".
+// v0.2 (CR-001): thẻ / dòng hiện tóm tắt model của lô ("2 × KU, 1 × JU") + đếm chiếc theo trạng thái (v_lot_summary).
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useData } from '../data/store.tsx'
@@ -7,7 +8,7 @@ import { Shell } from '../ui/Shell.tsx'
 import { Icon } from '../ui/icons.tsx'
 import { LOT_FLOW, LOT_LABEL, LotChip } from '../ui/status.tsx'
 import { dmy, vnd } from '../ui/format.ts'
-import { byNewest, linesOf, LotCard, LotRowItem, lotLinesText, sellerOf, summaryOf, UnitCost, useIsDesk } from './lots/common.tsx'
+import { byNewest, LotCard, LotRowItem, modelsText, sellerOf, summaryOf, UnitCounts, useIsDesk } from './lots/common.tsx'
 import { useLotFlow } from './lots/LotFlow.tsx'
 
 type View = 'board' | 'list'
@@ -91,7 +92,7 @@ export default function Lots() {
     body = !ls.length ? <div className="empty">{emptyMsg}</div> : desk ? (
       <div className="tbl-wrap">
         <table className="tbl">
-          <thead><tr><th>Lô</th><th>Ngày đặt</th><th>Hàng</th><th>Người bán</th><th>Trạng thái</th><th className="r">Tiền hàng</th><th className="r">Ship về VN</th><th className="r">Giá vốn / chiếc</th><th className="r">Phải trả TG</th></tr></thead>
+          <thead><tr><th>Lô</th><th>Ngày đặt</th><th>Hàng</th><th>Người bán</th><th>Trạng thái</th><th>Chiếc</th><th className="r">Tiền hàng</th><th className="r">Ship về VN</th><th className="r">Ship / chiếc</th><th className="r">Phải trả TG</th></tr></thead>
           <tbody>
             {ls.map((l) => {
               const s = sellerOf(d, l), sum = summaryOf(d, l.id)
@@ -99,12 +100,13 @@ export default function Lots() {
                 <tr key={l.id} data-act="go" tabIndex={0} onClick={() => nav(`/lo/${l.id}`)} onKeyDown={(e) => { if (e.key === 'Enter') nav(`/lo/${l.id}`) }}>
                   <td>{d.lotCode[l.id]}</td>
                   <td>{dmy(l.ordered_at)}</td>
-                  <td>{lotLinesText(d, l.id)}</td>
+                  <td>{modelsText(d, sum)}</td>
                   <td>{s?.nickname ?? '—'}{s?.is_avoided && <> <span className="pill bad">tránh</span></>}</td>
                   <td><LotChip s={l.status} /></td>
+                  <td><UnitCounts sum={sum} /></td>
                   <td className="r">{vnd(sum?.goods_vnd ?? 0)}</td>
                   <td className="r">{l.ship_fee_vnd == null ? <span className="pill bad">chưa nhập</span> : vnd(l.ship_fee_vnd)}</td>
-                  <td className="r">{linesOf(d, l.id).map((x, i) => <span key={x.id}>{i > 0 && <br />}<UnitCost l={l} x={x} /></span>)}</td>
+                  <td className="r">{sum?.ship_per_unit_vnd != null ? vnd(sum.ship_per_unit_vnd) : '—'}</td>
                   <td className="r">{vnd(sum?.payable_vnd ?? 0)}</td>
                 </tr>
               )

@@ -11,7 +11,7 @@ export default function MoreMenu() {
   return (
     <Shell section="" title="Menu">
       <div className="list">
-        {NAV.slice(4).map(([h, t, , ic]) => (
+        {NAV.slice(5).map(([h, t, , ic]) => (
           <Link key={h} className="li" to={h}><span className="gpic"><Icon name={ic} /></span><div className="main"><b>{t}</b></div>
             {h === '/congno' && <span className="v">{tr(d.balance.balance_vnd)}</span>}<Icon name="chev" size={16} /></Link>
         ))}

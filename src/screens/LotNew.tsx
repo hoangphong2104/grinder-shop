@@ -1,28 +1,41 @@
-// SC_06 Nhập lô Goofish (/lo/new) + sửa lô chưa nhận (/lo/:id/sua). Khối AI quét ở đầu form (BR-13: chỉ điền sẵn,
-// không tự lưu). Xem trước tiền bằng src/domain; số chính thức do DB tính sau khi save_lot.
+// SC_06 Nhập lô Goofish (/lo/new) + sửa lô chưa nhận (/lo/:id/sua). v0.2 (CR-001 A2): lô = các NHÓM CHIẾC
+// (model, số lượng N, giá ¥ / chiếc, giá bán dự kiến / chiếc) → DB tạo N chiếc, mỗi chiếc 1 mã (D1). Sửa lô chưa
+// nhận: sửa / bỏ từng chiếc cũ (không bỏ được chiếc đang giữ cho đơn — UNIT_RESERVED) và thêm nhóm mới.
+// Khối AI quét ở đầu form (BR-13: chỉ điền sẵn, không tự lưu). Xem trước bằng src/domain; số chính thức do DB tính.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useData, useStore } from '../data/store.tsx'
-import type { LotRow, SellerRow } from '../data/types.ts'
+import type { DbData, LotRow, ModelRow, SellerRow } from '../data/types.ts'
 import { supabase } from '../lib/supabase.ts'
 import { Shell } from '../ui/Shell.tsx'
 import { useToast } from '../ui/feedback.tsx'
 import { Icon } from '../ui/icons.tsx'
+import { UnitChip } from '../ui/status.tsx'
 import { parseNum, todayVn, tr, vnd } from '../ui/format.ts'
-import { lotGoodsVnd, lotPayable, unitCost, unitCostBeforeShip, type Lot } from '../domain/index.ts'
-import { linesOf, variantName } from './lots/common.tsx'
+import { autoUnitCost, formatUnitCode, lotGoodsVnd, lotPayable, unitCostBeforeShip, type Unit } from '../domain/index.ts'
+import { codesText, rangeText, unitsOfLot } from './lots/common.tsx'
+import { MAX_GROUP_ITEMS } from './lots/LotFlow.tsx'
+import { errText, RpcError, useRpcDetail } from './lots/rpc.ts'
 import { invokeScan, matchModelByAlias, MAX_TEXT, uploadScreenshot, type ScanResponse } from './lots/scan.ts'
 import '../styles/lots.css'
 
-interface LineDraft { variantId: string; qty: string; cny: string }
+/** Nhóm chiếc mới: listAuto = giá bán đang là giá mặc định của model (đổi model ⇒ đổi theo). */
+interface GroupDraft { key: number; modelId: string; qty: string; cny: string; list: string; listAuto: boolean }
+/** Chiếc đã có của lô đang sửa. */
+interface UnitDraft {
+  unitId: string; code: string; modelId: string; modelName: string; cny: string; list: string; removed: boolean
+  holder: string | null; status: Parameters<typeof UnitChip>[0]['s']; costOverride: number | null
+}
 interface Draft {
-  url: string; title: string; sellerNick: string; region: string; lines: LineDraft[]
+  url: string; title: string; sellerNick: string; region: string; groups: GroupDraft[]; units: UnitDraft[]
   rate: string; shipFee: string; orderedAt: string; note: string
 }
-type MarkKey = 'title' | 'seller' | 'region' | 'variant' | 'cny'
+type MarkKey = 'title' | 'seller' | 'region' | 'model' | 'qty' | 'cny'
 type Marks = Partial<Record<MarkKey, 'ai' | 'low'>>
-interface AiInfo { notes: string | null; condition: string | null; usage: ScanResponse['usage'] | null; modelHint: string | null }
+interface AiInfo { notes: string | null; condition: string | null; usage: ScanResponse['usage'] | null; modelHint: ModelRow | null }
+interface SaveResult { lot_id: string; version: number; created_units?: { unit_id: string; code: string }[]; removed_units?: { code: string }[] }
 
+const MAX_LOT_UNITS = 1000
 /** Item id Goofish từ link (?id=… hoặc &id=…). DB chỉ nhận 6–24 chữ số. */
 const itemIdOf = (u: string) => { const m = u.match(/[?&]id=(\d{6,})/); return m && m[1].length <= 24 ? m[1] : null }
 /** Số → chuỗi ô nhập kiểu VN (dấu phẩy thập phân). */
@@ -32,20 +45,46 @@ const findSeller = (sellers: SellerRow[], nick: string) => {
   return k ? sellers.find((s) => s.nickname.trim().toLowerCase() === k) : undefined
 }
 const lineId = (base: string, i: number) => (i === 0 ? base : `${base}-${i + 1}`)
+const round2 = (n: number) => Math.round(n * 100) / 100
+/** Giá ¥ hợp lệ: > 0, ≤ 100.000, tối đa 2 chữ số thập phân — trả thông báo lỗi hoặc null. */
+function cnyError(v: string): string | null {
+  const c = parseNum(v)
+  if (c == null || c <= 0 || c > 100000) return 'Nhập giá ¥ / chiếc (lớn hơn 0).'
+  if (Math.abs(c * 100 - Math.round(c * 100)) > 1e-6) return 'Giá ¥ tối đa 2 chữ số thập phân.'
+  return null
+}
+/** Giá bán dự kiến: trống hoặc số đồng nguyên ≥ 0. */
+function listError(v: string): string | null {
+  if (!v.trim()) return null
+  const n = parseNum(v)
+  return n == null || !Number.isInteger(n) || n < 0 ? 'Giá bán là số đồng nguyên ≥ 0, hoặc để trống.' : null
+}
+const listVal = (v: string) => (v.trim() ? parseNum(v) : null)
 
-function initDraft(lot: LotRow | undefined, d: ReturnType<typeof useData>): Draft {
+let groupKey = 0
+const newGroup = (): GroupDraft => ({ key: ++groupKey, modelId: '', qty: '1', cny: '', list: '', listAuto: true })
+const defaultList = (d: DbData, modelId: string) => numStr(d.models.find((m) => m.id === modelId)?.default_list_price_vnd ?? null)
+
+/** modelId (tuỳ chọn, từ /lo/new?model=…): chỉ nhận model đang bán — điền sẵn model + giá bán mặc định nhóm đầu. */
+function initDraft(lot: LotRow | undefined, d: DbData, modelId?: string | null): Draft {
   if (!lot) {
+    const g = newGroup()
+    if (modelId && d.models.some((m) => m.id === modelId && m.is_active)) { g.modelId = modelId; g.list = defaultList(d, modelId) }
     return {
-      url: '', title: '', sellerNick: '', region: '', lines: [{ variantId: '', qty: '1', cny: '' }],
+      url: '', title: '', sellerNick: '', region: '', groups: [g], units: [],
       rate: numStr(d.suggestions.last_exchange_rate), shipFee: '', orderedAt: todayVn(), note: '',
     }
   }
   const s = lot.seller_id ? d.sellers.find((x) => x.id === lot.seller_id) : undefined
-  const lines = linesOf(d, lot.id)
+  const units = unitsOfLot(d, lot.id).map((u): UnitDraft => ({
+    unitId: u.unit_id, code: u.code, modelId: u.model_id, modelName: u.model_name, cny: numStr(Number(u.price_cny)),
+    list: numStr(u.list_price_vnd), removed: false,
+    holder: u.holding_order_id ? d.orderCode[u.holding_order_id] ?? 'đơn khác' : null, status: u.status, costOverride: u.cost_vnd_override,
+  }))
   return {
     url: lot.goofish_url ?? (lot.goofish_item_id ? `https://www.goofish.com/item?id=${lot.goofish_item_id}` : ''),
     title: lot.listing_title ?? '', sellerNick: s?.nickname ?? '', region: s?.region ?? '',
-    lines: lines.length ? lines.map((x) => ({ variantId: x.variant_id, qty: String(x.qty), cny: numStr(Number(x.price_cny)) })) : [{ variantId: '', qty: '1', cny: '' }],
+    groups: units.length ? [] : [newGroup()], units,
     rate: numStr(Number(lot.exchange_rate)), shipFee: lot.ship_fee_vnd == null ? '' : String(lot.ship_fee_vnd),
     orderedAt: lot.ordered_at, note: lot.note ?? '',
   }
@@ -66,7 +105,9 @@ export default function LotNew() {
     return (
       <Shell section="lo" title={`Sửa ${d.lotCode[lot.id]}`} back={`/lo/${lot.id}`}>
         <div className="note-box">
-          <span>{lot.status === 'received' ? 'Lô đã nhận chỉ sửa được phí ship và ghi chú (Q-014) — làm ở trang chi tiết lô.' : 'Lô đã huỷ — không sửa được.'}</span>
+          <span>{lot.status === 'received'
+            ? 'Lô đã nhận: không thêm / bớt chiếc, không đổi giá ¥ / tỷ giá (A10, Q-014). Sửa phí ship và ghi chú ở trang lô; giá nhập ₫, giá bán dự kiến, số seri ở trang từng chiếc.'
+            : 'Lô đã huỷ — không sửa được.'}</span>
         </div>
         <Link className="btn btn-ghost btn-block" to={`/lo/${lot.id}`}>Về chi tiết lô</Link>
       </Shell>
@@ -77,10 +118,12 @@ export default function LotNew() {
 
 function LotForm({ lot }: { lot: LotRow | undefined }) {
   const d = useData()
-  const { rpc, session } = useStore()
+  const { session } = useStore()
+  const call = useRpcDetail()
   const toast = useToast()
   const nav = useNavigate()
-  const [draft, setDraft] = useState<Draft>(() => initDraft(lot, d))
+  const [params] = useSearchParams()
+  const [draft, setDraft] = useState<Draft>(() => initDraft(lot, d, params.get('model')))
   const [version] = useState(lot?.version ?? null) // version lúc mở form — bắt sửa đồng thời
   const [marks, setMarks] = useState<Marks>({})
   const [errs, setErrs] = useState<Record<string, string>>({})
@@ -100,24 +143,38 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
   const editing = !!lot
   const code = lot ? d.lotCode[lot.id] : `L-${String(d.lots.length + 1).padStart(3, '0')}`
   const scanOn = d.settings?.ai_scan_enabled ?? true
-  const modelActive = (mid: string) => d.models.find((m) => m.id === mid)?.is_active ?? false
-  const activeVariants = d.variants.filter((v) => v.is_active && modelActive(v.model_id))
+  const activeModels = d.models.filter((m) => m.is_active)
   const sellers = d.sellers.filter((s) => !s.is_hidden)
+  const kept = draft.units.filter((u) => !u.removed)
+  const items = kept.length + draft.groups.length
 
   // ---- Sửa ô ----
+  const clearErr = (...ids: string[]) => setErrs((e) => { const n = { ...e }; for (const k of ids) delete n[k]; delete n['f-groups']; return n })
+  const clearMark = (k: MarkKey) => setMarks((m) => { const n = { ...m }; delete n[k]; return n })
   const set = <K extends keyof Draft>(k: K, v: Draft[K], mark?: MarkKey) => {
     setDraft((p) => ({ ...p, [k]: v }))
-    if (mark) setMarks((m) => { const n = { ...m }; delete n[mark]; return n })
-    setErrs((e) => { const n = { ...e }; delete n[`f-${k === 'orderedAt' ? 'date' : k === 'shipFee' ? 'ship' : k === 'sellerNick' ? 'seller' : k}`]; return n })
+    if (mark) clearMark(mark)
+    clearErr(`f-${k === 'orderedAt' ? 'date' : k === 'shipFee' ? 'ship' : k === 'sellerNick' ? 'seller' : k}`)
   }
-  const setLine = (i: number, k: keyof LineDraft, v: string) => {
-    setDraft((p) => ({ ...p, lines: p.lines.map((x, j) => (j === i ? { ...x, [k]: v } : x)) }))
-    if (i === 0 && (k === 'variantId' || k === 'cny')) setMarks((m) => { const n = { ...m }; delete n[k === 'cny' ? 'cny' : 'variant']; return n })
-    const base = k === 'variantId' ? 'f-variant' : k === 'qty' ? 'f-qty' : 'f-cny'
-    setErrs((e) => { const n = { ...e }; delete n[lineId(base, i)]; return n })
+  const setGroup = (i: number, patch: Partial<GroupDraft>) => {
+    setDraft((p) => ({ ...p, groups: p.groups.map((g, j) => (j === i ? { ...g, ...patch } : g)) }))
+    if (i === 0 && 'modelId' in patch) clearMark('model')
+    if (i === 0 && 'cny' in patch) clearMark('cny')
+    if (i === 0 && 'qty' in patch) clearMark('qty')
+    clearErr(...Object.keys(patch).map((k) => lineId(`f-${k === 'modelId' ? 'model' : k}`, i)))
   }
-  const addLine = () => setDraft((p) => (p.lines.length >= 20 ? p : { ...p, lines: [...p.lines, { variantId: '', qty: '1', cny: '' }] }))
-  const removeLine = (i: number) => setDraft((p) => ({ ...p, lines: p.lines.filter((_, j) => j !== i) }))
+  /** Đổi model ⇒ điền sẵn giá bán dự kiến = giá mặc định của model (nếu người dùng chưa tự gõ). */
+  const pickModel = (i: number, modelId: string) => {
+    const g = draftRef.current.groups[i]
+    setGroup(i, g.listAuto || !g.list.trim() ? { modelId, list: defaultList(d, modelId), listAuto: true } : { modelId })
+  }
+  const addGroup = () => setDraft((p) => (p.units.filter((u) => !u.removed).length + p.groups.length >= MAX_GROUP_ITEMS ? p : { ...p, groups: [...p.groups, newGroup()] }))
+  const removeGroup = (i: number) => setDraft((p) => ({ ...p, groups: p.groups.filter((_, j) => j !== i) }))
+  const setUnit = (unitId: string, patch: Partial<UnitDraft>) => {
+    setDraft((p) => ({ ...p, units: p.units.map((u) => (u.unitId === unitId ? { ...u, ...patch } : u)) }))
+    const u = draftRef.current.units.find((x) => x.unitId === unitId)
+    if (u) clearErr(`f-u-cny-${u.code}`, `f-u-list-${u.code}`)
+  }
 
   // ---- Ảnh ----
   const pickFile = (f: File | null) => {
@@ -136,7 +193,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
     return path
   }
 
-  // ---- AI quét ----
+  // ---- AI quét (chỉ đoán model — không còn màu / biến thể) ----
   const applyScan = (r: ScanResponse) => {
     const th = Number(d.settings?.ai_confidence_threshold ?? 0.7)
     const flags = new Set(r.flags ?? [])
@@ -144,23 +201,15 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
     const good = <T,>(k: string, x: { value: T | null; confidence: number } | undefined): x is { value: T; confidence: number } =>
       !!x && x.value != null && x.value !== '' && Number(x.confidence) >= th && !flags.has(k)
 
-    // Model · màu: biến thể chắc ⇒ dùng; không thì khớp model (AI hoặc tên gọi khác) — model chỉ có 1 màu đang bán ⇒ chọn luôn.
-    let variantId: string | null = null, modelHint: string | null = null
-    const aiVar = good('variant_id', f.variant_id) ? f.variant_id.value : null
-    const aiModel = good('model_id', f.model_id) ? f.model_id.value : null
-    if (aiVar && activeVariants.some((v) => v.id === aiVar)) variantId = aiVar
-    else {
-      const byId = aiModel ? d.models.find((m) => m.id === aiModel && m.is_active) : undefined
-      const model = byId ?? matchModelByAlias(d.models, [f.model_id?.matched_text, good('listing_title', f.listing_title) ? f.listing_title.value : null])
-      if (model) {
-        const vs = activeVariants.filter((v) => v.model_id === model.id)
-        if (vs.length === 1) variantId = vs[0].id
-        else modelHint = model.name
-      }
-    }
+    // Model: chỉ chọn khi AI đủ chắc (≥ ngưỡng, không bị flag) và là model đang bán; không thì để trống + gợi ý theo tên gọi khác.
+    const fm = f.model_id
+    const aiModelId = good('model_id', fm) ? fm.value : null
+    const aiModel = aiModelId ? activeModels.find((m) => m.id === aiModelId) ?? null : null
+    const hint = aiModel ? null : matchModelByAlias(d.models, [f.model_id?.matched_text, f.listing_title?.value])
 
     const cur = draftRef.current
-    const next: Draft = { ...cur, lines: cur.lines.map((x) => ({ ...x })) }
+    const next: Draft = { ...cur, groups: cur.groups.map((g) => ({ ...g })) }
+    const g0 = next.groups[0]
     const m: Marks = {}
     const fill = (key: MarkKey, empty: boolean, ok: boolean, apply: () => void) => {
       if (!empty) return // chỉ điền ô người dùng chưa gõ
@@ -170,12 +219,21 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
     fill('title', !cur.title.trim(), good('listing_title', f.listing_title), () => { next.title = String(f.listing_title!.value).slice(0, 300) })
     fill('seller', !cur.sellerNick.trim(), good('seller_nickname', f.seller_nickname) && !!sellerNick, () => { next.sellerNick = String(sellerNick).slice(0, 100) })
     fill('region', !cur.region.trim(), good('seller_region', f.seller_region), () => { next.region = String(f.seller_region!.value).slice(0, 100) })
-    fill('cny', !cur.lines[0].cny.trim(), good('price_cny', f.price_cny) && Number(f.price_cny!.value) > 0, () => { next.lines[0].cny = numStr(Number(f.price_cny!.value)) })
-    fill('variant', !cur.lines[0].variantId, variantId != null, () => { next.lines[0].variantId = variantId! })
+    if (g0) {
+      fill('cny', !g0.cny.trim(), good('price_cny', f.price_cny) && Number(f.price_cny!.value) > 0, () => { g0.cny = numStr(Number(f.price_cny!.value)) })
+      // Số lượng: chỉ điền khi người dùng chưa gõ (ô còn mặc định 1 / trống); qty_guess null ⇒ không đánh dấu.
+      const qg = r.qty_guess
+      const qOk = !!qg && Number.isInteger(Number(qg.value)) && Number(qg.value) >= 2 && Number(qg.value) <= 50 && Number(qg.confidence) >= th
+      if (qOk && (!g0.qty.trim() || g0.qty.trim() === '1')) { g0.qty = String(Number(qg!.value)); m.qty = 'ai' }
+      fill('model', !g0.modelId, aiModel != null, () => {
+        g0.modelId = aiModel!.id
+        if (g0.listAuto || !g0.list.trim()) { g0.list = defaultList(d, aiModel!.id); g0.listAuto = true }
+      })
+    }
 
     setDraft(next)
     setMarks((p) => ({ ...p, ...m }))
-    setAi({ notes: r.notes ?? null, condition: r.condition_text ?? null, usage: r.usage ?? null, modelHint: m.variant === 'low' ? modelHint : null })
+    setAi({ notes: r.notes ?? null, condition: r.condition_text ?? null, usage: r.usage ?? null, modelHint: m.model === 'low' ? hint : null })
   }
 
   const scan = async () => {
@@ -191,17 +249,47 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
       applyScan(r)
       toast('AI đã điền — kiểm tra ô đánh dấu')
     } catch (e) {
-      toast(e instanceof Error ? e.message : String(e))
+      toast(errText(e))
     } finally { setScanning(false) }
   }
 
-  // ---- Xem trước tiền (domain) ----
+  // ---- Xem trước (domain): mã sẽ tạo, giá nhập ₫ tự tính / chiếc, tiền hàng, phải trả ----
   const rate = parseNum(draft.rate), ship = parseNum(draft.shipFee)
-  const pl = draft.lines.map((x) => ({ variantId: x.variantId, qty: parseNum(x.qty) ?? 0, cny: parseNum(x.cny) }))
-  const calcOk = rate != null && rate > 0 && pl.every((x) => x.qty > 0 && x.cny != null && x.cny > 0) && (ship == null || ship >= 0)
-  const dl: Lot | null = calcOk
-    ? { id: lot?.id ?? 'draft', orderedAt: draft.orderedAt, rate: rate!, shipFee: ship, status: 'dat', receivedAt: null, lines: pl.map((x) => ({ variantId: x.variantId, qty: x.qty, cny: x.cny! })) }
-    : null
+  const rateOk = rate != null && rate > 0
+  const shipVal = draft.shipFee.trim() && ship != null && Number.isInteger(ship) && ship >= 0 ? ship : null
+  const seq = new Map<string, number>()
+  const groupCodes: string[][] = draft.groups.map((g) => {
+    const model = d.models.find((m) => m.id === g.modelId)
+    const q = parseNum(g.qty)
+    if (!model || q == null || !Number.isInteger(q) || q < 1 || q > MAX_LOT_UNITS) return []
+    let n = seq.get(model.id) ?? Math.max(1, model.next_seq)
+    const out: string[] = []
+    for (let k = 0; k < q; k++) out.push(formatUnitCode(model.code_prefix.toUpperCase(), n++))
+    seq.set(model.id, n)
+    return out
+  })
+  const lotId = lot?.id ?? 'draft'
+  const pUnits: Unit[] = []
+  let previewOk = rateOk
+  for (const u of kept) {
+    const c = parseNum(u.cny)
+    if (cnyError(u.cny)) { previewOk = false; continue }
+    pUnits.push({ id: u.unitId, code: u.code, modelId: u.modelId, lotId, priceCny: c!, costOverride: u.costOverride, listPrice: listVal(u.list) })
+  }
+  draft.groups.forEach((g, i) => {
+    const c = parseNum(g.cny)
+    if (cnyError(g.cny) || !groupCodes[i].length) { previewOk = false; return }
+    for (const cd of groupCodes[i]) pUnits.push({ id: cd, code: cd, modelId: g.modelId, lotId, priceCny: c!, costOverride: null, listPrice: listVal(g.list) })
+  })
+  const N = pUnits.length
+  const pLot = { id: lotId, rate: rate ?? 0, shipFee: shipVal, status: 'ordered' as const }
+  const autoCost = (priceCny: number) => (rateOk && N > 0
+    ? (shipVal != null ? autoUnitCost({ priceCny }, pLot, N) : unitCostBeforeShip({ priceCny }, pLot))
+    : null)
+  const costText = (priceCny: number | null) => {
+    const c = priceCny != null ? autoCost(priceCny) : null
+    return c == null ? '—' : shipVal != null ? vnd(c) : <>{vnd(c)} <span className="muted small">+ ship</span></>
+  }
 
   // ---- Gợi ý / cảnh báo ----
   const iid = itemIdOf(draft.url)
@@ -216,15 +304,23 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
     if (draft.title.length > 300) e['f-title'] = 'Tiêu đề tối đa 300 ký tự.'
     if (draft.sellerNick.trim().length > 100) e['f-seller'] = 'Nickname tối đa 100 ký tự.'
     if (draft.region.length > 100) e['f-region'] = 'Khu vực tối đa 100 ký tự.'
-    draft.lines.forEach((x, i) => {
-      const q = parseNum(x.qty), c = parseNum(x.cny)
-      if (!x.variantId) e[lineId('f-variant', i)] = 'Chọn model · màu.'
-      if (q == null || !Number.isInteger(q) || q < 1 || q > 1000) e[lineId('f-qty', i)] = 'Số lượng là số nguyên từ 1 đến 1.000.'
-      if (c == null || c <= 0 || c > 100000) e[lineId('f-cny', i)] = 'Nhập giá ¥ / chiếc (lớn hơn 0).'
-      else if (Math.abs(c * 100 - Math.round(c * 100)) > 1e-6) e[lineId('f-cny', i)] = 'Giá ¥ tối đa 2 chữ số thập phân.'
+    for (const u of kept) {
+      const ce = cnyError(u.cny), le = listError(u.list)
+      if (ce) e[`f-u-cny-${u.code}`] = ce
+      if (le) e[`f-u-list-${u.code}`] = le
+    }
+    draft.groups.forEach((g, i) => {
+      const q = parseNum(g.qty), ce = cnyError(g.cny), le = listError(g.list)
+      if (!g.modelId) e[lineId('f-model', i)] = 'Chọn model.'
+      if (q == null || !Number.isInteger(q) || q < 1 || q > MAX_LOT_UNITS) e[lineId('f-qty', i)] = 'Số lượng là số nguyên từ 1 đến 1.000.'
+      if (ce) e[lineId('f-cny', i)] = ce
+      if (le) e[lineId('f-list', i)] = le
     })
+    if (items === 0) e['f-groups'] = 'Lô cần ít nhất 1 chiếc — bấm "Thêm nhóm chiếc".'
+    else if (items > MAX_GROUP_ITEMS) e['f-groups'] = `Tối đa ${MAX_GROUP_ITEMS} dòng mỗi lần lưu (mỗi chiếc cũ + mỗi nhóm mới là 1 dòng) — bớt nhóm hoặc gộp nhóm cùng model, cùng giá.`
+    else if (kept.length + draft.groups.reduce((a, g) => a + (parseNum(g.qty) ?? 0), 0) > MAX_LOT_UNITS) e['f-groups'] = 'Một lô tối đa 1.000 chiếc.'
     if (rate == null || rate <= 0 || rate >= 1e8) e['f-rate'] = 'Nhập tỷ giá ₫/¥ (lớn hơn 0).'
-    if (draft.shipFee.trim() && (ship == null || !Number.isInteger(ship) || ship < 0)) e['f-ship'] = 'Phí ship là số đồng nguyên ≥ 0, hoặc để trống.'
+    if (draft.shipFee.trim() && shipVal == null) e['f-ship'] = 'Phí ship là số đồng nguyên ≥ 0, hoặc để trống.'
     if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.orderedAt)) e['f-date'] = 'Chọn ngày đặt.'
     if (draft.note.length > 2000) e['f-note'] = 'Ghi chú tối đa 2.000 ký tự.'
     return e
@@ -236,14 +332,14 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
     const first = Object.keys(e)[0]
     if (first) {
       toast('Kiểm tra các ô báo đỏ')
-      document.getElementById(first)?.focus()
+      document.getElementById(first === 'f-groups' ? 'f-add-group' : first)?.focus()
       return
     }
     setSaving(true)
     try {
       let shot: string | null
       try { shot = await ensureUploaded() } catch (err) {
-        toast((err instanceof Error ? err.message : String(err)) + ' Hoặc bấm "Bỏ ảnh" để lưu không kèm ảnh.')
+        toast(errText(err) + ' Hoặc bấm "Bỏ ảnh" để lưu không kèm ảnh.')
         setSaving(false)
         return
       }
@@ -257,22 +353,29 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
         screenshot_path: shot,
         listing_title: draft.title.trim() || null,
         ordered_at: draft.orderedAt,
-        exchange_rate: Math.round(rate! * 100) / 100,
-        ship_fee_vnd: draft.shipFee.trim() ? ship : null,
+        exchange_rate: round2(rate!),
+        ship_fee_vnd: shipVal,
         status: lot?.status ?? 'ordered',
         note: draft.note.trim() || null,
       }
       if (!existing && nick) p_lot.new_seller = { nickname: nick, region: region || null, profile_url: null }
-      const p_lines = draft.lines.map((x) => ({ variant_id: x.variantId, qty: parseNum(x.qty), price_cny: Math.round(parseNum(x.cny)! * 100) / 100 }))
-      const r = await rpc<{ lot_id: string; version: number; duplicate_lot_ids: string[] }>('save_lot', {
-        p_lot_id: lot?.id ?? null, p_lot, p_lines, p_expected_version: lot ? version : null,
-      })
+      // Chiếc cũ giữ lại {unit_id, price_cny, list_price_vnd}; nhóm mới {model_id, qty, price_cny, list_price_vnd} (null = không có giá bán)
+      const p_groups = [
+        ...kept.map((u) => ({ unit_id: u.unitId, price_cny: round2(parseNum(u.cny)!), list_price_vnd: listVal(u.list) })),
+        ...draft.groups.map((g) => ({ model_id: g.modelId, qty: parseNum(g.qty), price_cny: round2(parseNum(g.cny)!), list_price_vnd: listVal(g.list) })),
+      ]
+      const r = await call<SaveResult>('save_lot', { p_lot_id: lot?.id ?? null, p_lot, p_groups, p_expected_version: lot ? version : null })
       // Người bán cũ chưa có khu vực ⇒ ghi bổ sung (bảng sellers được ghi trực tiếp).
       if (existing && !existing.region && region) await supabase.from('sellers').update({ region }).eq('id', existing.id)
-      toast(`Đã lưu ${code}${dl ? ` · phải trả trung gian ${tr(lotPayable(dl))}` : ''}`)
+      const made = (r.created_units ?? []).map((u) => u.code)
+      const gone = (r.removed_units ?? []).map((u) => u.code)
+      toast(`Đã lưu ${code}${made.length ? ` · tạo ${codesText(made, 3)}` : ''}${gone.length ? ` · bỏ ${codesText(gone, 3)}` : ''}`)
       nav(`/lo/${r.lot_id}`, { replace: true })
     } catch (err) {
-      toast(err instanceof Error ? err.message : String(err))
+      if (err instanceof RpcError && err.code === 'UNIT_RESERVED' && err.detail && typeof err.detail === 'object') {
+        const det = err.detail as { code?: string; order_id?: string }
+        toast(`${det.code ?? 'Chiếc này'} đang giữ cho ${det.order_id ? d.orderCode[det.order_id] ?? 'một đơn' : 'một đơn'} — không bỏ khỏi lô được. Sửa / huỷ đơn đó trước.`)
+      } else toast(errText(err))
       setSaving(false)
     }
   }
@@ -283,9 +386,9 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
     : null
   const cls = (k: MarkKey, extra = '') => `input ${extra} ${marks[k] ? 'ai' : ''}`.trim()
   const err = (fid: string): ReactNode => (errs[fid] ? <span className="err-text" role="alert">{errs[fid]}</span> : null)
-  const variantOptions = (cur: string) => {
-    const list = activeVariants.some((v) => v.id === cur) || !cur ? activeVariants : [...activeVariants, ...d.variants.filter((v) => v.id === cur)]
-    return list.map((v) => <option key={v.id} value={v.id}>{variantName(d, v.id)}{v.is_active && modelActive(v.model_id) ? '' : ' (đã ẩn)'}</option>)
+  const modelOptions = (cur: string) => {
+    const list = activeModels.some((m) => m.id === cur) || !cur ? activeModels : [...activeModels, ...d.models.filter((m) => m.id === cur)]
+    return list.map((m) => <option key={m.id} value={m.id}>{m.name} ({m.code_prefix}){m.is_active ? '' : ' (đã ẩn)'}</option>)
   }
 
   const scanBlock = (
@@ -319,9 +422,100 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
       {ai && (ai.notes || ai.condition || ai.usage) && (
         <div className="note-box way" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
           {ai.notes && <span>AI ghi chú: {ai.notes}</span>}
+          {marks.qty === 'ai' && <span className="small">AI đoán tin có nhiều chiếc — kiểm tra giá ¥ là giá MỖI chiếc (không phải tổng).</span>}
           {ai.condition && <span>Tình trạng trong tin: {ai.condition}</span>}
           {ai.usage && <span className="small">Đã dùng {ai.usage.scans_this_month}/{ai.usage.cap} lượt quét tháng này.</span>}
         </div>
+      )}
+    </div>
+  )
+
+  const unitsBlock = draft.units.length > 0 && (
+    <div className="full stack">
+      <p className="section-title">Chiếc đã có trong lô ({kept.length}/{draft.units.length})</p>
+      <div className="card card-pad stack">
+        {draft.units.map((u) => (
+          <div className={`lot-unit ${u.removed ? 'removed' : ''}`} key={u.unitId}>
+            <div className="uhead">
+              <span><b className="lot-codes">{u.code}</b> <span className="muted small">{u.modelName}</span> {u.holder && <UnitChip s={u.status} holder={u.holder} />}</span>
+              {u.removed
+                ? <button type="button" className="link-btn" onClick={() => setUnit(u.unitId, { removed: false })}>Giữ lại</button>
+                : u.holder
+                  ? <span className="hint">Đang giữ cho {u.holder} — không bỏ được</span>
+                  : <button type="button" className="link-btn" onClick={() => setUnit(u.unitId, { removed: true })}>Bỏ chiếc</button>}
+            </div>
+            {!u.removed && (
+              <>
+                <label className="f">Giá ¥
+                  <input className="input money" id={`f-u-cny-${u.code}`} inputMode="decimal" value={u.cny} onChange={(e) => setUnit(u.unitId, { cny: e.target.value })} />
+                  <span className="hint">{u.costOverride != null ? <>Giá nhập ₫ sửa tay {vnd(u.costOverride)}</> : <>Giá nhập ₫ ≈ {costText(parseNum(u.cny))}</>}</span>
+                  {err(`f-u-cny-${u.code}`)}
+                </label>
+                <label className="f">Giá bán dự kiến (₫)
+                  <input className="input money" id={`f-u-list-${u.code}`} inputMode="numeric" value={u.list} placeholder="để trống" onChange={(e) => setUnit(u.unitId, { list: e.target.value })} />
+                  {err(`f-u-list-${u.code}`)}
+                </label>
+              </>
+            )}
+            {u.removed && <span className="hint" style={{ gridColumn: '1 / -1' }}>Sẽ bỏ khỏi lô khi lưu — mã {u.code} không cấp lại.</span>}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+
+  const groupsBlock = (
+    <div className="full stack">
+      {editing && <p className="section-title">Thêm chiếc mới</p>}
+      {draft.groups.map((g, i) => {
+        const codes = groupCodes[i]
+        const c = parseNum(g.cny)
+        return (
+          <div className="lot-line" key={g.key}>
+            <label className="f">
+              <span className="lrow">
+                <span>Model <span className="req">*</span>{draft.groups.length > 1 ? ` (nhóm ${i + 1})` : ''} {i === 0 && flag('model')}</span>
+                {(i > 0 || editing) && <button type="button" className="link-btn" onClick={() => removeGroup(i)}>Bỏ nhóm</button>}
+              </span>
+              <select className={i === 0 ? cls('model') : 'input'} id={lineId('f-model', i)} value={g.modelId} onChange={(e) => pickModel(i, e.target.value)}>
+                <option value="">Chọn…</option>
+                {modelOptions(g.modelId)}
+              </select>
+              {i === 0 && ai?.modelHint && !g.modelId && (
+                <span className="hint">Tin có nhắc {ai.modelHint.name} — <button type="button" className="link-btn small" onClick={() => pickModel(0, ai.modelHint!.id)}>Chọn {ai.modelHint.name}</button></span>
+              )}
+              {!activeModels.length && <span className="hint">Chưa có model đang bán — thêm ở <Link className="link-btn small" to="/danhmuc">Model</Link>.</span>}
+              {err(lineId('f-model', i))}
+            </label>
+            <div className="two">
+              <label className="f"><span className="lrow">Số lượng <span className="req">*</span> {i === 0 && flag('qty')}</span>
+                <input className={i === 0 ? cls('qty', 'money') : 'input money'} id={lineId('f-qty', i)} inputMode="numeric" value={g.qty} onChange={(e) => setGroup(i, { qty: e.target.value })} />
+                {err(lineId('f-qty', i))}
+              </label>
+              <label className="f"><span className="lrow">Giá ¥ / chiếc <span className="req">*</span> {i === 0 && flag('cny')}</span>
+                <input className={i === 0 ? cls('cny', 'money') : 'input money'} id={lineId('f-cny', i)} inputMode="decimal" value={g.cny}
+                  onChange={(e) => setGroup(i, { cny: e.target.value })} />
+                {err(lineId('f-cny', i))}
+              </label>
+            </div>
+            <label className="f">Giá bán dự kiến / chiếc (₫)
+              <input className="input money" id={lineId('f-list', i)} inputMode="numeric" value={g.list} placeholder="để trống"
+                onChange={(e) => setGroup(i, { list: e.target.value, listAuto: false })} />
+              <span className="hint">{g.modelId && g.listAuto && g.list ? 'Giá mặc định của model — sửa được' : 'Sửa riêng từng chiếc được sau khi lưu'}</span>
+              {err(lineId('f-list', i))}
+            </label>
+            {codes.length > 0 && (
+              <p className="hint">Sẽ tạo <span className="lot-codes">{rangeText(codes)}</span>{codes.length > 3 ? ` (${codes.length} chiếc)` : ''}
+                {c != null && c > 0 && rateOk ? <> · giá nhập ₫ ≈ {costText(c)} / chiếc</> : null}</p>
+            )}
+          </div>
+        )
+      })}
+      {err('f-groups')}
+      {items < MAX_GROUP_ITEMS && (
+        <button type="button" className="link-btn" id="f-add-group" style={{ alignSelf: 'flex-start' }} onClick={addGroup}>
+          <Icon name="plus" size={14} /> Thêm nhóm chiếc (model / giá khác)
+        </button>
       )}
     </div>
   )
@@ -363,37 +557,8 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
           {err('f-region')}
         </label>
 
-        <div className="full stack">
-          {draft.lines.map((x, i) => (
-            <div className="lot-line" key={i}>
-              <label className="f">
-                <span className="lrow">
-                  <span>Model · màu <span className="req">*</span>{draft.lines.length > 1 ? ` (dòng ${i + 1})` : ''} {i === 0 && flag('variant')}</span>
-                  {i > 0 && <button type="button" className="link-btn" onClick={() => removeLine(i)}>Bỏ dòng</button>}
-                </span>
-                <select className={i === 0 ? cls('variant') : 'input'} id={lineId('f-variant', i)} value={x.variantId} onChange={(e) => setLine(i, 'variantId', e.target.value)}>
-                  <option value="">Chọn…</option>
-                  {variantOptions(x.variantId)}
-                </select>
-                {i === 0 && ai?.modelHint && !x.variantId && <span className="hint">AI nhận ra model {ai.modelHint} — chọn màu.</span>}
-                {!activeVariants.length && <span className="hint">Chưa có model · màu đang bán — thêm ở <Link className="link-btn small" to="/danhmuc">Model & màu</Link>.</span>}
-                {err(lineId('f-variant', i))}
-              </label>
-              <div className="two">
-                <label className="f">Số lượng <span className="req">*</span>
-                  <input className="input money" id={lineId('f-qty', i)} inputMode="numeric" value={x.qty} onChange={(e) => setLine(i, 'qty', e.target.value)} />
-                  {err(lineId('f-qty', i))}
-                </label>
-                <label className="f"><span className="lrow">Giá ¥ / chiếc <span className="req">*</span> {i === 0 && flag('cny')}</span>
-                  <input className={i === 0 ? cls('cny', 'money') : 'input money'} id={lineId('f-cny', i)} inputMode="decimal" value={x.cny}
-                    onChange={(e) => setLine(i, 'cny', e.target.value)} />
-                  {err(lineId('f-cny', i))}
-                </label>
-              </div>
-            </div>
-          ))}
-          {draft.lines.length < 20 && <button type="button" className="link-btn" style={{ alignSelf: 'flex-start' }} onClick={addLine}><Icon name="plus" size={14} /> Thêm dòng hàng (model · màu khác)</button>}
-        </div>
+        {unitsBlock}
+        {groupsBlock}
 
         <div className="two">
           <label className="f">Tỷ giá ₫/¥ <span className="req">*</span>
@@ -417,18 +582,18 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
         </label>
 
         <div className="calc full">
-          <div className="ln"><span>Tiền hàng</span><span>{dl ? vnd(lotGoodsVnd(dl)) : '—'}</span></div>
-          <div className="ln"><span>Phí ship về VN</span><span>{ship != null ? vnd(ship) : 'chưa nhập'}</span></div>
-          {(dl ? dl.lines : [null]).map((x, i) => (
-            <div className={`ln ${i === 0 ? 'total' : ''}`} key={i}>
-              <span>Giá vốn / chiếc{dl && dl.lines.length > 1 && x ? ` · ${x.variantId ? variantName(d, x.variantId) : `dòng ${i + 1}`}` : ''}</span>
-              <span>
-                {dl && x ? (dl.shipFee != null ? vnd(unitCost(dl, x)) : <>{vnd(unitCostBeforeShip(dl, x))} <span className="muted small">+ ship</span></>) : '—'}
-              </span>
+          <div className="ln"><span>Số chiếc</span><span>{N || '—'}</span></div>
+          <div className="ln"><span>Tiền hàng</span><span>{previewOk && N ? vnd(lotGoodsVnd(pLot, pUnits)) : '—'}</span></div>
+          <div className="ln"><span>Phí ship về VN</span><span>{shipVal != null ? vnd(shipVal) : 'chưa nhập'}</span></div>
+          <div className="ln"><span>Ship / chiếc</span><span>{shipVal != null && N ? vnd(Math.round(shipVal / N)) : '—'}</span></div>
+          {draft.groups.map((g, i) => (
+            <div className="ln" key={g.key}>
+              <span>Giá nhập ₫ / chiếc · {groupCodes[i].length ? rangeText(groupCodes[i], 2) : `nhóm ${i + 1}`}</span>
+              <span>{previewOk ? costText(parseNum(g.cny)) : '—'}</span>
             </div>
           ))}
-          <div className="ln"><span>Phải trả trung gian</span><span>{dl ? vnd(lotPayable(dl)) : '—'}</span></div>
-          <div className="formula">= giá web ¥ × tỷ giá + ship ÷ số chiếc</div>
+          <div className="ln total"><span>Phải trả trung gian</span><span>{previewOk && N ? vnd(lotPayable(pLot, pUnits)) : '—'}</span></div>
+          <div className="formula">Giá nhập ₫ = giá ¥ × tỷ giá + ship ÷ {N || 'số'} chiếc · mã chiếc do app cấp khi lưu</div>
         </div>
       </div>
     </Shell>

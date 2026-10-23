@@ -1,46 +1,39 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { Lot, Transfer } from './types.ts';
-import { intermediaryDebt, intermediaryLedger, totalPayable } from './debt.ts';
-import { validateTransfer } from './validate.ts';
+import type { Lot, Transfer, Unit } from './types.ts';
+import { intermediaryBalance, intermediaryDebt, totalPayable, transferEffect } from './debt.ts';
 
-const br01Lot = (over: Partial<Lot> = {}): Lot => ({
-  id: 'L1', orderedAt: '2026-10-01', rate: 3600, shipFee: 600000, status: 'veVN', receivedAt: null,
-  lines: [{ variantId: 'v', qty: 2, cny: 1010 }], ...over,
+const lot = (over: Partial<Lot> = {}): Lot => ({ id: 'L1', rate: 3600, shipFee: 600000, status: 'vn_shipping', receivedAt: null, ...over });
+const unit = (id: string, lotId = 'L1', over: Partial<Unit> = {}): Unit => ({
+  id, code: id, modelId: 'ku', lotId, priceCny: 1010, costOverride: null, listPrice: null, ...over,
 });
-const sent = (amount: number, over: Partial<Transfer> = {}): Transfer => ({ id: 'T1', date: '2026-10-02', kind: 'chuyen', amount, ...over });
+const units = [unit('a'), unit('b')];
+const sent = (amount: number, over: Partial<Transfer> = {}): Transfer => ({ kind: 'transfer', amount, ...over });
 
 test('BR-12 approved example: payable 7.872.000 − transfer 5.000.000 → debt 2.872.000', () => {
-  assert.equal(totalPayable([br01Lot()]), 7872000);
-  assert.equal(intermediaryDebt([br01Lot()], [sent(5000000)]), 2872000);
+  assert.equal(totalPayable([lot()], units), 7872000);
+  assert.equal(intermediaryDebt([lot()], units, [sent(5000000)]), 2872000);
+});
+
+test('A4: payable ignores hand-entered ₫ costs', () => {
+  assert.equal(intermediaryDebt([lot()], [unit('a', 'L1', { costOverride: 1 }), unit('b')], [sent(5000000)]), 2872000);
 });
 
 test('BR-12: payable follows lot edits (ship fee entered later) and cancellation', () => {
-  assert.equal(intermediaryDebt([br01Lot({ shipFee: null })], [sent(5000000)]), 2272000);
-  assert.equal(intermediaryDebt([br01Lot({ status: 'huy' })], [sent(5000000)]), -5000000);
+  assert.equal(intermediaryDebt([lot({ shipFee: null })], units, [sent(5000000)]), 2272000);
+  assert.equal(intermediaryDebt([lot({ status: 'cancelled' })], units, [sent(5000000)]), -5000000);
 });
 
-test('BR-12: adjustments are signed (+ increases debt, − decreases)', () => {
-  const ts = [sent(5000000), sent(10000, { id: 'T2', kind: 'dieuChinh' }), sent(-2000, { id: 'T3', kind: 'dieuChinh' })];
-  assert.equal(intermediaryDebt([br01Lot()], ts), 2872000 + 10000 - 2000);
-});
-
-test('ledger: chronological with running balance; cancelled lot stays at 0', () => {
-  const lots = [br01Lot(), br01Lot({ id: 'L2', orderedAt: '2026-10-03', status: 'huy' })];
-  const ts = [sent(5000000, { date: '2026-10-01' }), sent(1000, { id: 'T2', kind: 'dieuChinh', date: '2026-10-04' })];
-  assert.deepEqual(intermediaryLedger(lots, ts), [
-    { date: '2026-10-01', kind: 'phaiTra', refId: 'L1', amount: 7872000, balance: 7872000 },
-    { date: '2026-10-01', kind: 'daChuyen', refId: 'T1', amount: -5000000, balance: 2872000 },
-    { date: '2026-10-03', kind: 'phaiTra', refId: 'L2', amount: 0, balance: 2872000 },
-    { date: '2026-10-04', kind: 'dieuChinh', refId: 'T2', amount: 1000, balance: 2873000 },
-  ]);
-});
-
-test('transfer validation', () => {
-  assert.equal(validateTransfer(sent(5000000)).ok, true);
-  assert.equal(validateTransfer(sent(0)).ok, false);
-  assert.equal(validateTransfer(sent(-1)).ok, false);
-  assert.equal(validateTransfer(sent(1.5)).ok, false);
-  assert.equal(validateTransfer(sent(-1, { kind: 'dieuChinh' })).ok, true);
-  assert.equal(validateTransfer(sent(0, { kind: 'dieuChinh' })).ok, false);
+test('BR-12: adjustments are signed (+ increases debt, − decreases); several lots', () => {
+  const lots = [lot(), lot({ id: 'L2', rate: 3500, shipFee: 100000 })];
+  const us = [...units, unit('c', 'L2', { priceCny: 1000 })]; // L2: 1.000 × 3.500 + 100.000 = 3.600.000
+  const ts = [sent(5000000), sent(10000, { kind: 'adjustment' }), sent(-2000, { kind: 'adjustment' })];
+  assert.deepEqual(intermediaryBalance(lots, us, ts), {
+    totalPayable: 7872000 + 3600000,
+    totalTransferred: 5000000,
+    totalAdjustment: 8000,
+    balance: 7872000 + 3600000 - 5000000 + 8000,
+  });
+  assert.equal(transferEffect(sent(5)), -5);
+  assert.equal(transferEffect(sent(-5, { kind: 'adjustment' })), -5);
 });

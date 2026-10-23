@@ -9,7 +9,7 @@
 .hdr .act { display: flex; gap: 6px; align-items: center; }
 main.view { padding-block: 14px calc(96px + env(safe-area-inset-bottom, 0px)); padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 14px; max-width: 1240px; }
 
-.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--surface); border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) 72px repeat(2, minmax(0, 1fr)); align-items: center; padding: 4px max(4px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(4px, env(safe-area-inset-left, 0px)); }
+.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--surface); border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) 64px repeat(3, minmax(0, 1fr)); align-items: center; padding: 4px max(4px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(4px, env(safe-area-inset-left, 0px)); }
 .tab { border: 0; background: transparent; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; color: var(--muted); min-height: 48px; justify-content: center; cursor: pointer; padding: 0; }
 .tab svg { width: 22px; height: 22px; }
 .tab[aria-current="page"] { color: var(--accent); font-weight: 600; }
@@ -179,3 +179,14 @@ main.view { padding-block: 14px calc(96px + env(safe-area-inset-bottom, 0px)); p
 .err-text { color: var(--bad); font-size: 13px; }
 a.kcard, a.shot, a.li, a.btn, a.tab { text-decoration: none; color: inherit; }
 a.btn-primary { color: var(--on-fill); }
+
+/* CR-002 Ghi chú */
+.tab span { white-space: nowrap; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.notes-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.note { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; min-width: 0; }
+.note.pinned { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.note-body { all: unset; cursor: pointer; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.5; max-height: 14em; overflow: hidden; }
+.note-body:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.note-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+@media (min-width: 960px) { .notes-grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); align-items: start; } }

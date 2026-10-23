@@ -1,4 +1,5 @@
 // SC_08 Chi tiết đơn — bước trạng thái, thao tác theo trạng thái (chốt / gửi / hoàn tất / huỷ), tiền & lãi, thông tin khách.
+// CR-001: mỗi dòng = 1 chiếc cụ thể; lãi = Σ(giá chốt − giá nhập ₫ hiện tại của chiếc) − ship shop chịu (A8, không chụp giá).
 import { useCallback, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useData, useStore } from '../data/store.tsx'
@@ -7,9 +8,10 @@ import type { OrderStatusDb, PaymentKindDb, PaymentRow } from '../data/types.ts'
 import { supabase } from '../lib/supabase.ts'
 import { Sheet, useToast } from '../ui/feedback.tsx'
 import { Shell } from '../ui/Shell.tsx'
-import { ORDER_LABEL } from '../ui/status.tsx'
+import { LOT_LABEL, ORDER_LABEL } from '../ui/status.tsx'
 import { dmy, parseNum, todayVn, tr, vnd } from '../ui/format.ts'
 import { isSentStatus, makeLookup, PAY_LABEL, VERSION_CONFLICT_MSG } from './orders/common.ts'
+import '../styles/orders.css'
 
 type SheetKind = 'ship' | 'done' | 'cancel' | 'pay' | 'info' | { delPay: PaymentRow }
 
@@ -37,17 +39,15 @@ export default function OrderDetail() {
   const profit = lk.profit(o.id)
   const payments = d.payments.filter((p) => p.order_id === o.id)
 
-  // Gộp SL theo biến thể (1 biến thể có thể ở nhiều dòng).
-  const need = new Map<string, number>()
-  for (const x of lines) need.set(x.variant_id, (need.get(x.variant_id) ?? 0) + x.qty)
-
-  // Q-013 / BR-08: chốt được khi mọi biến thể: SL ≤ Có sẵn − SL các đơn Đã chốt khác (đúng như private.order_fillable).
-  const confirmedOther = (vid: string) => d.orderLines
-    .filter((x) => x.variant_id === vid && x.order_id !== o.id && lk.order(x.order_id)?.status === 'confirmed')
-    .reduce((a, x) => a + x.qty, 0)
-  const fillable = [...need].every(([vid, q]) => q <= (lk.variant(vid)?.on_hand_qty ?? 0) - confirmedOther(vid))
-  // BR-09: gửi được khi Có sẵn ≥ SL từng biến thể.
-  const short = [...need].filter(([vid, q]) => (lk.variant(vid)?.on_hand_qty ?? 0) < q)
+  // Từng chiếc của đơn + giá nhập ₫ hiệu lực hiện tại (v_units) + lãi theo chiếc.
+  const rows = lines.map((x) => {
+    const u = lk.unit(x.unit_id)
+    return { x, u, profit: u ? x.unit_price_vnd - u.cost_vnd : null }
+  })
+  // Chiếc còn chưa về kho (lô chưa Đã nhận) — chặn chốt (A7) và gửi (A8).
+  const notIn = rows.filter((r) => !r.u?.is_received)
+  const notInText = notIn.map((r) => r.u ? `${r.u.code} (${d.lotCode[r.u.lot_id] ?? 'lô'} · ${LOT_LABEL[r.u.lot_status]})` : '?').join(', ')
+  const provisional = rows.some((r) => r.u?.cost_is_provisional)
 
   async function run(fn: () => Promise<unknown>, ok: string) {
     setBusy(true)
@@ -67,13 +67,12 @@ export default function OrderDetail() {
 
   let action = null
   if (o.status === 'preorder') {
-    action = fillable
-      ? <><div className="note-box"><span>Đã đủ hàng có sẵn cho đơn này.</span></div>
+    // A7: nhận lô vào kho thì đơn Đặt trước có mọi chiếc đã về tự chuyển Đã chốt; nút chốt tay để dự phòng.
+    action = s.all_units_received
+      ? <><div className="note-box"><span>Mọi chiếc của đơn đã về kho.</span></div>
         <button className="btn btn-primary btn-block" disabled={busy} onClick={chot}>Chốt đơn</button></>
-      : <div className="note-box way"><span>Chờ hàng về — {[...need.keys()].map((vid) => {
-        const st = lk.stock(vid)
-        return `${lk.vName(vid)}: sẵn ${st?.on_hand ?? 0}, đang về ${st?.incoming ?? 0}`
-      }).join('; ')}</span></div>
+      : <><div className="note-box way"><span>Chờ hàng về — {notInText}. Khi lô được nhận vào kho, đơn tự chuyển Đã chốt.</span></div>
+        <button className="btn btn-primary btn-block" disabled>Chốt đơn</button></>
   } else if (o.status === 'confirmed') {
     action = <button className="btn btn-primary btn-block" disabled={busy} onClick={() => setSheet('ship')}>Gửi hàng</button>
   } else if (o.status === 'shipped') {
@@ -95,8 +94,11 @@ export default function OrderDetail() {
           {o.completion_forced && o.status === 'completed' && <div className="note-box"><span>Đơn hoàn tất khi chưa thu khớp tiền (đã xác nhận bỏ qua).</span></div>}
           {action}
           <div className="calc">
-            {lines.map((x) => (
-              <div key={x.id} className="ln"><span>{x.qty} × {lk.vName(x.variant_id)} @ {tr(x.unit_price_vnd)}</span><span>{vnd(x.qty * x.unit_price_vnd)}</span></div>
+            {rows.map(({ x, u }) => (
+              <div key={x.id} className="ln">
+                <span>{u ? <Link to={`/kho/${u.unit_id}`}>{u.code}</Link> : '?'} · {u?.model_name ?? 'Không tìm thấy chiếc'}</span>
+                <span>{vnd(x.unit_price_vnd)}</span>
+              </div>
             ))}
             <div className="ln"><span>Ship VN · {o.ship_fee_payer === 'customer' ? 'khách trả (thu hộ)' : 'shop chịu'}</span><span>{vnd(o.ship_fee_vnd)}</span></div>
             <div className="ln total"><span>Khách phải trả</span><span>{vnd(total)}</span></div>
@@ -127,16 +129,19 @@ export default function OrderDetail() {
           </dl>
           <button className="btn btn-ghost btn-block" disabled={busy} onClick={() => setSheet('info')}>Sửa mã vận đơn / ghi chú</button>
           <div className="calc">
-            {lines.map((x) => {
-              const avg = lk.stock(x.variant_id)?.avg_cost_vnd ?? 0
-              return (
-                <div key={x.id} className="ln"><span>Giá vốn · {lk.variant(x.variant_id)?.name ?? '?'}</span>
-                  <span>{x.unit_cost_vnd != null ? vnd(x.unit_cost_vnd) : <span className="muted">~{vnd(avg)} (BQ hiện tại)</span>}</span></div>
-              )
-            })}
+            {rows.map(({ x, u, profit: p }) => (
+              <div key={x.id} className="ln">
+                <span>
+                  {u?.code ?? '?'} · chốt {tr(x.unit_price_vnd)}
+                  <span className="sub">giá nhập {u ? vnd(u.cost_vnd) : '—'}{u?.cost_is_overridden ? ' (sửa tay)' : u?.cost_is_provisional ? ' (tạm tính, chưa có ship lô)' : ''}</span>
+                </span>
+                <span>{o.status === 'cancelled' || p == null ? '—' : sent ? vnd(p) : `~${vnd(p)}`}</span>
+              </div>
+            ))}
+            {o.ship_fee_payer === 'shop' && o.ship_fee_vnd > 0 && <div className="ln"><span>Ship shop chịu</span><span>−{vnd(o.ship_fee_vnd)}</span></div>}
             <div className="ln total"><span>{sent ? 'Lãi đơn' : 'Lãi dự kiến'}</span>
               <span>{profit.value == null ? '—' : profit.est ? `~${vnd(profit.value)}` : vnd(profit.value)}</span></div>
-            <div className="formula">Giá vốn chốt lúc gửi hàng (BR-05){o.ship_fee_payer === 'shop' ? ' · đã trừ ship shop chịu' : ''}</div>
+            <div className="formula">Giá nhập theo từng chiếc — đổi nếu bạn sửa phí ship lô / sửa tay.{provisional ? ' Có chiếc giá nhập tạm tính (lô chưa có phí ship).' : ''}</div>
           </div>
           {(o.status === 'preorder' || o.status === 'confirmed') && <button className="btn btn-danger btn-block" disabled={busy} onClick={() => setSheet('cancel')}>Huỷ đơn</button>}
         </div>
@@ -144,8 +149,8 @@ export default function OrderDetail() {
 
       {sheet === 'ship' && (
         <ShipSheet onClose={close} busy={busy} tracking={o.tracking_no ?? ''}
-          shortText={short.map(([vid, q]) => `${lk.vName(vid)}: cần ${q}, có sẵn ${lk.variant(vid)?.on_hand_qty ?? 0}`).join('; ')}
-          avgText={[...need.keys()].map((vid) => tr(lk.stock(vid)?.avg_cost_vnd ?? 0)).join(', ')}
+          shortText={notIn.length ? notInText : ''}
+          codes={lk.unitsText(s)}
           onOk={(tracking, date) => run(() => rpc('ship_order', { p_order_id: o.id, p_tracking_no: tracking || null, p_shipped_at: date || null, p_expected_version: o.version }),
             `Đã gửi ${code}${profit.value != null ? ` · lãi ${tr(profit.value)}` : ''}`)} />
       )}
@@ -163,7 +168,7 @@ export default function OrderDetail() {
             onClick={() => run(() => rpc('cancel_order', { p_order_id: o.id, p_expected_version: o.version }),
               s.paid_vnd > 0 ? `Đã huỷ ${code} · cần hoàn ${tr(s.paid_vnd)}` : `Đã huỷ ${code}`)}>Huỷ đơn</button>}>
           <p className="muted" style={{ textAlign: 'center', margin: 0 }}>
-            Bỏ giữ hàng cho {code}. Tiền cọc đã thu cần ghi “Hoàn tiền” nếu trả lại khách.{s.paid_vnd > 0 ? ` Đã thu ${vnd(s.paid_vnd)}.` : ''}
+            Bỏ giữ {lk.unitsText(s)} cho {code} — các chiếc trả về Trong kho / Đang về. Tiền cọc đã thu cần ghi “Hoàn tiền” nếu trả lại khách.{s.paid_vnd > 0 ? ` Đã thu ${vnd(s.paid_vnd)}.` : ''}
           </p>
         </Sheet>
       )}
@@ -202,18 +207,18 @@ export default function OrderDetail() {
   )
 }
 
-function ShipSheet({ onClose, onOk, busy, tracking, shortText, avgText }: {
-  onClose: () => void; onOk: (tracking: string, date: string) => void; busy: boolean; tracking: string; shortText: string; avgText: string
+function ShipSheet({ onClose, onOk, busy, tracking, shortText, codes }: {
+  onClose: () => void; onOk: (tracking: string, date: string) => void; busy: boolean; tracking: string; shortText: string; codes: string
 }) {
   const [tk, setTk] = useState(tracking)
   const [date, setDate] = useState(todayVn())
   return (
     <Sheet title="Gửi hàng" onClose={onClose}
       footer={<button className="btn btn-primary btn-block" disabled={busy || !!shortText || !date} onClick={() => onOk(tk.trim(), date)}>Xác nhận đã gửi</button>}>
-      {shortText && <div className="warn-box"><span>Không đủ hàng có sẵn để gửi (BR-09) — {shortText}.</span></div>}
+      {shortText && <div className="warn-box"><span>Còn chiếc chưa về kho — chưa gửi được: {shortText}.</span></div>}
       <label className="f" htmlFor="sh-tracking">Mã vận đơn<input className="input" id="sh-tracking" value={tk} onChange={(e) => setTk(e.target.value)} placeholder="VD: GHTK 1234" maxLength={100} /></label>
       <label className="f" htmlFor="sh-date">Ngày gửi<input className="input" id="sh-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
-      <p className="hint">Trừ kho và chốt giá vốn = BQ hiện tại ({avgText}). Không hoàn tác được.</p>
+      <p className="hint">{codes} chuyển sang Đã bán. Lãi tính theo giá nhập ₫ hiện tại của từng chiếc (đổi nếu sau này sửa phí ship lô / sửa tay). Không hoàn tác được.</p>
     </Sheet>
   )
 }
