@@ -6,7 +6,7 @@ export const LOT_LABEL: Record<LotStatusDb, string> = {
   ordered: 'Đã đặt', cn_shipping: 'Ship nội địa TQ', at_forwarder: 'Tới trung gian', vn_shipping: 'Đang về VN', received: 'Đã nhận', cancelled: 'Huỷ',
 }
 const LOT_TONE: Record<LotStatusDb, string> = { ordered: 'neu', cn_shipping: 'way', at_forwarder: 'way', vn_shipping: 'way', received: 'ok', cancelled: 'neu' }
-// CR-004: 'returned' = Hoàn hàng (khách bom / chuyển hoàn) — chip đỏ
+// CR-004: 'returned' = Hoàn hàng (khách bom / chuyển hoàn) - chip đỏ
 export const ORDER_LABEL: Record<OrderStatusDb, string> = { preorder: 'Đặt trước', confirmed: 'Đã chốt', shipped: 'Đã gửi', completed: 'Hoàn tất', cancelled: 'Huỷ', returned: 'Hoàn hàng' }
 const ORDER_TONE: Record<OrderStatusDb, string> = { preorder: 'way', confirmed: 'hold', shipped: 'neu', completed: 'ok', cancelled: 'neu', returned: 'bad' }
 
@@ -35,5 +35,5 @@ export const ConditionChip = ({ c, hideNew }: { c: UnitConditionDb; hideNew?: bo
   hideNew && c === 'new' ? null : <span className={`pill ${CONDITION_TONE[c]}`}>{CONDITION_LABEL[c]}</span>
 // CR-004 DON-S1: hình thức thu
 export const PAY_METHOD_LABEL: Record<PaymentMethodDb, string> = { transfer: 'Chuyển khoản', cash: 'Tiền mặt', cod: 'COD' }
-// CR-004 KHO-S1: màu tuổi tồn (v_units.aging_level) — dùng làm class chữ / chip
+// CR-004 KHO-S1: màu tuổi tồn (v_units.aging_level) - dùng làm class chữ / chip
 export const AGING_TONE: Record<AgingLevelDb, string> = { ok: 'neu', warn: 'way', alert: 'bad' }

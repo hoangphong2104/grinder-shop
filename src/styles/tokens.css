@@ -1,5 +1,5 @@
-/* Grinder Shop — design tokens (từ prototype v2.2 đã duyệt); hướng A + C + D (chat-record 2026-10-22, "Chọn hướng giao diện").
-   A: khung bảng điều khiển — nền xám rất nhạt, thẻ trắng viền mảnh, chip màu theo trạng thái, số căn cột bằng font mono.
+/* Grinder Shop - design tokens (từ prototype v2.2 đã duyệt); hướng A + C + D (chat-record 2026-10-22, "Chọn hướng giao diện").
+   A: khung bảng điều khiển - nền xám rất nhạt, thẻ trắng viền mảnh, chip màu theo trạng thái, số căn cột bằng font mono.
    Màu nhấn: xanh rêu (teal). Màu trạng thái tách riêng: xanh lá = có sẵn / xong · cam = đang về / chờ · xanh dương = đã giữ / cần làm · đỏ = nợ / hết / lỗi.
    Sáng / tối theo máy (prefers-color-scheme) + chọn tay (data-theme). */
 :root {

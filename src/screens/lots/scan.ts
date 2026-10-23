@@ -1,7 +1,7 @@
 // AI quét tin Goofish (F2, BR-13): thu nhỏ ảnh → upload bucket private → gọi Edge Function scan-goofish
 // theo hợp đồng System Design §5.2. Mọi lỗi ⇒ ném Error có câu tiếng Việt; form vẫn nhập tay được.
-// v0.2 (CR-001): Edge Function chỉ đoán model (fields.model_id) — bỏ fields.variant_id (bản cũ còn gửi thì bỏ qua);
-// thêm qty_guess ở gốc (số chiếc trong tin, 2..50; null khi 1 chiếc / không chắc — không bao giờ bị flag).
+// v0.2 (CR-001): Edge Function chỉ đoán model (fields.model_id) - bỏ fields.variant_id (bản cũ còn gửi thì bỏ qua);
+// thêm qty_guess ở gốc (số chiếc trong tin, 2..50; null khi 1 chiếc / không chắc - không bao giờ bị flag).
 import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase.ts'
 import { errorMessage } from '../../data/errors.ts'
@@ -20,7 +20,7 @@ export interface ScanResponse {
   fields: {
     listing_title?: ScanField<string>; price_cny?: ScanField<number>; seller_nickname?: ScanField<string>
     seller_region?: ScanField<string>; model_id?: ScanField<string>
-    /** Bản Edge Function cũ (v0.1) — không dùng nữa, có thể vắng. */
+    /** Bản Edge Function cũ (v0.1) - không dùng nữa, có thể vắng. */
     variant_id?: ScanField<string>
   }
   /** Số chiếc AI đoán trong tin (2..50); null khi 1 chiếc / không chắc / dưới ngưỡng. */
@@ -53,19 +53,19 @@ async function shrink(file: File): Promise<{ blob: Blob; ext: string; type: stri
     if (OK_TYPES.includes(file.type) && file.size <= MAX_BYTES) {
       return { blob: file, ext: file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg', type: file.type }
     }
-    throw new Error('Không đọc được ảnh này — chọn ảnh JPEG / PNG / WebP (ảnh chụp màn hình).')
+    throw new Error('Không đọc được ảnh này - chọn ảnh JPEG / PNG / WebP (ảnh chụp màn hình).')
   }
 }
 
-/** Upload ảnh chụp tin vào {uid}/goofish/{uuid}.jpg — trả đường dẫn để lưu vào lots.screenshot_path. */
+/** Upload ảnh chụp tin vào {uid}/goofish/{uuid}.jpg - trả đường dẫn để lưu vào lots.screenshot_path. */
 export async function uploadScreenshot(uid: string, file: File): Promise<string> {
   const { blob, ext, type } = await shrink(file)
-  if (blob.size > MAX_BYTES) throw new Error('Ảnh quá lớn (> 5 MB) — chụp lại hoặc chọn ảnh nhỏ hơn.')
+  if (blob.size > MAX_BYTES) throw new Error('Ảnh quá lớn (> 5 MB) - chụp lại hoặc chọn ảnh nhỏ hơn.')
   const path = `${uid}/goofish/${crypto.randomUUID()}.${ext}`
   const { error } = await supabase.storage.from(BUCKET).upload(path, blob, { contentType: type, upsert: false })
   if (error) {
-    if (/Failed to fetch|NetworkError|network/i.test(error.message)) throw new Error('Mất kết nối mạng — chưa tải ảnh lên được. Thử lại khi có mạng.')
-    throw new Error('Không tải được ảnh lên — thử lại. (' + error.message + ')')
+    if (/Failed to fetch|NetworkError|network/i.test(error.message)) throw new Error('Mất kết nối mạng - chưa tải ảnh lên được. Thử lại khi có mạng.')
+    throw new Error('Không tải được ảnh lên - thử lại. (' + error.message + ')')
   }
   return path
 }
@@ -73,8 +73,8 @@ export async function uploadScreenshot(uid: string, file: File): Promise<string>
 // Mã lỗi của Edge Function (supabase/functions/scan-goofish/README.md). Câu tiếng Việt lấy từ data/errors.ts;
 // chỉ INTERNAL / INVALID_INPUT có câu riêng ở đây cho ngữ cảnh quét.
 const LOCAL: Record<string, string> = {
-  INTERNAL: 'AI quét gặp lỗi — nhập tay.',
-  INVALID_INPUT: 'Dữ liệu quét chưa hợp lệ (chữ rỗng hoặc quá 20.000 ký tự) — kiểm tra lại.',
+  INTERNAL: 'AI quét gặp lỗi - nhập tay.',
+  INVALID_INPUT: 'Dữ liệu quét chưa hợp lệ (chữ rỗng hoặc quá 20.000 ký tự) - kiểm tra lại.',
 }
 const SHARED = ['SCAN_CAP_REACHED', 'SCAN_DISABLED', 'AI_QUOTA_EXHAUSTED', 'AI_UPSTREAM_ERROR', 'AI_UNREADABLE',
   'IMAGE_NOT_FOUND', 'PAYLOAD_TOO_LARGE', 'FORBIDDEN', 'NOT_AUTHENTICATED']
@@ -82,13 +82,13 @@ const SHARED = ['SCAN_CAP_REACHED', 'SCAN_DISABLED', 'AI_QUOTA_EXHAUSTED', 'AI_U
 interface ScanErr { code?: string; message?: string; used?: number; cap?: number }
 function scanMessage(e: ScanErr | undefined, status: number | undefined): string {
   const code = e?.code
-  if (code === 'SCAN_CAP_REACHED' && e?.used != null && e?.cap != null) return `Đã dùng hết ${e.used}/${e.cap} lượt quét AI tháng này — nhập tay.`
+  if (code === 'SCAN_CAP_REACHED' && e?.used != null && e?.cap != null) return `Đã dùng hết ${e.used}/${e.cap} lượt quét AI tháng này - nhập tay.`
   if (code && LOCAL[code]) return LOCAL[code]
   if (code && SHARED.includes(code)) return errorMessage({ message: code })
   if (status === 401) return errorMessage({ message: 'NOT_AUTHENTICATED' }) // 401 của gateway không có thân JSON
   if (status === 429) return errorMessage({ message: 'AI_QUOTA_EXHAUSTED' })
-  if (status === 404) return 'Chức năng AI quét chưa được triển khai — nhập tay.'
-  return e?.message ? `${e.message} — nhập tay.` : 'AI quét gặp lỗi — nhập tay.'
+  if (status === 404) return 'Chức năng AI quét chưa được triển khai - nhập tay.'
+  return e?.message ? `${e.message} - nhập tay.` : 'AI quét gặp lỗi - nhập tay.'
 }
 
 /** Gọi scan-goofish. Thành công ⇒ trả kết quả; lỗi ⇒ ném Error tiếng Việt (SCAN_CAP_REACHED, SCAN_DISABLED, AI_QUOTA_EXHAUSTED…). */
@@ -101,8 +101,8 @@ export async function invokeScan(input: ScanInput, goofishUrl: string | null): P
       try { body = (await res.json())?.error } catch { /* thân không phải JSON (vd. 401 của gateway) */ }
       throw new Error(scanMessage(body, res.status))
     }
-    if (error instanceof FunctionsFetchError) throw new Error('Mất kết nối mạng — chưa quét được. Vẫn nhập tay được.')
-    if (error instanceof FunctionsRelayError) throw new Error('Không gọi được AI quét lúc này — thử lại hoặc nhập tay.')
+    if (error instanceof FunctionsFetchError) throw new Error('Mất kết nối mạng - chưa quét được. Vẫn nhập tay được.')
+    if (error instanceof FunctionsRelayError) throw new Error('Không gọi được AI quét lúc này - thử lại hoặc nhập tay.')
     throw new Error(scanMessage({ message: error.message }, undefined))
   }
   const r = (typeof data === 'string' ? JSON.parse(data) : data) as ScanResponse | { ok: false; error?: ScanErr }
@@ -112,7 +112,7 @@ export async function invokeScan(input: ScanInput, goofishUrl: string | null): P
 
 const norm = (s: string) => s.toLowerCase().replace(/[\s\-_.·]/g, '')
 
-/** Khớp model theo tên + tên gọi khác (models.aliases) — lấy tên khớp dài nhất. */
+/** Khớp model theo tên + tên gọi khác (models.aliases) - lấy tên khớp dài nhất. */
 export function matchModelByAlias(models: ModelRow[], texts: (string | null | undefined)[]): ModelRow | null {
   let best: ModelRow | null = null, bestLen = 0
   for (const raw of texts) {

@@ -59,12 +59,12 @@ export default function Lots() {
 
   let body
   if (!d.lots.length) {
-    body = <div className="empty">Chưa có lô nào — bấm <Link className="link-btn" to="/lo/new">Nhập lô Goofish</Link> để thêm lô đầu tiên.</div>
+    body = <div className="empty">Chưa có lô nào - bấm <Link className="link-btn" to="/lo/new">Nhập lô Goofish</Link> để thêm lô đầu tiên.</div>
   } else if (!desk) {
     // Điện thoại: 1 danh sách + chip bước (LOT-M2)
     const chips: [Stage, string][] = [['open', 'Đang về'], ...LOT_FLOW.map((k): [Stage, string] => [k, LOT_SHORT[k]]), ['all', 'Tất cả']]
     const ls = found.filter((l) => matchStage(stage, l))
-    const emptyMsg = needle ? 'Không có lô khớp tìm kiếm ở bước này' : stage === 'open' ? 'Không có lô đang về — lô mới bấm nút + → Nhập lô Goofish'
+    const emptyMsg = needle ? 'Không có lô khớp tìm kiếm ở bước này' : stage === 'open' ? 'Không có lô đang về - lô mới bấm nút + → Nhập lô Goofish'
       : stage === 'received' ? 'Chưa có lô đã nhận' : stage === 'all' ? 'Không có lô' : `Không có lô ở bước ${LOT_LABEL[stage as LotStatusDb]}`
     body = (
       <>
@@ -118,13 +118,13 @@ export default function Lots() {
                       <td>{d.lotCode[l.id]}</td>
                       <td>{dmy(l.ordered_at)}{days != null && <span className="muted small"> · {days} ngày</span>}</td>
                       <td>{modelsText(d, sum)}</td>
-                      <td>{s?.nickname ?? '—'}{s?.is_avoided && <> <span className="pill bad">tránh</span></>}</td>
+                      <td>{s?.nickname ?? '-'}{s?.is_avoided && <> <span className="pill bad">tránh</span></>}</td>
                       <td><LotChip s={l.status} />{isLate(d, l) && <> <span className="pill bad">Về trễ</span></>}</td>
                       <td><UnitCounts sum={sum} /></td>
                       <td className="r">{vnd(sum?.goods_vnd ?? 0)}</td>
                       <td className="r">{vnd(sum?.buying_fee_vnd ?? 0)} <span className="muted small">{pct(lotFeePct(l))}</span></td>
                       <td className="r">{l.ship_fee_vnd == null ? <span className="pill bad">chưa nhập</span> : vnd(l.ship_fee_vnd)}</td>
-                      <td className="r">{sum?.ship_per_unit_vnd != null ? vnd(sum.ship_per_unit_vnd) : '—'}</td>
+                      <td className="r">{sum?.ship_per_unit_vnd != null ? vnd(sum.ship_per_unit_vnd) : '-'}</td>
                       <td className="r">{vnd(sum?.payable_vnd ?? 0)}</td>
                     </tr>
                   )
@@ -137,7 +137,7 @@ export default function Lots() {
     )
   }
 
-  // Máy tính: chọn cách xem (bảng cột / bảng) — điện thoại không có (LOT-M2)
+  // Máy tính: chọn cách xem (bảng cột / bảng) - điện thoại không có (LOT-M2)
   const seg = desk && d.lots.length > 0 && (
     <div className="row" style={{ justifyContent: 'space-between' }}>
       <div className="seg">

@@ -53,7 +53,7 @@ test('KHO-S3: validateUnit accepts the 4 conditions (missing = Mới), rejects o
   assert.equal(bad.error.field, 'condition');
 });
 
-test('DON-S1: payment method — 3 methods, COD only for a payment', () => {
+test('DON-S1: payment method - 3 methods, COD only for a payment', () => {
   assert.equal(validatePayment({ kind: 'deposit', amount: 1, method: 'cash' }).ok, true);
   assert.equal(validatePayment({ kind: 'payment', amount: 1, method: 'cod' }).ok, true);
   assert.equal(validatePayment({ kind: 'deposit', amount: 1, method: 'cod' }).ok, false);
@@ -63,7 +63,7 @@ test('DON-S1: payment method — 3 methods, COD only for a payment', () => {
   assert.equal(validateOrder({ ...o3, returnShipFee: 1.5 }).ok, false);
 });
 
-test('DON-S1: COD pending = max(min(COD − COD received, receivable), 0) — mirror of SQL O1', () => {
+test('DON-S1: COD pending = max(min(COD − COD received, receivable), 0) - mirror of SQL O1', () => {
   // O1: 5.000.000 + ship 30.000 khách trả = 5.030.000; cọc tiền mặt 1.000.000 ⇒ còn thu 4.030.000; COD 4.030.000
   const o1: Order = { id: 'o1', status: 'shipped', shippedAt: '2026-10-17', shipFee: 30000, shipPayer: 'customer', codAmount: 4030000,
     lines: [{ unitId: 'z3', price: 5000000 }], payments: [{ kind: 'deposit', amount: 1000000, method: 'cash' }] };
@@ -82,7 +82,7 @@ test('DON-S1: COD pending = max(min(COD − COD received, receivable), 0) — mi
   assert.equal(totalCodPending([o1, part, full, byTransfer]), 4030000 + 2030000);
 });
 
-test('DON-S3: returnOrder guard — only from shipped; returned cannot complete / cancel / return again', () => {
+test('DON-S3: returnOrder guard - only from shipped; returned cannot complete / cancel / return again', () => {
   for (const status of ['preorder', 'confirmed', 'completed', 'cancelled', 'returned'] as const) {
     const r = checkReturnOrder({ ...o3, status });
     assert.ok(!r.ok);
@@ -97,7 +97,7 @@ test('DON-S3: returnOrder guard — only from shipped; returned cannot complete 
   assert.equal(checkReturnOrder(r3).ok, false);
 });
 
-test('DON-S3: returned + KEEP deposit — numbers of SQL O3', () => {
+test('DON-S3: returned + KEEP deposit - numbers of SQL O3', () => {
   const r3 = ok(returnOrder(o3, { keepDeposit: true, returnShipFee: 45000, returnedAt: '2026-10-21' }));
   // đã thu ròng 1.500.000; giữ tối đa Σ cọc 1.000.000 ⇒ cần hoàn 500.000; giữ 1.000.000
   // lãi = 1.000.000 − 40.000 (ship đi shop chịu) − 45.000 (ship về) = 915.000
@@ -114,7 +114,7 @@ test('DON-S3: returned + KEEP deposit — numbers of SQL O3', () => {
   assert.equal(orderProfit(refunded, new Map()), 915000);
 });
 
-test('DON-S3: returned + REFUND deposit — numbers of SQL O5', () => {
+test('DON-S3: returned + REFUND deposit - numbers of SQL O5', () => {
   const r5 = ok(returnOrder(o5, { keepDeposit: false, returnShipFee: 35000, returnedAt: today }));
   // đã thu ròng 800.000; giữ tối đa 0 ⇒ cần hoàn 800.000; giữ 0; lãi = 0 − 0 (ship khách chịu) − 35.000 = −35.000
   assert.equal(orderRefundDue(r5), 800000);
@@ -150,7 +150,7 @@ test('CR-004 monthly profit: returned order counts in its return month, not its 
   assert.deepEqual(profitByMonth([r3, o5], costs).map((m) => m.month), ['2026-10']);
 });
 
-test('KHO-S1: aging level — > 30 warn, > 60 alert (defaults), thresholds from settings', () => {
+test('KHO-S1: aging level - > 30 warn, > 60 alert (defaults), thresholds from settings', () => {
   assert.equal(agingLevel(null), null);
   assert.equal(agingLevel(30), 'ok');
   assert.equal(agingLevel(31), 'warn');
@@ -169,7 +169,7 @@ test('KHO-S1: aging level — > 30 warn, > 60 alert (defaults), thresholds from 
   assert.equal(buildUnitViews(units, lots, [], today, { warnDays: 30, alertDays: 70 })[0]!.agingLevel, 'warn');
 });
 
-test('LOT-S2: lot late — open lot ordered > 21 days ago (setting), received / cancelled never late', () => {
+test('LOT-S2: lot late - open lot ordered > 21 days ago (setting), received / cancelled never late', () => {
   assert.equal(lotDaysOpen(L4, today), 22);
   assert.equal(isLotLate(L4, today), true);
   assert.equal(isLotLate(L4, today, 22), false);

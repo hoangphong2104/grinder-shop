@@ -27,7 +27,7 @@ export const CODE_PREFIX_RE = /^[A-Za-z0-9]{1,10}$/;
 /** Max units created by one lot group (same bound as the v1 lot line quantity). */
 export const MAX_GROUP_QTY = 1000;
 
-/** A1 — model fields. */
+/** A1 - model fields. */
 export function validateModel(m: Model): Result<Model> {
   if (!isNonEmptyString(m.name) || m.name.trim().length > 80) {
     return fail(invalid('A1', 'Tên model phải có 1–80 ký tự.', 'name'));
@@ -44,7 +44,7 @@ export function validateModel(m: Model): Result<Model> {
   return ok(m);
 }
 
-/** CR-003 — phí mua hộ %: số từ 0 đến 100, tối đa 2 chữ số thập phân (DB numeric(5,2)). */
+/** CR-003 - phí mua hộ %: số từ 0 đến 100, tối đa 2 chữ số thập phân (DB numeric(5,2)). */
 export const isBuyingFeePct = (n: unknown): n is number =>
   isFiniteNumber(n) && n >= 0 && n <= 100 && Math.abs(n * 100 - Math.round(n * 100)) < 1e-6;
 
@@ -65,7 +65,7 @@ export function validateLot(lot: Lot): Result<Lot> {
 
 const checkPriceCny = (n: Cny): boolean => isFiniteNumber(n) && n > 0;
 
-/** A2 — one group of the lot form: model, N ≥ 1, ¥ > 0, list price null or whole đồng ≥ 0. */
+/** A2 - one group of the lot form: model, N ≥ 1, ¥ > 0, list price null or whole đồng ≥ 0. */
 export function validateLotGroup(g: { modelId: string; qty: number; priceCny: Cny; listPrice: Vnd | null }, i = 0): Result<true> {
   if (!isNonEmptyString(g.modelId)) return fail(invalid('A2', `Nhóm ${i + 1}: chưa chọn model.`, `groups[${i}].modelId`));
   if (!isPositiveInt(g.qty) || g.qty > MAX_GROUP_QTY) {
@@ -78,7 +78,7 @@ export function validateLotGroup(g: { modelId: string; qty: number; priceCny: Cn
   return ok(true);
 }
 
-/** CR-004 — DB enums. */
+/** CR-004 - DB enums. */
 export const UNIT_CONDITIONS: readonly UnitCondition[] = ['new', 'like_new', 'used', 'defect'];
 export const PAYMENT_METHODS: readonly PaymentMethod[] = ['transfer', 'cash', 'cod'];
 

@@ -1,8 +1,8 @@
 // SC_06 Nhập lô Goofish (/lo/new) + sửa lô chưa nhận (/lo/:id/sua). v0.2 (CR-001 A2): lô = các NHÓM CHIẾC
 // (model, số lượng N, giá ¥ / chiếc, giá bán dự kiến / chiếc) → DB tạo N chiếc, mỗi chiếc 1 mã (D1). Sửa lô chưa
-// nhận: sửa / bỏ từng chiếc cũ (không bỏ được chiếc đang giữ cho đơn — UNIT_RESERVED) và thêm nhóm mới.
+// nhận: sửa / bỏ từng chiếc cũ (không bỏ được chiếc đang giữ cho đơn - UNIT_RESERVED) và thêm nhóm mới.
 // Khối AI quét ở đầu form (BR-13: chỉ điền sẵn, không tự lưu). Xem trước bằng src/domain; số chính thức do DB tính.
-// v0.3 (CR-003): ô "Phí mua hộ %" cạnh tỷ giá — lô mới điền sẵn mặc định trong Cài đặt; tính vào giá nhập ₫ / chiếc
+// v0.3 (CR-003): ô "Phí mua hộ %" cạnh tỷ giá - lô mới điền sẵn mặc định trong Cài đặt; tính vào giá nhập ₫ / chiếc
 // và phải trả trung gian. Lô đã nhận thì phí khoá như tỷ giá (form sửa không mở cho lô đã nhận).
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -48,7 +48,7 @@ const findSeller = (sellers: SellerRow[], nick: string) => {
 }
 const lineId = (base: string, i: number) => (i === 0 ? base : `${base}-${i + 1}`)
 const round2 = (n: number) => Math.round(n * 100) / 100
-/** Giá ¥ hợp lệ: > 0, ≤ 100.000, tối đa 2 chữ số thập phân — trả thông báo lỗi hoặc null. */
+/** Giá ¥ hợp lệ: > 0, ≤ 100.000, tối đa 2 chữ số thập phân - trả thông báo lỗi hoặc null. */
 function cnyError(v: string): string | null {
   const c = parseNum(v)
   if (c == null || c <= 0 || c > 100000) return 'Nhập giá ¥ / chiếc (lớn hơn 0).'
@@ -67,7 +67,7 @@ let groupKey = 0
 const newGroup = (): GroupDraft => ({ key: ++groupKey, modelId: '', qty: '1', cny: '', list: '', listAuto: true })
 const defaultList = (d: DbData, modelId: string) => numStr(d.models.find((m) => m.id === modelId)?.default_list_price_vnd ?? null)
 
-/** modelId (tuỳ chọn, từ /lo/new?model=…): chỉ nhận model đang bán — điền sẵn model + giá bán mặc định nhóm đầu. */
+/** modelId (tuỳ chọn, từ /lo/new?model=…): chỉ nhận model đang bán - điền sẵn model + giá bán mặc định nhóm đầu. */
 function initDraft(lot: LotRow | undefined, d: DbData, modelId?: string | null): Draft {
   if (!lot) {
     const g = newGroup()
@@ -110,7 +110,7 @@ export default function LotNew() {
         <div className="note-box">
           <span>{lot.status === 'received'
             ? 'Lô đã nhận: không thêm / bớt chiếc, không đổi giá ¥ / tỷ giá (A10, Q-014). Sửa phí ship và ghi chú ở trang lô; giá nhập ₫, giá bán dự kiến, số seri ở trang từng chiếc.'
-            : 'Lô đã huỷ — không sửa được.'}</span>
+            : 'Lô đã huỷ - không sửa được.'}</span>
         </div>
         <Link className="btn btn-ghost btn-block" to={`/lo/${lot.id}`}>Về chi tiết lô</Link>
       </Shell>
@@ -127,7 +127,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
   const nav = useNavigate()
   const [params] = useSearchParams()
   const [draft, setDraft] = useState<Draft>(() => initDraft(lot, d, params.get('model')))
-  const [version] = useState(lot?.version ?? null) // version lúc mở form — bắt sửa đồng thời
+  const [version] = useState(lot?.version ?? null) // version lúc mở form - bắt sửa đồng thời
   const [marks, setMarks] = useState<Marks>({})
   const [errs, setErrs] = useState<Record<string, string>>({})
   const [mode, setMode] = useState<'img' | 'text'>('img')
@@ -196,7 +196,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
     return path
   }
 
-  // ---- AI quét (chỉ đoán model — không còn màu / biến thể) ----
+  // ---- AI quét (chỉ đoán model - không còn màu / biến thể) ----
   const applyScan = (r: ScanResponse) => {
     const th = Number(d.settings?.ai_confidence_threshold ?? 0.7)
     const flags = new Set(r.flags ?? [])
@@ -242,7 +242,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
   const scan = async () => {
     if (mode === 'img' && !file && !keptShot) return toast('Chọn ảnh chụp tin trước')
     if (mode === 'text' && !text.trim()) return toast('Dán chữ từ trang tin trước')
-    if (mode === 'text' && text.length > MAX_TEXT) return toast('Chữ dán tối đa 20.000 ký tự — bớt phần thừa')
+    if (mode === 'text' && text.length > MAX_TEXT) return toast('Chữ dán tối đa 20.000 ký tự - bớt phần thừa')
     setScanning(true)
     try {
       const input = mode === 'img'
@@ -250,7 +250,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
         : { kind: 'text' as const, text: text.trim() }
       const r = await invokeScan(input, draftRef.current.url.trim() || null)
       applyScan(r)
-      toast('AI đã điền — kiểm tra ô đánh dấu')
+      toast('AI đã điền - kiểm tra ô đánh dấu')
     } catch (e) {
       toast(errText(e))
     } finally { setScanning(false) }
@@ -294,7 +294,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
     : null)
   const costText = (priceCny: number | null) => {
     const c = priceCny != null ? autoCost(priceCny) : null
-    return c == null ? '—' : shipVal != null ? vnd(c) : <>{vnd(c)} <span className="muted small">+ ship</span></>
+    return c == null ? '-' : shipVal != null ? vnd(c) : <>{vnd(c)} <span className="muted small">+ ship</span></>
   }
 
   // ---- Gợi ý / cảnh báo ----
@@ -322,8 +322,8 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
       if (ce) e[lineId('f-cny', i)] = ce
       if (le) e[lineId('f-list', i)] = le
     })
-    if (items === 0) e['f-groups'] = 'Lô cần ít nhất 1 chiếc — bấm "Thêm nhóm chiếc".'
-    else if (items > MAX_GROUP_ITEMS) e['f-groups'] = `Tối đa ${MAX_GROUP_ITEMS} dòng mỗi lần lưu (mỗi chiếc cũ + mỗi nhóm mới là 1 dòng) — bớt nhóm hoặc gộp nhóm cùng model, cùng giá.`
+    if (items === 0) e['f-groups'] = 'Lô cần ít nhất 1 chiếc - bấm "Thêm nhóm chiếc".'
+    else if (items > MAX_GROUP_ITEMS) e['f-groups'] = `Tối đa ${MAX_GROUP_ITEMS} dòng mỗi lần lưu (mỗi chiếc cũ + mỗi nhóm mới là 1 dòng) - bớt nhóm hoặc gộp nhóm cùng model, cùng giá.`
     else if (kept.length + draft.groups.reduce((a, g) => a + (parseNum(g.qty) ?? 0), 0) > MAX_LOT_UNITS) e['f-groups'] = 'Một lô tối đa 1.000 chiếc.'
     if (rate == null || rate <= 0 || rate >= 1e8) e['f-rate'] = 'Nhập tỷ giá ₫/¥ (lớn hơn 0).'
     if (feeVal == null) e['f-fee'] = 'Phí mua hộ là số % từ 0 đến 100 (vd. 3 hoặc 2,5), tối đa 2 chữ số thập phân.'
@@ -382,7 +382,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
     } catch (err) {
       if (err instanceof RpcError && err.code === 'UNIT_RESERVED' && err.detail && typeof err.detail === 'object') {
         const det = err.detail as { code?: string; order_id?: string }
-        toast(`${det.code ?? 'Chiếc này'} đang giữ cho ${det.order_id ? d.orderCode[det.order_id] ?? 'một đơn' : 'một đơn'} — không bỏ khỏi lô được. Sửa / huỷ đơn đó trước.`)
+        toast(`${det.code ?? 'Chiếc này'} đang giữ cho ${det.order_id ? d.orderCode[det.order_id] ?? 'một đơn' : 'một đơn'} - không bỏ khỏi lô được. Sửa / huỷ đơn đó trước.`)
       } else toast(errText(err))
       setSaving(false)
     }
@@ -390,7 +390,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
 
   // ---- Giao diện ----
   const flag = (k: MarkKey) => marks[k]
-    ? <span className={`ai-flag ${marks[k] === 'low' ? 'low' : ''}`}><Icon name="spark" size={12} />{marks[k] === 'low' ? 'AI không chắc — kiểm tra' : 'AI điền'}</span>
+    ? <span className={`ai-flag ${marks[k] === 'low' ? 'low' : ''}`}><Icon name="spark" size={12} />{marks[k] === 'low' ? 'AI không chắc - kiểm tra' : 'AI điền'}</span>
     : null
   const cls = (k: MarkKey, extra = '') => `input ${extra} ${marks[k] ? 'ai' : ''}`.trim()
   const err = (fid: string): ReactNode => (errs[fid] ? <span className="err-text" role="alert">{errs[fid]}</span> : null)
@@ -424,13 +424,13 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
       </button>
       <p className="hint" style={{ textAlign: 'center' }}>
         {scanOn
-          ? 'Goofish chặn đọc thẳng từ link — AI đọc ảnh hoặc chữ bạn đưa. Không quét vẫn nhập tay được.'
-          : <>AI quét đang tắt trong <Link className="link-btn small" to="/caidat">Cài đặt</Link> — nhập tay bên dưới.</>}
+          ? 'Goofish chặn đọc thẳng từ link - AI đọc ảnh hoặc chữ bạn đưa. Không quét vẫn nhập tay được.'
+          : <>AI quét đang tắt trong <Link className="link-btn small" to="/caidat">Cài đặt</Link> - nhập tay bên dưới.</>}
       </p>
       {ai && (ai.notes || ai.condition || ai.usage) && (
         <div className="note-box way" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
           {ai.notes && <span>AI ghi chú: {ai.notes}</span>}
-          {marks.qty === 'ai' && <span className="small">AI đoán tin có nhiều chiếc — kiểm tra giá ¥ là giá MỖI chiếc (không phải tổng).</span>}
+          {marks.qty === 'ai' && <span className="small">AI đoán tin có nhiều chiếc - kiểm tra giá ¥ là giá MỖI chiếc (không phải tổng).</span>}
           {ai.condition && <span>Tình trạng trong tin: {ai.condition}</span>}
           {ai.usage && <span className="small">Đã dùng {ai.usage.scans_this_month}/{ai.usage.cap} lượt quét tháng này.</span>}
         </div>
@@ -449,7 +449,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
               {u.removed
                 ? <button type="button" className="link-btn" onClick={() => setUnit(u.unitId, { removed: false })}>Giữ lại</button>
                 : u.holder
-                  ? <span className="hint">Đang giữ cho {u.holder} — không bỏ được</span>
+                  ? <span className="hint">Đang giữ cho {u.holder} - không bỏ được</span>
                   : <button type="button" className="link-btn" onClick={() => setUnit(u.unitId, { removed: true })}>Bỏ chiếc</button>}
             </div>
             {!u.removed && (
@@ -465,7 +465,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
                 </label>
               </>
             )}
-            {u.removed && <span className="hint" style={{ gridColumn: '1 / -1' }}>Sẽ bỏ khỏi lô khi lưu — mã {u.code} không cấp lại.</span>}
+            {u.removed && <span className="hint" style={{ gridColumn: '1 / -1' }}>Sẽ bỏ khỏi lô khi lưu - mã {u.code} không cấp lại.</span>}
           </div>
         ))}
       </div>
@@ -490,9 +490,9 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
                 {modelOptions(g.modelId)}
               </select>
               {i === 0 && ai?.modelHint && !g.modelId && (
-                <span className="hint">Tin có nhắc {ai.modelHint.name} — <button type="button" className="link-btn small" onClick={() => pickModel(0, ai.modelHint!.id)}>Chọn {ai.modelHint.name}</button></span>
+                <span className="hint">Tin có nhắc {ai.modelHint.name} - <button type="button" className="link-btn small" onClick={() => pickModel(0, ai.modelHint!.id)}>Chọn {ai.modelHint.name}</button></span>
               )}
-              {!activeModels.length && <span className="hint">Chưa có model đang bán — thêm ở <Link className="link-btn small" to="/danhmuc">Model</Link>.</span>}
+              {!activeModels.length && <span className="hint">Chưa có model đang bán - thêm ở <Link className="link-btn small" to="/danhmuc">Model</Link>.</span>}
               {err(lineId('f-model', i))}
             </label>
             <div className="two">
@@ -509,7 +509,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
             <label className="f"><span className="flab">Giá bán dự kiến / chiếc (₫)</span>
               <input className="input money" id={lineId('f-list', i)} inputMode="numeric" value={g.list} placeholder="để trống"
                 onChange={(e) => setGroup(i, { list: e.target.value, listAuto: false })} />
-              <span className="hint">{g.modelId && g.listAuto && g.list ? 'Giá mặc định của model — sửa được' : 'Sửa riêng từng chiếc được sau khi lưu'}</span>
+              <span className="hint">{g.modelId && g.listAuto && g.list ? 'Giá mặc định của model - sửa được' : 'Sửa riêng từng chiếc được sau khi lưu'}</span>
               {err(lineId('f-list', i))}
             </label>
             {codes.length > 0 && (
@@ -556,7 +556,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
           <datalist id="lot-sellers">{sellers.map((s) => <option key={s.id} value={s.nickname} />)}</datalist>
           {sMatch
             ? <span className="hint">Người bán cũ · đã mua {d.lots.filter((l) => l.seller_id === sMatch.id).length} lô{sMatch.is_avoided && <> · <span className="req">đang đánh dấu TRÁNH</span></>}</span>
-            : draft.sellerNick.trim() ? <span className="hint">Người bán mới — sẽ thêm vào danh bạ</span> : null}
+            : draft.sellerNick.trim() ? <span className="hint">Người bán mới - sẽ thêm vào danh bạ</span> : null}
           {err('f-seller')}
         </label>
         <label className="f"><span className="lrow">Khu vực {flag('region')}</span>
@@ -600,18 +600,18 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
         </label>
 
         <div className="calc full">
-          <div className="ln"><span>Số chiếc</span><span>{N || '—'}</span></div>
-          <div className="ln"><span>Tiền hàng</span><span>{previewOk && N ? vnd(lotGoodsVnd(pLot, pUnits)) : '—'}</span></div>
-          <div className="ln"><span>Phí mua hộ ({feeVal != null ? pct(feeVal) : '—'})</span><span>{previewOk && N ? vnd(lotBuyingFeeVnd(pLot, pUnits)) : '—'}</span></div>
+          <div className="ln"><span>Số chiếc</span><span>{N || '-'}</span></div>
+          <div className="ln"><span>Tiền hàng</span><span>{previewOk && N ? vnd(lotGoodsVnd(pLot, pUnits)) : '-'}</span></div>
+          <div className="ln"><span>Phí mua hộ ({feeVal != null ? pct(feeVal) : '-'})</span><span>{previewOk && N ? vnd(lotBuyingFeeVnd(pLot, pUnits)) : '-'}</span></div>
           <div className="ln"><span>Phí ship về VN</span><span>{shipVal != null ? vnd(shipVal) : 'chưa nhập'}</span></div>
-          <div className="ln"><span>Ship / chiếc</span><span>{shipVal != null && N ? vnd(Math.round(shipVal / N)) : '—'}</span></div>
+          <div className="ln"><span>Ship / chiếc</span><span>{shipVal != null && N ? vnd(Math.round(shipVal / N)) : '-'}</span></div>
           {draft.groups.map((g, i) => (
             <div className="ln" key={g.key}>
               <span>Giá nhập ₫ / chiếc · {groupCodes[i].length ? rangeText(groupCodes[i], 2) : `nhóm ${i + 1}`}</span>
-              <span>{previewOk ? costText(parseNum(g.cny)) : '—'}</span>
+              <span>{previewOk ? costText(parseNum(g.cny)) : '-'}</span>
             </div>
           ))}
-          <div className="ln total"><span>Phải trả trung gian</span><span>{previewOk && N ? vnd(lotPayable(pLot, pUnits)) : '—'}</span></div>
+          <div className="ln total"><span>Phải trả trung gian</span><span>{previewOk && N ? vnd(lotPayable(pLot, pUnits)) : '-'}</span></div>
           <div className="formula">Giá nhập ₫ = giá ¥ × tỷ giá × (1 + phí {feeVal != null ? pct(feeVal) : '%'}) + ship ÷ {N || 'số'} chiếc · mã chiếc do app cấp khi lưu</div>
         </div>
       </div>

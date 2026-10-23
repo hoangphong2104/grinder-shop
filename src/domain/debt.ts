@@ -1,5 +1,5 @@
 /**
- * BR-12 / A4 — Công nợ trung gian.
+ * BR-12 / A4 - Công nợ trung gian.
  * Every lot owes one "Phải trả" = lotPayable(lot, units) (0 once cancelled; derived, so it follows lot edits).
  * Còn nợ = Σ Phải trả − Σ Đã chuyển + Σ Điều chỉnh (adjustments are signed).
  */

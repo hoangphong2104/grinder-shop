@@ -1,4 +1,4 @@
-// CHỈ DÙNG KHI DEV — dữ liệu mẫu để xem giao diện mà không cần đăng nhập Supabase.
+// CHỈ DÙNG KHI DEV - dữ liệu mẫu để xem giao diện mà không cần đăng nhập Supabase.
 // Bật bằng `?demo` trên URL khi chạy `npm run dev` (vd. http://localhost:5173/?demo#/kho).
 // store.tsx chỉ gọi file này sau điều kiện `import.meta.env.DEV` ⇒ bản build production loại bỏ hoàn toàn.
 //
@@ -24,7 +24,7 @@ const EMAIL = 'demo@local'
 
 /* ---------- Ngày giờ ---------- */
 
-/** Hôm nay theo giờ VN (YYYY-MM-DD) — giống ui/format.todayVn, viết lại để tầng data không phụ thuộc ui. */
+/** Hôm nay theo giờ VN (YYYY-MM-DD) - giống ui/format.todayVn, viết lại để tầng data không phụ thuộc ui. */
 const todayVn = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())
 /** Cộng / trừ ngày trên chuỗi ISO (theo lịch, không lệch múi giờ). */
 function addDays(iso: string, n: number): string {
@@ -65,14 +65,14 @@ const MODELS: { id: string; name: string; brand: string; prefix: string; price: 
   { id: 'demo-m-zp6', name: 'ZP6 Special', brand: '1Zpresso', prefix: 'ZP6', price: 4600000, low: 3, aliases: ['ZP6', 'ZP6S', 'ZP-6'] },
   { id: 'demo-m-ku', name: 'K Ultra', brand: '1Zpresso', prefix: 'KU', price: 6800000, low: 1, aliases: ['KU', 'K-Ultra', 'Kultra'] },
   { id: 'demo-m-ju', name: 'J Ultra', brand: '1Zpresso', prefix: 'JU', price: 7200000, low: 1, aliases: ['JU', 'J-Ultra', 'Jultra'] },
-  // Model tên rất dài, chưa có giá mặc định — thử độ co giãn của bố cục
+  // Model tên rất dài, chưa có giá mặc định - thử độ co giãn của bố cục
   { id: 'demo-m-c3', name: 'Timemore Chestnut C3S Pro Max Phiên Bản Giới Hạn Màu Xám Đá Granite', brand: 'Timemore', prefix: 'C3PM', price: null, low: 2, aliases: ['C3S Pro', 'C3 Max'] },
 ]
 
 const SELLERS: { id: string; nickname: string; region: string | null; url: string | null; rep: string | null; avoided?: boolean; hidden?: boolean }[] = [
   { id: 'demo-s-1', nickname: '咖啡小王子', region: '浙江 杭州', url: 'https://www.goofish.com/personal?userId=2201001', rep: 'Đóng gói kỹ, trả lời nhanh' },
   { id: 'demo-s-2', nickname: '1Zpresso官方授权二手店铺_限时清仓_不议价请勿打扰_谢谢合作', region: '广东 深圳', url: 'https://www.goofish.com/personal?userId=2201002', rep: 'Shop lớn, hàng gần như mới, hay có KU' },
-  { id: 'demo-s-3', nickname: '老李的磨豆机', region: '上海', url: null, rep: 'Giao chậm 2 lần, hộp móp — TRÁNH', avoided: true },
+  { id: 'demo-s-3', nickname: '老李的磨豆机', region: '上海', url: null, rep: 'Giao chậm 2 lần, hộp móp - TRÁNH', avoided: true },
   { id: 'demo-s-4', nickname: '手冲爱好者阿杰', region: '北京 朝阳', url: 'https://www.goofish.com/personal?userId=2201004', rep: null },
   { id: 'demo-s-5', nickname: '旧物回收站', region: null, url: null, rep: 'Không còn bán đồ pha cà phê', hidden: true },
 ]
@@ -80,7 +80,7 @@ const SELLERS: { id: string; nickname: string; region: string | null; url: strin
 const CUSTOMERS: { id: string; name: string; url: string | null; phone: string | null; address: string | null; note?: string; hidden?: boolean }[] = [
   { id: 'demo-c-1', name: 'Trần Minh Khoa', url: 'https://facebook.com/khoa.tran.coffee', phone: '0903 456 789', address: '12 Nguyễn Thị Minh Khai, P. Đa Kao, Q.1, TP.HCM', note: 'Khách quen, mua lần 2' },
   { id: 'demo-c-2', name: 'Nguyễn Hoàng Bảo Ngọc (Ngọc Cà Phê Rang Xay Thủ Công Đà Lạt) 🌿', url: 'https://facebook.com/ngoc.caphe.dalat.rangxay', phone: '0918 222 333',
-    address: 'Hẻm 45/12/7 đường Phan Đình Phùng, Phường 2, TP. Đà Lạt, Lâm Đồng — gọi trước khi giao, nhà trong hẻm nhỏ xe tải không vào được' },
+    address: 'Hẻm 45/12/7 đường Phan Đình Phùng, Phường 2, TP. Đà Lạt, Lâm Đồng - gọi trước khi giao, nhà trong hẻm nhỏ xe tải không vào được' },
   { id: 'demo-c-3', name: 'Lê Quang Huy', url: null, phone: '0987 111 222', address: '88 Trần Phú, Hải Châu, Đà Nẵng' },
   { id: 'demo-c-4', name: 'Phạm Thu Hà', url: 'https://facebook.com/thuha.pham', phone: null, address: 'Số 5 ngõ 102 Trường Chinh, Đống Đa, Hà Nội' },
   { id: 'demo-c-5', name: 'Võ Đức Thắng', url: null, phone: '0935 678 910', address: null },
@@ -106,7 +106,7 @@ const LOTS: LotSpec[] = [
       { model: 'demo-m-zp6', cny: 740, list: 4550000 }, { model: 'demo-m-c3', cny: 420, list: 2200000, serial: 'TM-C3SPM-GR-20240917-000123456' }] },
   { id: 'demo-l-4', ago: 20, receivedAgo: 8, status: 'received', rate: 3610, ship: 720000, fee: 0, seller: 'demo-s-1',
     title: 'K Ultra 磨豆机 3台', itemId: '780011223304',
-    units: [{ model: 'demo-m-ku', cny: 1010, list: 6700000 }, { model: 'demo-m-ku', cny: 1010, override: 3900000, note: 'Giá nhập sửa tay — được người bán giảm thêm ¥30 sau khi trả' },
+    units: [{ model: 'demo-m-ku', cny: 1010, list: 6700000 }, { model: 'demo-m-ku', cny: 1010, override: 3900000, note: 'Giá nhập sửa tay - được người bán giảm thêm ¥30 sau khi trả' },
       { model: 'demo-m-ku', cny: 1010 }] },
   { id: 'demo-l-5', ago: 15, status: 'cancelled', rate: 3612, ship: null, fee: 0, seller: 'demo-s-3',
     title: 'K-Ultra 二手 成色好', itemId: '780011223305', note: 'Người bán không giao, đã hoàn tiền qua trung gian.',
@@ -130,7 +130,7 @@ const ORDERS: OrderSpec[] = [
   { id: 'demo-o-1', customer: 'demo-c-1', ago: 50, status: 'completed', shippedAgo: 47, completedAgo: 43, ship: 35000, payer: 'shop', tracking: 'GHN 8823 4471 09',
     cod: 3600000, lines: [['ZP6-001', 4600000]], pays: [['deposit', 1000000, 50, undefined, 'cash'], ['payment', 3600000, 44, 'GHN chuyển COD', 'cod']] },
   { id: 'demo-o-2', customer: 'demo-c-2', ago: 42, status: 'completed', shippedAgo: 41, completedAgo: 37, ship: 40000, payer: 'customer', tracking: 'GHTK S19.A2.774512',
-    note: 'Khách chuyển dư 10.000 ₫ — hẹn trừ vào đơn sau', lines: [['ZP6-002', 4650000]], pays: [['payment', 4700000, 41, 'CK Techcombank']] },
+    note: 'Khách chuyển dư 10.000 ₫ - hẹn trừ vào đơn sau', lines: [['ZP6-002', 4650000]], pays: [['payment', 4700000, 41, 'CK Techcombank']] },
   { id: 'demo-o-3', customer: 'demo-c-3', ago: 26, status: 'shipped', shippedAgo: 25, ship: 45000, payer: 'shop', tracking: 'VNPost EB123456789VN',
     cod: 4900000, lines: [['KU-001', 6900000]], pays: [['deposit', 2000000, 26]] },
   { id: 'demo-o-4', customer: 'demo-c-6', ago: 22, status: 'cancelled', cancelledAgo: 19, ship: 0, payer: 'shop',
@@ -139,12 +139,12 @@ const ORDERS: OrderSpec[] = [
     lines: [['JU-001', 7300000], ['ZP6-005', 4500000]], pays: [['payment', 11860000, 14]] },
   { id: 'demo-o-6', customer: 'demo-c-3', ago: 10, status: 'preorder', ship: 0, payer: 'shop',
     note: 'Giữ chiếc KU đang về, khách lấy ngay khi hàng tới', lines: [['KU-008', 7000000]], pays: [['deposit', 2000000, 10]] },
-  // CR-004: khách bom — hãng chuyển hoàn, shop giữ cọc 1tr, khoản trả thêm 300k phải hoàn
+  // CR-004: khách bom - hãng chuyển hoàn, shop giữ cọc 1tr, khoản trả thêm 300k phải hoàn
   { id: 'demo-o-11', customer: 'demo-c-5', ago: 9, status: 'returned', shippedAgo: 8, returnedAgo: 4, ship: 35000, payer: 'shop', tracking: 'GHTK S19.A2.889911',
     cod: 5500000, returnShip: 35000, keepDeposit: true, returnNote: 'Khách không nghe máy 3 lần, GHTK chuyển hoàn',
     lines: [['KU-002', 6800000]], pays: [['deposit', 1000000, 9], ['payment', 300000, 9]] },
   { id: 'demo-o-7', customer: 'demo-c-1', ago: 7, status: 'completed', shippedAgo: 6, completedAgo: 3, forced: true, ship: 0, payer: 'shop',
-    note: 'Khách xin bớt 200k, đã đồng ý — hoàn tất dù còn thiếu', lines: [['KU-004', 6700000]], pays: [['payment', 6500000, 6]] },
+    note: 'Khách xin bớt 200k, đã đồng ý - hoàn tất dù còn thiếu', lines: [['KU-004', 6700000]], pays: [['payment', 6500000, 6]] },
   { id: 'demo-o-8', customer: 'demo-c-7', ago: 6, status: 'preorder', ship: 50000, payer: 'customer',
     lines: [['JU-003', 7400000]], pays: [['deposit', 3000000, 6]] },
   { id: 'demo-o-9', customer: 'demo-c-5', ago: 4, status: 'confirmed', ship: 30000, payer: 'customer',
@@ -156,7 +156,7 @@ const ORDERS: OrderSpec[] = [
 const TRANSFERS: { ago: number; kind: 'transfer' | 'adjustment'; amount: number; note: string | null }[] = [
   { ago: 59, kind: 'transfer', amount: 10000000, note: 'CK Vietcombank' },
   { ago: 44, kind: 'transfer', amount: 12000000, note: null },
-  { ago: 29, kind: 'transfer', amount: 25000000, note: 'CK Techcombank — lô trộn JU/ZP6/C3' },
+  { ago: 29, kind: 'transfer', amount: 25000000, note: 'CK Techcombank - lô trộn JU/ZP6/C3' },
   { ago: 19, kind: 'transfer', amount: 10000000, note: null },
   { ago: 16, kind: 'adjustment', amount: 50000, note: 'Phí chuyển khoản quốc tế' },
   { ago: 11, kind: 'transfer', amount: 15000000, note: 'Ứng trước lô KU đang về' },
@@ -168,10 +168,10 @@ const NOTES: { ago: number; pinned: boolean; body: string }[] = [
   { ago: 1, pinned: true, body: [
     'QUY TRÌNH NHẬN HÀNG (đọc kỹ trước khi mở thùng):',
     '1. Quay video lúc mở thùng, đủ 4 mặt hộp, có tem trung gian.',
-    '2. Kiểm tra số serial dưới đáy cối, ghi vào ô Serial của từng chiếc — nếu serial không khớp hộp thì ghi chú lại và báo trung gian trong 24 giờ.',
-    '3. Quay thử khô 20 vòng ở mỗi nấc: 1, 3, 5, 8 — nghe tiếng lạo xạo hoặc kẹt là để riêng, KHÔNG bán.',
+    '2. Kiểm tra số serial dưới đáy cối, ghi vào ô Serial của từng chiếc - nếu serial không khớp hộp thì ghi chú lại và báo trung gian trong 24 giờ.',
+    '3. Quay thử khô 20 vòng ở mỗi nấc: 1, 3, 5, 8 - nghe tiếng lạo xạo hoặc kẹt là để riêng, KHÔNG bán.',
     '4. Lau sạch burr bằng cọ, không dùng nước; phủ túi chống ẩm trước khi cất.',
-    '5. Chụp 3 ảnh: toàn thân, burr, phụ kiện — đăng lên nhóm Facebook trong ngày.',
+    '5. Chụp 3 ảnh: toàn thân, burr, phụ kiện - đăng lên nhóm Facebook trong ngày.',
     '6. Nhập phí ship thật của lô ngay khi trung gian báo để giá nhập không còn tạm tính.',
     'Lưu ý: hàng của người bán 老李的磨豆机 đã 2 lần móp hộp, nếu thấy link của người này thì bỏ qua. Lô nào mua hộ có phí thì nhớ nhập phí % để công nợ khớp với trung gian. Cuối tháng đối chiếu số dư công nợ với tin nhắn Zalo của trung gian, chênh lệch thì ghi Điều chỉnh kèm lý do rõ ràng.',
   ].join('\n') },
@@ -369,7 +369,7 @@ export function buildDemoData(): DbData {
     }
   })
 
-  // v_intermediary_balance — kiểm chéo với domain (Σ phải trả từ lô) để chắc số liệu khớp
+  // v_intermediary_balance - kiểm chéo với domain (Σ phải trả từ lô) để chắc số liệu khớp
   const sum = (k: TxnRow['kind']) => txns.reduce((a, t) => a + (t.kind === k ? t.amount_vnd : 0), 0)
   const balance: BalanceRow = {
     total_payable_vnd: sum('payable'), total_transferred_vnd: sum('transfer'), total_adjustment_vnd: sum('adjustment'),

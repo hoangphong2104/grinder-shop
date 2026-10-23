@@ -1,4 +1,4 @@
-// Edge Function `scan-goofish` — đọc tin rao Goofish (闲鱼) bằng Google Gemini (gói miễn phí) và trả về
+// Edge Function `scan-goofish` - đọc tin rao Goofish (闲鱼) bằng Google Gemini (gói miễn phí) và trả về
 // dữ liệu ĐIỀN SẴN cho form lô. Hợp đồng: system-design-lite-v1 §5.2 (request / response / mã lỗi),
 // cập nhật theo DB schema v2 / CR-001: bỏ bảng `variants` ⇒ bỏ `variant_id`, AI chỉ đoán model;
 // thêm `qty_guess` (số chiếc nếu tin ghi rõ nhiều chiếc, vd. "两台").
@@ -9,7 +9,7 @@
 //  - NFR-10: dùng JWT của người dùng (RLS áp dụng), KHÔNG dùng service_role. Key Gemini chỉ là secret.
 //  - NFR-11: chỉ gửi cho Gemini ảnh / chữ của tin rao + danh mục model đang bán (tên, hãng, tiền tố mã,
 //    tên gọi khác). Không đọc khách / đơn / chiếc (units).
-//  - NFR-18: log chỉ scan_id, model, token, mã lỗi — không log ảnh / nội dung tin / key.
+//  - NFR-18: log chỉ scan_id, model, token, mã lỗi - không log ảnh / nội dung tin / key.
 //
 // Cấu trúc file: hằng số & lỗi → tiện ích thuần (test được) → gọi Gemini → handler → Deno.serve.
 // Một file duy nhất để có thể dán thẳng vào trình soạn thảo Edge Function trên Supabase Dashboard.
@@ -64,16 +64,16 @@ const STATUS: Record<ErrorCode, number> = {
 
 const MESSAGES: Record<ErrorCode, string> = {
   INVALID_INPUT: "Dữ liệu gửi lên không hợp lệ.",
-  NOT_AUTHENTICATED: "Phiên đăng nhập hết hạn — đăng nhập lại.",
+  NOT_AUTHENTICATED: "Phiên đăng nhập hết hạn - đăng nhập lại.",
   FORBIDDEN: "Tài khoản này không được phép dùng quét AI.",
-  SCAN_DISABLED: "Quét AI đang tắt trong Cài đặt — nhập tay.",
-  IMAGE_NOT_FOUND: "Không tải được ảnh — thử lại hoặc nhập tay.",
-  PAYLOAD_TOO_LARGE: "Ảnh lớn hơn 5 MB — thu nhỏ lại rồi thử lại.",
-  AI_UNREADABLE: "AI không đọc được tin này — nhập tay.",
-  SCAN_CAP_REACHED: "Đã dùng hết lượt quét AI tháng này — nhập tay hoặc tăng hạn mức trong Cài đặt.",
-  AI_QUOTA_EXHAUSTED: "Hết lượt AI miễn phí lúc này — nhập tay (thử lại sau).",
-  AI_UPSTREAM_ERROR: "Dịch vụ AI đang lỗi hoặc quá thời gian — thử lại hoặc nhập tay.",
-  INTERNAL: "Lỗi hệ thống — nhập tay.",
+  SCAN_DISABLED: "Quét AI đang tắt trong Cài đặt - nhập tay.",
+  IMAGE_NOT_FOUND: "Không tải được ảnh - thử lại hoặc nhập tay.",
+  PAYLOAD_TOO_LARGE: "Ảnh lớn hơn 5 MB - thu nhỏ lại rồi thử lại.",
+  AI_UNREADABLE: "AI không đọc được tin này - nhập tay.",
+  SCAN_CAP_REACHED: "Đã dùng hết lượt quét AI tháng này - nhập tay hoặc tăng hạn mức trong Cài đặt.",
+  AI_QUOTA_EXHAUSTED: "Hết lượt AI miễn phí lúc này - nhập tay (thử lại sau).",
+  AI_UPSTREAM_ERROR: "Dịch vụ AI đang lỗi hoặc quá thời gian - thử lại hoặc nhập tay.",
+  INTERNAL: "Lỗi hệ thống - nhập tay.",
 };
 
 /** Lỗi có mã nghiệp vụ; `extra` được trộn vào object `error` của response (vd. used, cap). */
@@ -102,7 +102,7 @@ export type CatalogModel = {
   code_prefix: string | null;
   aliases: string[];
 };
-/** Danh mục kèm mã ngắn (M1, M2…) dùng trong prompt — tránh để AI phải chép lại uuid. */
+/** Danh mục kèm mã ngắn (M1, M2…) dùng trong prompt - tránh để AI phải chép lại uuid. */
 export type Catalog = { models: (CatalogModel & { code: string })[] };
 
 export type Field<T> = { value: T | null; confidence: number };
@@ -124,10 +124,10 @@ export type CleanResult = {
 };
 
 // -----------------------------------------------------------------------------
-// 3. Tiện ích thuần (không I/O) — có test trong test.ts
+// 3. Tiện ích thuần (không I/O) - có test trong test.ts
 // -----------------------------------------------------------------------------
 
-/** Tách item id từ link Goofish — cùng regex với `save_lot` trong SQL. */
+/** Tách item id từ link Goofish - cùng regex với `save_lot` trong SQL. */
 export function parseItemId(url: string | null): string | null {
   if (!url) return null;
   const m = /[?&]id=([0-9]{6,24})/.exec(url);
@@ -219,7 +219,7 @@ const oneLine = (s: string, max = 80) => s.replace(/\s+/g, " ").trim().slice(0, 
 
 /** Danh mục dạng chữ đưa vào prompt (chỉ tên model / hãng / tiền tố mã / tên gọi khác). */
 export function catalogText(cat: Catalog): string {
-  if (cat.models.length === 0) return "CATALOGUE: (empty — always answer NONE for model_id)";
+  if (cat.models.length === 0) return "CATALOGUE: (empty - always answer NONE for model_id)";
   const lines = ["CATALOGUE (the ONLY allowed choices for model_id):"];
   for (const m of cat.models) {
     const brand = m.brand ? oneLine(m.brand, 60) : "";
@@ -233,7 +233,7 @@ export function catalogText(cat: Catalog): string {
   return lines.join("\n");
 }
 
-/** responseSchema (OpenAPI-subset của Gemini) — enum mã danh mục + "NONE". */
+/** responseSchema (OpenAPI-subset của Gemini) - enum mã danh mục + "NONE". */
 export function buildResponseSchema(cat: Catalog): Record<string, unknown> {
   const conf = { type: "NUMBER", description: "0..1" };
   const strField = {
@@ -384,7 +384,7 @@ export function cleanQtyGuess(x: unknown, threshold: number): QtyGuess {
 export function cleanAiOutput(raw: unknown, cat: Catalog, threshold: number): CleanResult {
   if (!isObj(raw)) throw new ScanError("AI_UNREADABLE");
   if (raw.is_goofish_listing !== true) {
-    throw new ScanError("AI_UNREADABLE", "AI không nhận ra đây là tin rao Goofish — nhập tay.");
+    throw new ScanError("AI_UNREADABLE", "AI không nhận ra đây là tin rao Goofish - nhập tay.");
   }
   const get = (k: string) => (isObj(raw[k]) ? (raw[k] as Record<string, unknown>) : null);
   const rejected = new Set<keyof ScanFields>();
@@ -441,7 +441,7 @@ export function cleanAiOutput(raw: unknown, cat: Catalog, threshold: number): Cl
   };
 }
 
-/** Đầu tháng hiện tại theo giờ VN (UTC+7, không có giờ mùa hè) — dạng ISO UTC. */
+/** Đầu tháng hiện tại theo giờ VN (UTC+7, không có giờ mùa hè) - dạng ISO UTC. */
 export function monthStartVnIso(now: Date): string {
   const vn = new Date(now.getTime() + 7 * 3600_000);
   return new Date(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), 1) - 7 * 3600_000).toISOString();
@@ -453,7 +453,7 @@ export function escapeLike(s: string): string {
 }
 
 // -----------------------------------------------------------------------------
-// 4. Gọi Gemini (REST generateContent) — gói gọn để dễ đổi provider (RSK-03)
+// 4. Gọi Gemini (REST generateContent) - gói gọn để dễ đổi provider (RSK-03)
 // -----------------------------------------------------------------------------
 
 export type GeminiOk = { kind: "ok"; json: unknown; model: string; inputTokens: number; outputTokens: number };
@@ -529,10 +529,10 @@ export async function callGemini(opts: {
     throw new ScanError("AI_QUOTA_EXHAUSTED");
   }
   if (!res.ok) {
-    // 400 / 403 / 404 thường do sai key hoặc sai SCAN_MODEL — thông báo an toàn, không lộ chi tiết.
+    // 400 / 403 / 404 thường do sai key hoặc sai SCAN_MODEL - thông báo an toàn, không lộ chi tiết.
     await res.body?.cancel();
     const hint = res.status >= 400 && res.status < 500
-      ? "Dịch vụ AI từ chối yêu cầu (kiểm tra GEMINI_API_KEY / SCAN_MODEL) — nhập tay."
+      ? "Dịch vụ AI từ chối yêu cầu (kiểm tra GEMINI_API_KEY / SCAN_MODEL) - nhập tay."
       : undefined;
     throw new ScanError("AI_UPSTREAM_ERROR", hint, { upstream_status: res.status });
   }
@@ -621,7 +621,7 @@ function rpcError(err: { message?: string; details?: string | null } | null): Sc
       cap = Number.isFinite(d.cap) ? d.cap : null;
     } catch (_e) { /* bỏ qua */ }
     const message = cap !== null
-      ? `Đã dùng hết ${cap} lượt quét AI tháng này — nhập tay hoặc tăng hạn mức trong Cài đặt.`
+      ? `Đã dùng hết ${cap} lượt quét AI tháng này - nhập tay hoặc tăng hạn mức trong Cài đặt.`
       : undefined;
     return new ScanError("SCAN_CAP_REACHED", message, { used, cap });
   }
@@ -665,7 +665,7 @@ export function createHandler(deps: Deps): (req: Request) => Promise<Response> {
     const apiKey = deps.env("GEMINI_API_KEY");
     if (!supabaseUrl || !anonKey || !apiKey) {
       log({ event: "config_missing", supabase_url: !!supabaseUrl, anon_key: !!anonKey, gemini_key: !!apiKey });
-      return errorResponse(new ScanError("INTERNAL", "Edge Function chưa cấu hình đủ (secret) — nhập tay."), cors);
+      return errorResponse(new ScanError("INTERNAL", "Edge Function chưa cấu hình đủ (secret) - nhập tay."), cors);
     }
     const authHeader = req.headers.get("Authorization") ?? "";
     const jwt = /^Bearer\s+(.+)$/i.exec(authHeader)?.[1]?.trim();
@@ -748,7 +748,7 @@ export function createHandler(deps: Deps): (req: Request) => Promise<Response> {
         content = { text: `<listing_text>\n${safe}\n</listing_text>` };
       }
 
-      // ---- Bước 5: danh mục model đang bán (schema v2: không còn bảng variants; KHÔNG đọc khách / đơn — NFR-11)
+      // ---- Bước 5: danh mục model đang bán (schema v2: không còn bảng variants; KHÔNG đọc khách / đơn - NFR-11)
       const [mRes, sRes] = await Promise.all([
         sb.from("models").select("id, name, brand, code_prefix, aliases").eq("is_active", true)
           .order("sort_order").order("name").limit(MAX_MODELS),
@@ -805,7 +805,7 @@ export function createHandler(deps: Deps): (req: Request) => Promise<Response> {
       // ---- Bước 11: đóng log (ok)
       await finish("ok", null);
 
-      // Lượt đã dùng tháng này — cùng quy tắc với ai_scan_reserve (lỗi 0 token không tính).
+      // Lượt đã dùng tháng này - cùng quy tắc với ai_scan_reserve (lỗi 0 token không tính).
       const { count } = await sb.from("ai_scan_log").select("id", { count: "exact", head: true })
         .gte("created_at", monthStartVnIso(now()))
         .or("status.neq.error,input_tokens.gt.0");

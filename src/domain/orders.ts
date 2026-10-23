@@ -4,7 +4,7 @@
  *    automatic confirmation of pre-orders when a lot is received (A7), cancel / complete guards.
  *  - Money: total / paid / receivable / refund due (BR-10, Q-009, Q-010, Q-015),
  *    profit from each unit's CURRENT effective cost (BR-11 + A8, no snapshot) and monthly profit.
- *  - CR-004: COD (DON-S1 — COD received / pending) and returns "Hoàn hàng" (DON-S3 — guard, money rules, profit);
+ *  - CR-004: COD (DON-S1 - COD received / pending) and returns "Hoàn hàng" (DON-S3 - guard, money rules, profit);
  *    same numbers as the DB view v_order_summary (supabase/v2/003_cod_return_condition.sql).
  * Pure: guards return Results, inputs are never mutated.
  */
@@ -19,7 +19,7 @@ const orderRef = (o: Pick<Order, 'id' | 'code'>): string => o.code ?? o.id;
 /* ---------- Picking units (A6) ---------- */
 
 /**
- * A6 — can this unit be put on an order? Not if its lot is cancelled, nor if another non-cancelled order
+ * A6 - can this unit be put on an order? Not if its lot is cancelled, nor if another non-cancelled order
  * already holds it (reserved or sold). `forOrderId` = the order being edited (its own lines don't conflict).
  * On success returns where the unit is: `in_stock` or `incoming`.
  */
@@ -40,14 +40,14 @@ export function checkUnitAvailable(
   return ok(lot.status === 'received' ? 'in_stock' : 'incoming');
 }
 
-/** A6 — status of an order holding these units: any unit still incoming → `preorder`, all received → `confirmed`. */
+/** A6 - status of an order holding these units: any unit still incoming → `preorder`, all received → `confirmed`. */
 export function orderStatusFor(units: readonly Pick<Unit, 'lotId'>[], lots: readonly Pick<Lot, 'id' | 'status'>[]): 'preorder' | 'confirmed' {
   const lotById = new Map(lots.map((l) => [l.id, l]));
   return units.some((u) => lotById.get(u.lotId)?.status !== 'received') ? 'preorder' : 'confirmed';
 }
 
 /**
- * A6 — validate the unit selection of a new (or edited, `forOrderId`) order and decide its status.
+ * A6 - validate the unit selection of a new (or edited, `forOrderId`) order and decide its status.
  * Rejects: no unit, the same unit twice, unknown unit, unit unavailable.
  */
 export function checkOrderUnits(
@@ -84,7 +84,7 @@ export function checkOrderUnits(
 /* ---------- Transitions ---------- */
 
 /**
- * A8 + Q-007 — "Gửi hàng" only for a confirmed order whose units are all in received lots.
+ * A8 + Q-007 - "Gửi hàng" only for a confirmed order whose units are all in received lots.
  * `units` / `lots` may be the full lists (looked up by id).
  */
 export function canShip(order: Order, units: readonly Unit[], lots: readonly Lot[]): Result<true> {
@@ -121,7 +121,7 @@ export function canShip(order: Order, units: readonly Unit[], lots: readonly Lot
 }
 
 /**
- * A7 — pre-orders to switch to `confirmed` once lot `lotIdJustReceived` is received: those holding at least
+ * A7 - pre-orders to switch to `confirmed` once lot `lotIdJustReceived` is received: those holding at least
  * one unit of that lot and whose units are now ALL in received lots. The lot is treated as received even if
  * `lots` still carries its old status.
  */
@@ -136,7 +136,7 @@ export function preordersToAutoConfirm(lotIdJustReceived: string, units: readonl
   });
 }
 
-/** §2 — an order can be cancelled only before it is shipped. Its units are released (A5). */
+/** §2 - an order can be cancelled only before it is shipped. Its units are released (A5). */
 export function checkCancelOrder(order: Order): Result<true> {
   if (order.status !== 'preorder' && order.status !== 'confirmed') {
     return fail({ code: 'INVALID_TRANSITION', rule: '§2', message: `Không huỷ được đơn đang "${ORDER_STATUS_LABEL[order.status]}".`, orderId: order.id });
@@ -144,7 +144,7 @@ export function checkCancelOrder(order: Order): Result<true> {
   return ok(true);
 }
 
-/** CR-004 DON-S3 — "Hoàn hàng / khách không nhận" only for a shipped order (not completed / cancelled / returned). */
+/** CR-004 DON-S3 - "Hoàn hàng / khách không nhận" only for a shipped order (not completed / cancelled / returned). */
 export function checkReturnOrder(order: Order): Result<true> {
   if (order.status !== 'shipped') {
     return fail({
@@ -167,8 +167,8 @@ export interface ReturnInput {
 }
 
 /**
- * CR-004 DON-S3 — preview of `return_order`: the order becomes `returned`, its units are released (back in stock,
- * sellable again — see `holdingOrder`), money follows `orderRefundDue` / `orderKept` / `orderProfit`.
+ * CR-004 DON-S3 - preview of `return_order`: the order becomes `returned`, its units are released (back in stock,
+ * sellable again - see `holdingOrder`), money follows `orderRefundDue` / `orderKept` / `orderProfit`.
  */
 export function returnOrder(order: Order, input: ReturnInput): Result<Order> {
   const g = checkReturnOrder(order);
@@ -183,7 +183,7 @@ export function returnOrder(order: Order, input: ReturnInput): Result<Order> {
 }
 
 /**
- * BR-10 + Q-010 — move a shipped order to `completed`. Needs receivable = 0 (neither under- nor overpaid)
+ * BR-10 + Q-010 - move a shipped order to `completed`. Needs receivable = 0 (neither under- nor overpaid)
  * unless the user explicitly confirms (`acceptOutstanding`).
  */
 export function completeOrder(order: Order, opts: { acceptOutstanding?: boolean } = {}): Result<Order> {
@@ -224,15 +224,15 @@ export const orderPaid = (o: Pick<Order, 'payments'>): Vnd => o.payments.reduce(
 export const orderDeposits = (o: Pick<Order, 'payments'>): Vnd => o.payments.reduce((a, p) => a + (p.kind === 'deposit' ? p.amount : 0), 0);
 
 /**
- * BR-10 — Còn phải thu = tổng − đã thu. Negative = customer overpaid (Q-010).
- * A cancelled or returned order owes nothing: 0 (Q-009 / CR-004 — its money shows in `orderRefundDue` instead).
+ * BR-10 - Còn phải thu = tổng − đã thu. Negative = customer overpaid (Q-010).
+ * A cancelled or returned order owes nothing: 0 (Q-009 / CR-004 - its money shows in `orderRefundDue` instead).
  */
 export const orderReceivable = (o: Order): Vnd => (o.status === 'cancelled' || o.status === 'returned' ? 0 : orderTotal(o) - orderPaid(o));
 
 /**
  * "Cần hoàn X" until refunds are recorded; 0 for live orders.
  *  - cancelled (Q-009): max(0, đã thu ròng)
- *  - returned (CR-004): max(0, đã thu ròng − (keepDeposit ? Σ cọc : 0)) — "giữ cọc" keeps the deposits only;
+ *  - returned (CR-004): max(0, đã thu ròng − (keepDeposit ? Σ cọc : 0)) - "giữ cọc" keeps the deposits only;
  *    money paid beyond the deposit is still refunded.
  */
 export function orderRefundDue(o: Order): Vnd {
@@ -241,10 +241,10 @@ export function orderRefundDue(o: Order): Vnd {
   return 0;
 }
 
-/** CR-004 — tiền shop giữ lại của đơn hoàn hàng = đã thu ròng − cần hoàn (null for other statuses). */
+/** CR-004 - tiền shop giữ lại của đơn hoàn hàng = đã thu ròng − cần hoàn (null for other statuses). */
 export const orderKept = (o: Order): Vnd | null => (o.status === 'returned' ? orderPaid(o) - orderRefundDue(o) : null);
 
-/** Khách còn nợ (dashboard): Σ positive receivables only — overpaid orders do not offset others. */
+/** Khách còn nợ (dashboard): Σ positive receivables only - overpaid orders do not offset others. */
 export const customersTotalDue = (orders: readonly Order[]): Vnd => orders.reduce((a, o) => a + Math.max(0, orderReceivable(o)), 0);
 
 /** Σ refund due over cancelled and returned orders. */
@@ -269,14 +269,14 @@ export function orderMargin(o: Order, costs: ReadonlyMap<string, Vnd>): Vnd {
 }
 
 /**
- * CR-004 — lãi đơn hoàn hàng = tiền shop giữ − phí ship đi (nếu shop chịu) − phí ship chiều về.
+ * CR-004 - lãi đơn hoàn hàng = tiền shop giữ − phí ship đi (nếu shop chịu) − phí ship chiều về.
  * Unit costs are not involved (the units are back in stock). Computed on the money KEPT, so recording the
  * refund later does not change it.
  */
 export const returnedOrderProfit = (o: Order): Vnd => (orderKept(o) ?? 0) - orderShipCost(o) - (o.returnShipFee ?? 0);
 
 /**
- * BR-11 + A8 — Lãi đơn = Σ(giá chốt − giá nhập ₫ hiện tại của chiếc) − phí ship shop chịu.
+ * BR-11 + A8 - Lãi đơn = Σ(giá chốt − giá nhập ₫ hiện tại của chiếc) − phí ship shop chịu.
  * Only for shipped / completed orders; returned orders use `returnedOrderProfit` (CR-004); null otherwise.
  * Not frozen: it follows later cost corrections (A3).
  */
@@ -319,13 +319,13 @@ export interface MonthProfit {
   revenue: Vnd;
   /** Sold (shipped / completed) orders counted. */
   orders: number;
-  /** CR-004 — returned orders counted (their profit — usually a loss — is in `profit`, no revenue). */
+  /** CR-004 - returned orders counted (their profit - usually a loss - is in `profit`, no revenue). */
   returns: number;
 }
 
 /**
  * Profit of the month (`YYYY-MM`): orders shipped that month (by `shippedAt`) + orders RETURNED that month
- * (by `returnedAt`, CR-004 — the sale's profit disappears, the return's own profit / loss appears).
+ * (by `returnedAt`, CR-004 - the sale's profit disappears, the return's own profit / loss appears).
  */
 export function profitForMonth(orders: readonly Order[], costs: ReadonlyMap<string, Vnd>, month: string): MonthProfit {
   const r: MonthProfit = { month, profit: 0, revenue: 0, orders: 0, returns: 0 };

@@ -40,7 +40,7 @@ hoặc `"input": { "kind": "text", "text": "<chữ copy, ≤ 20.000 ký tự>" }
   "flags": ["seller_region"],
   "qty_guess": null,
   "condition_text": "全新未拆",
-  "notes": "Có giá gạch ngang ¥1.299 — đã lấy giá hiện tại ¥1.010.",
+  "notes": "Có giá gạch ngang ¥1.299 - đã lấy giá hiện tại ¥1.010.",
   "seller_match": { "seller_id": "<uuid>", "nickname": "咖啡小王", "is_avoided": false },
   "duplicate_lot_ids": [],
   "usage": { "scans_this_month": 12, "cap": 100 }
@@ -50,7 +50,7 @@ hoặc `"input": { "kind": "text", "text": "<chữ copy, ≤ 20.000 ký tự>" }
 **Thay đổi so với v1 (schema v2 / CR-001):**
 
 - **Bỏ `fields.variant_id`** (cả trong response, responseSchema gửi Gemini, validate và `flags`). Client v0.2 không được đọc trường này nữa. Nếu AI vẫn trả `variant_id` thì bị bỏ qua.
-- **Thêm `qty_guess`** (cấp gốc, cạnh `flags`): `{ "value": <số nguyên 2..50>, "confidence": <0..1> }` khi tin **ghi rõ nhiều chiếc** (vd. "两台", "2台", "一对", "x2"), ngược lại `null`. Chỉ trả khi `confidence` ≥ `settings.ai_confidence_threshold`; 1 chiếc / không ghi / số sai ⇒ `null`. Không bao giờ nằm trong `flags`. Gợi ý cho ô **số lượng N** của form lô (A2); người dùng vẫn tự xác nhận. Khi > 1 chiếc, `notes` nói giá là tổng hay giá/chiếc — `price_cny` vẫn là số hiển thị trên tin.
+- **Thêm `qty_guess`** (cấp gốc, cạnh `flags`): `{ "value": <số nguyên 2..50>, "confidence": <0..1> }` khi tin **ghi rõ nhiều chiếc** (vd. "两台", "2台", "一对", "x2"), ngược lại `null`. Chỉ trả khi `confidence` ≥ `settings.ai_confidence_threshold`; 1 chiếc / không ghi / số sai ⇒ `null`. Không bao giờ nằm trong `flags`. Gợi ý cho ô **số lượng N** của form lô (A2); người dùng vẫn tự xác nhận. Khi > 1 chiếc, `notes` nói giá là tổng hay giá/chiếc - `price_cny` vẫn là số hiển thị trên tin.
 - `fields.model_id` giữ nguyên dạng `{ value: uuid | null, confidence, matched_text }`. Các trường khác, `seller_match`, `duplicate_lot_ids` (lô cùng `lots.goofish_item_id`, trừ lô đã huỷ), `usage`, mã lỗi: **không đổi**.
 
 **Lỗi:** `{ "ok": false, "error": { "code": "...", "message": "<tiếng Việt>" } }`
@@ -105,7 +105,7 @@ hoặc `"input": { "kind": "text", "text": "<chữ copy, ≤ 20.000 ký tự>" }
 3. Xoá code mẫu, dán **toàn bộ** nội dung `index.ts`, rồi bấm **Deploy function**. Không cần dán `test.ts`.
 4. **Edge Functions → Secrets** (hoặc *Project Settings → Edge Functions*) → thêm `GEMINI_API_KEY`, `ALLOWED_USER_IDS`, `SCAN_MODEL` (+ `SCAN_MODEL_FALLBACK` nếu muốn) → Save. Secret có hiệu lực ngay, không cần deploy lại.
 5. **Xác thực JWT:** mở function → tab **Details / Settings** → giữ **bật** "Enforce JWT verification" (mặc định). Function vẫn tự kiểm lại bằng `auth.getUser()` và `ALLOWED_USER_IDS`. *Ngoại lệ:* nếu project dùng **JWT signing keys mới** và gateway từ chối cả token hợp lệ (401 không phải JSON của function), thì có thể tắt tuỳ chọn này. Function vẫn an toàn vì tự xác thực.
-6. Schema v2 (`supabase/v2/setup-v2.sql` / `001_schema_v2.sql`) phải đã chạy (có `models.code_prefix`, `ai_scan_reserve`, `ai_scan_finish`, bucket `private-images`). **Deploy lại function này sau khi cài schema v2** — bản cũ còn đọc bảng `variants` nên sẽ trả `INTERNAL`. Tài khoản phải đã đăng nhập app ít nhất 1 lần (`bootstrap_user` tạo `settings` + 3 model).
+6. Schema v2 (`supabase/v2/setup-v2.sql` / `001_schema_v2.sql`) phải đã chạy (có `models.code_prefix`, `ai_scan_reserve`, `ai_scan_finish`, bucket `private-images`). **Deploy lại function này sau khi cài schema v2** - bản cũ còn đọc bảng `variants` nên sẽ trả `INTERNAL`. Tài khoản phải đã đăng nhập app ít nhất 1 lần (`bootstrap_user` tạo `settings` + 3 model).
 
 *Cách CLI (nếu sau này dùng):* `supabase functions deploy scan-goofish` và `supabase secrets set GEMINI_API_KEY=… ALLOWED_USER_IDS=… SCAN_MODEL=…`. Nếu cần tắt JWT check thì thêm `[functions.scan-goofish] verify_jwt = false` vào `supabase/config.toml`.
 
@@ -113,7 +113,7 @@ hoặc `"input": { "kind": "text", "text": "<chữ copy, ≤ 20.000 ký tự>" }
 
 ---
 
-## 4. Model Gemini và hạn mức miễn phí — **phải kiểm lại khi deploy**
+## 4. Model Gemini và hạn mức miễn phí - **phải kiểm lại khi deploy**
 
 Kiểm ngày 2026-10-22 trên ai.google.dev (trang *Models* và *Pricing*):
 

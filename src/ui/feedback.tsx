@@ -19,7 +19,7 @@ export function Sheet({ title, children, onClose, footer }: { title: string; chi
   const ref = useRef<HTMLDivElement>(null)
   const closeRef = useRef(onClose)
   closeRef.current = onClose
-  // Focus một lần lúc mở: ô nhập đầu tiên; sheet chỉ có nút (xác nhận) thì focus "Đóng" — tránh Enter nhầm vào nút nguy hiểm.
+  // Focus một lần lúc mở: ô nhập đầu tiên; sheet chỉ có nút (xác nhận) thì focus "Đóng" - tránh Enter nhầm vào nút nguy hiểm.
   useEffect(() => {
     const k = (e: KeyboardEvent) => { if (e.key === 'Escape') closeRef.current() }
     addEventListener('keydown', k)

@@ -26,7 +26,7 @@ export default function Catalog() {
   return (
     <Shell section="danhmuc" title="Model" back={desk ? undefined : '/them'}
       actions={<button className="btn btn-ghost btn-sm only-desk" onClick={() => setEdit({})}>+ Thêm model</button>}>
-      {d.models.length === 0 && <div className="empty">Chưa có model nào — bấm “+ Thêm model”.</div>}
+      {d.models.length === 0 && <div className="empty">Chưa có model nào - bấm “+ Thêm model”.</div>}
       {d.models.length > 0 && (
         <div className="ov-list">
           {d.models.map((m) => {
@@ -34,7 +34,7 @@ export default function Catalog() {
             return (
               <Row2 key={m.id} onClick={() => setEdit({ m })} className={m.is_active ? '' : 'dim'} label={`Sửa model ${m.name}`}
                 a={<><span className="gpic" style={{ width: 24, height: 24 }}><GrinderArt shape={shapeOf(m.name)} /></span><Tx><b>{m.name}</b></Tx></>}
-                b={m.default_list_price_vnd != null ? tr(m.default_list_price_vnd) : '—'}
+                b={m.default_list_price_vnd != null ? tr(m.default_list_price_vnd) : '-'}
                 c={<>{!m.is_active && <span className="pill">Đã ẩn</span>}<Tx><span className="num">{m.code_prefix}</span> · ngưỡng {m.low_stock_threshold} · tiếp {nextCode(m)}</Tx></>}
                 d={`${s?.sellable_count ?? 0} bán được · ${unitCount(m.id)} đã nhập`} />
             )
@@ -106,7 +106,7 @@ function ModelSheet({ m, onClose }: { m?: ModelRow; onClose: () => void }) {
     const { data, error } = await supabase.from('models').delete().eq('id', m.id).select('id')
     if (error || !data?.length) {
       setBusy(false); setConfirmDel(false)
-      setErrs({ form: error ? writeError(error, `Model ${m.name}`) : 'Không xoá được — dữ liệu đã đổi, thử lại.' })
+      setErrs({ form: error ? writeError(error, `Model ${m.name}`) : 'Không xoá được - dữ liệu đã đổi, thử lại.' })
       await reload(); return
     }
     await reload(); setBusy(false); toast(`Đã xoá ${m.name}`); onClose()
@@ -147,7 +147,7 @@ function ModelSheet({ m, onClose }: { m?: ModelRow; onClose: () => void }) {
       {m && (
         <>
           {confirmDel && <p className="warn-box">Xoá vĩnh viễn model “{m.name}”? Chỉ xoá được khi chưa có chiếc cối nào. Không hoàn tác được.</p>}
-          {!confirmDel && used > 0 && <p className="hint" style={{ margin: 0 }}>Model đã có {used} chiếc — không xoá được, chỉ ẩn (BR-14).</p>}
+          {!confirmDel && used > 0 && <p className="hint" style={{ margin: 0 }}>Model đã có {used} chiếc - không xoá được, chỉ ẩn (BR-14).</p>}
           <div className="btn-row">
             <button className="btn btn-ghost" id="nm-toggle" disabled={busy} onClick={toggleActive}>{m.is_active ? 'Ẩn' : 'Hiện lại'}</button>
             {confirmDel

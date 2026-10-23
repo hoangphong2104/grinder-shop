@@ -19,7 +19,7 @@ type Group = { key: string; title: string; tone?: 'bad' | 'way'; count: number; 
 // SC_01 Tổng quan (CR-001 + CR-004): dashboard vận hành.
 // Điện thoại: Cần làm → ô số → Tồn kho rút gọn (HOME-M3). Máy tính: ô số trên, Tồn kho | Cần làm.
 // Cần làm gom theo loại có số đếm, mỗi nhóm tối đa 3 việc + "Xem tất cả" (HOME-M1); thêm việc theo tuổi (HOME-S1).
-// Lãi tháng gom theo profit_date (ngày gửi; đơn Hoàn hàng = ngày hoàn) — số chính thức v_order_summary.
+// Lãi tháng gom theo profit_date (ngày gửi; đơn Hoàn hàng = ngày hoàn) - số chính thức v_order_summary.
 export default function Home() {
   const d = useData()
   const desk = useDesk()
@@ -27,7 +27,7 @@ export default function Home() {
   const month = todayVn().slice(0, 7)
   const mNo = Number(month.slice(5))
 
-  // KPI: lãi tháng (HOME-M2 — dòng phụ 1 dòng, rút gọn)
+  // KPI: lãi tháng (HOME-M2 - dòng phụ 1 dòng, rút gọn)
   const inMonth = d.orderSummary.filter((o) => profitMonth(o) === month)
   const profit = inMonth.reduce((a, o) => a + (o.profit_vnd ?? 0), 0)
   const shippedN = inMonth.filter((o) => o.status !== 'returned').length
@@ -36,7 +36,7 @@ export default function Home() {
   const stockValue = d.modelStock.reduce((a, s) => a + s.stock_value_vnd, 0)
   const onHand = d.modelStock.reduce((a, s) => a + s.on_hand_count, 0)
   const incoming = d.modelStock.reduce((a, s) => a + s.incoming_count, 0)
-  // Khách còn nợ: đơn chưa Hoàn tất (đơn Huỷ / Hoàn hàng = 0 — Q-009); trả dư không trừ
+  // Khách còn nợ: đơn chưa Hoàn tất (đơn Huỷ / Hoàn hàng = 0 - Q-009); trả dư không trừ
   const dueOrders = d.orderSummary.filter((o) => o.status !== 'completed' && o.receivable_vnd > 0)
   const due = dueOrders.reduce((a, o) => a + o.receivable_vnd, 0)
   const debt = d.balance.balance_vnd
@@ -53,7 +53,7 @@ export default function Home() {
   add({ key: 'ship', title: 'Gửi hàng', count: toShip.length, more: '/don?f=wait', rows: orderRows(toShip) })
 
   const ready = byDate.filter((o) => o.status === 'preorder' && o.all_units_received)
-  add({ key: 'ready', title: 'Đủ hàng — chốt đơn', count: ready.length, more: '/don?f=pre', rows: orderRows(ready) })
+  add({ key: 'ready', title: 'Đủ hàng - chốt đơn', count: ready.length, more: '/don?f=pre', rows: orderRows(ready) })
 
   const refund = byDate.filter((o) => o.refund_due_vnd > 0)
   add({ key: 'refund', title: 'Cần hoàn tiền', tone: 'bad', count: refund.length, sum: refund.reduce((a, o) => a + o.refund_due_vnd, 0), more: '/don?f=refund',
@@ -95,7 +95,7 @@ export default function Home() {
   const todo = (
     <div className="ov-todo">
       <p className="section-title">Cần làm <span className="muted">{todoCount}</span></p>
-      {groups.length === 0 && <div className="empty">Không có việc tồn — đơn, lô và kho đều ổn.</div>}
+      {groups.length === 0 && <div className="empty">Không có việc tồn - đơn, lô và kho đều ổn.</div>}
       {groups.map((g) => (
         <section key={g.key} className="ov-todo" aria-label={g.title}>
           <h3 className={`ov-todo-h ${g.tone ?? ''}`}>
@@ -123,7 +123,7 @@ export default function Home() {
   const warnRank = (s: (typeof ms)[number]) => (s.sellable_count <= 0 ? 0 : s.is_low_stock ? 1 : 2)
   const kho = (id: string) => `/kho?model=${id}`
   const stockList = ms.length === 0
-    ? <div className="empty">Chưa có model đang bán — vào <Link to="/danhmuc">Model</Link> để thêm.</div>
+    ? <div className="empty">Chưa có model đang bán - vào <Link to="/danhmuc">Model</Link> để thêm.</div>
     : desk
       ? (
         <div className="tbl-wrap"><table className="tbl">
@@ -134,7 +134,7 @@ export default function Home() {
                 <td><Link className="row cell-link" to={kho(s.model_id)}><Gpic modelName={s.model_name} />{s.model_name}</Link></td>
                 <td className="r"><b>{s.sellable_count}</b></td><td className="r">{s.in_stock_count}</td><td className="r">{s.incoming_count}</td><td className="r">{s.reserved_count}</td>
                 <td><ModelStockChip m={s} /></td>
-                <td className="r">{s.stock_value_vnd ? vnd(s.stock_value_vnd) : '—'}</td>
+                <td className="r">{s.stock_value_vnd ? vnd(s.stock_value_vnd) : '-'}</td>
               </GoRow>
             ))}
           </tbody>

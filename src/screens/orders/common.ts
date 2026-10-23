@@ -20,7 +20,7 @@ export function useIsDesk(): boolean {
 export const PAY_LABEL: Record<PaymentKindDb, string> = { payment: 'Thanh toán', deposit: 'Cọc', refund: 'Hoàn tiền' }
 /** Đơn còn đang chạy (chưa Hoàn tất / Huỷ / Hoàn hàng). */
 export const OPEN_STATUSES: OrderStatusDb[] = ['preorder', 'confirmed', 'shipped']
-/** Đơn đã từng gửi hàng (CR-004: gồm cả Hoàn hàng — chỉ đi được từ Đã gửi). */
+/** Đơn đã từng gửi hàng (CR-004: gồm cả Hoàn hàng - chỉ đi được từ Đã gửi). */
 export const isSentStatus = (s: OrderStatusDb) => s === 'shipped' || s === 'completed' || s === 'returned'
 /** Chiếc đang ở tay khách (Đã bán): Đã gửi / Hoàn tất. Hoàn hàng ⇒ chiếc đã về kho. */
 export const isSoldStatus = (s: OrderStatusDb) => s === 'shipped' || s === 'completed'
@@ -30,9 +30,9 @@ export const isClosedStatus = (s: OrderStatusDb) => s === 'completed' || s === '
 /** Ngày giữa 2 ngày ISO (YYYY-MM-DD). */
 export const daysBetween = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / 86400000)
 
-/** "ZP6-001, KU-007 +1" — tối đa `max` mã, phần còn lại thành "+n". */
+/** "ZP6-001, KU-007 +1" - tối đa `max` mã, phần còn lại thành "+n". */
 export function codesText(codes: readonly string[] | null | undefined, max = 2): string {
-  if (!codes?.length) return '—'
+  if (!codes?.length) return '-'
   return codes.length <= max ? codes.join(', ') : `${codes.slice(0, max).join(', ')} +${codes.length - max}`
 }
 
@@ -90,7 +90,7 @@ export interface Lookup {
   unit: (unitId: string) => UnitViewRow | undefined
   /** "KU-007, JU-003" */
   unitsText: (s: OrderSummaryRow) => string
-  /** Khách phải trả = tiền hàng + ship khách trả (thu hộ — Q-015). */
+  /** Khách phải trả = tiền hàng + ship khách trả (thu hộ - Q-015). */
   total: (s: OrderSummaryRow) => number
   /** Lãi: đơn đã gửi / Hoàn hàng = số DB; chưa gửi = ước theo giá nhập ₫ hiện tại (A8); Huỷ = null. */
   profit: (orderId: string) => { value: number | null; est: boolean }
@@ -112,7 +112,7 @@ export function makeLookup(d: DbData): Lookup {
     lines: (oid) => linesBy.get(oid) ?? [],
     cust: (id) => customers.get(id),
     unit: (id) => units.get(id),
-    unitsText: (s) => (s.unit_codes?.length ? s.unit_codes.join(', ') : '—'),
+    unitsText: (s) => (s.unit_codes?.length ? s.unit_codes.join(', ') : '-'),
     total: (s) => s.goods_vnd + s.ship_charged_vnd,
     profit: (oid) => {
       const s = sums.get(oid)
@@ -125,7 +125,7 @@ export function makeLookup(d: DbData): Lookup {
 }
 
 /**
- * A6 — chiếc chọn được cho đơn: Trong kho hoặc Đang về và chưa đơn nào giữ; khi sửa đơn,
+ * A6 - chiếc chọn được cho đơn: Trong kho hoặc Đang về và chưa đơn nào giữ; khi sửa đơn,
  * các chiếc của chính đơn đó cũng chọn được. Trả về nơi chiếc đang ở, hoặc null nếu không chọn được.
  */
 export function unitAvailability(u: UnitViewRow, editId: string | null): 'in_stock' | 'incoming' | null {
@@ -141,4 +141,4 @@ export function sortOrders(d: DbData, rows: OrderSummaryRow[]): OrderSummaryRow[
 }
 
 /** Ghi trực tiếp 1 dòng có cột version: chỉ cập nhật nếu version chưa đổi (bắt sửa đồng thời 2 máy). */
-export const VERSION_CONFLICT_MSG = 'Dữ liệu vừa được sửa trên máy khác. App đã tải lại — thử lại thao tác.'
+export const VERSION_CONFLICT_MSG = 'Dữ liệu vừa được sửa trên máy khác. App đã tải lại - thử lại thao tác.'

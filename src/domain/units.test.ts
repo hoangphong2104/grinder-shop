@@ -83,7 +83,7 @@ test('A5: a cancelled order releases its unit (back to in_stock / incoming)', ()
   assert.equal(holdingOrder('001', [order('cancelled', ['001'])]), null);
 });
 
-test('D4: labels — "Đã giữ cho D-xxx"', () => {
+test('D4: labels - "Đã giữ cho D-xxx"', () => {
   const o = order('preorder', ['001']);
   assert.equal(unitStatusLabel('reserved', o), 'Đã giữ cho D-009');
   assert.equal(unitStatusLabel('sold', o), 'Đã bán (D-009)');
@@ -156,7 +156,7 @@ test('cancel lot: only before receipt and not while a unit is held by a live ord
   assert.equal(checkCancelLot(lot(), units, []).ok, false);
 });
 
-test('A10 / Q-014: received lot — ship fee, override, list price, serial editable; rate, ¥, model, unit set locked', () => {
+test('A10 / Q-014: received lot - ship fee, override, list price, serial editable; rate, ¥, model, unit set locked', () => {
   const before = { lot: lot(), units: [unit('1'), unit('2')] };
   const okEdit = {
     lot: lot({ shipFee: 800000 }),

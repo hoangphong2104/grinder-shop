@@ -53,7 +53,7 @@ test('A3 CR example: ship 600.000 → 800.000: non-overridden 4.036.000, overrid
   const c = effectiveCosts(us, [edited]);
   assert.equal(c.get('001'), 1010 * 3600 + 800000 / 2); // 4.036.000
   assert.equal(c.get('002'), 4000000);
-  assert.equal(orderProfit(sold, c), 6700000 - 4036000); // 2.664.000 — no frozen snapshot any more
+  assert.equal(orderProfit(sold, c), 6700000 - 4036000); // 2.664.000 - no frozen snapshot any more
   assert.equal(lotPayable(edited, us), 8072000); // 7.272.000 + 800.000
 });
 

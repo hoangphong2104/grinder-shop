@@ -1,4 +1,4 @@
-// CR-002 — Ghi chú khi bán hàng: ghim lên đầu, tìm kiếm (không phân biệt dấu). Lưu trên cloud, đồng bộ realtime.
+// CR-002 - Ghi chú khi bán hàng: ghim lên đầu, tìm kiếm (không phân biệt dấu). Lưu trên cloud, đồng bộ realtime.
 // CR-004: thẻ xem trước tối đa 3 dòng (NOTE-M1), ghim = nút biểu tượng 44px, Xoá chuyển vào sheet sửa (NOTE-M2), nhóm Đã ghim / Khác (NOTE-S1).
 import '../styles/overview.css'
 import { Fragment, useCallback, useMemo, useState } from 'react'
@@ -36,7 +36,7 @@ export default function Notes() {
   async function togglePin(n: NoteRow) {
     const { data, error } = await supabase.from('notes').update({ is_pinned: !n.is_pinned }).eq('id', n.id).eq('version', n.version).select('id')
     if (error) return toast(errorMessage(error))
-    if (!data?.length) toast('Ghi chú vừa được sửa trên máy khác — đã tải lại.')
+    if (!data?.length) toast('Ghi chú vừa được sửa trên máy khác - đã tải lại.')
     await reload()
   }
 
@@ -50,7 +50,7 @@ export default function Notes() {
       </label>
       {notes.length === 0 ? (
         <div className="empty">
-          {d.notes.length === 0 ? <>Chưa có ghi chú nào.<br />Bấm <b>Thêm</b> để ghi điều cần lưu ý khi bán — giá đã báo khách, cách đóng gói, lỗi hay gặp…</> : `Không có ghi chú nào khớp “${q}”.`}
+          {d.notes.length === 0 ? <>Chưa có ghi chú nào.<br />Bấm <b>Thêm</b> để ghi điều cần lưu ý khi bán - giá đã báo khách, cách đóng gói, lỗi hay gặp…</> : `Không có ghi chú nào khớp “${q}”.`}
         </div>
       ) : (
         <div className="notes-grid">
@@ -114,7 +114,7 @@ function NoteEditor({ note, onClose }: { note: NoteRow | null; onClose: () => vo
       : await supabase.from('notes').insert({ body: text, is_pinned: pinned }).select('id')
     setBusy(false)
     if (res.error) return setErr(errorMessage(res.error))
-    if (note && !res.data?.length) { await reload(); return setErr('Ghi chú vừa được sửa trên máy khác — đã tải lại, mở lại để sửa.') }
+    if (note && !res.data?.length) { await reload(); return setErr('Ghi chú vừa được sửa trên máy khác - đã tải lại, mở lại để sửa.') }
     await reload(); toast(note ? 'Đã lưu ghi chú' : 'Đã thêm ghi chú'); onClose()
   }
 

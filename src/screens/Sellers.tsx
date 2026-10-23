@@ -4,7 +4,7 @@ import { Shell } from '../ui/Shell.tsx'
 import { cny } from '../ui/format.ts'
 import { Row2, Tx, useDesk } from './overview/common.tsx'
 
-// SC_12 Người bán Goofish — danh sách (người bán đã ẩn để riêng, bật xem khi cần). CR-004: dòng 2 dòng (research §10).
+// SC_12 Người bán Goofish - danh sách (người bán đã ẩn để riêng, bật xem khi cần). CR-004: dòng 2 dòng (research §10).
 export default function Sellers() {
   const d = useData()
   const desk = useDesk()
@@ -21,7 +21,7 @@ export default function Sellers() {
           <button className="chip" aria-pressed={showHidden} onClick={() => setShowHidden(true)}>Cả đã ẩn <span className="c">{hiddenCount}</span></button>
         </div>
       )}
-      {list.length === 0 && <div className="empty">Chưa có người bán — người bán tự thêm khi lưu lô Goofish.</div>}
+      {list.length === 0 && <div className="empty">Chưa có người bán - người bán tự thêm khi lưu lô Goofish.</div>}
       {list.length > 0 && (
         <div className="ov-list">
           {list.map((s) => {

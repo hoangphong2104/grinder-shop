@@ -1,4 +1,4 @@
-/* Grinder Shop — bố cục (từ prototype v2.2 đã duyệt). Điện thoại: header + tab đáy (nút + giữa). Máy tính (≥ 960px): menu trái cố định + nội dung rộng tới 1240px. */
+/* Grinder Shop - bố cục (từ prototype v2.2 đã duyệt). Điện thoại: header + tab đáy (nút + giữa). Máy tính (≥ 960px): menu trái cố định + nội dung rộng tới 1240px. */
 
 #app { min-height: 100%; }
 .side { display: none; }
@@ -74,7 +74,7 @@ main.view { padding-block: 14px calc(96px + env(safe-area-inset-bottom, 0px)); p
 .note-box { background: var(--hold-bg); color: var(--hold); }
 .note-box.way { background: var(--way-bg); color: var(--way); }
 
-/* C — bảng cột theo trạng thái */
+/* C - bảng cột theo trạng thái */
 .board { display: grid; grid-template-columns: repeat(var(--cols, 5), minmax(200px, 1fr)); gap: 10px; overflow-x: auto; padding-bottom: 4px; }
 .bcol { display: flex; flex-direction: column; gap: 8px; min-width: 0; background: var(--surface-2); border-radius: var(--r-lg); padding: 8px; }
 .bcol h4 { margin: 0; font-size: 12.5px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; padding: 2px 4px 6px; border-bottom: 2px solid var(--cc, var(--line)); }
@@ -89,7 +89,7 @@ main.view { padding-block: 14px calc(96px + env(safe-area-inset-bottom, 0px)); p
 .bghost { border: 1.5px dashed var(--line); border-radius: var(--r-md); padding: 10px; text-align: center; color: var(--faint); font-size: 12px; }
 .stage-chips .chip[aria-pressed="true"] { background: var(--fill); border-color: var(--fill); color: var(--on-fill); }
 
-/* D — thẻ model */
+/* D - thẻ model */
 .mcards { display: grid; grid-template-columns: 1fr; gap: 10px; }
 .mcard { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; box-shadow: var(--shadow); }
 .mcard .pic { grid-row: 1 / span 2; width: 72px; height: 72px; border-radius: 12px; background: var(--accent-soft); display: grid; place-items: center; color: var(--accent); }

@@ -44,7 +44,7 @@ export function Shell({ section, title, back, actions, savebar, children }: {
         <div className="foot">{session?.user.email}</div>
       </nav>
       <div className="content">
-        {!online && <div className="banner-offline">Đang mất mạng — chỉ xem dữ liệu đã tải, chưa lưu được.</div>}
+        {!online && <div className="banner-offline">Đang mất mạng - chỉ xem dữ liệu đã tải, chưa lưu được.</div>}
         <header className="hdr">
           {back
             ? <button className="icon-btn" onClick={() => nav(back)} aria-label="Quay lại"><Icon name="back" /></button>

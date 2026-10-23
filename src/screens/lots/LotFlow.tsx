@@ -1,5 +1,5 @@
 // Thao tác trên lô dùng chung cho danh sách + chi tiết (v0.2, CR-001): chuyển bước, nhận vào kho (BR-02, Q-011,
-// A7 tự chốt đơn Đặt trước; CR-004 LOT-S1 tình trạng + seri từng chiếc), phí ship (trước nhận: save_lot; sau nhận: update_lot_ship_fee — A3, A10), huỷ lô
+// A7 tự chốt đơn Đặt trước; CR-004 LOT-S1 tình trạng + seri từng chiếc), phí ship (trước nhận: save_lot; sau nhận: update_lot_ship_fee - A3, A10), huỷ lô
 // (LOT_HAS_RESERVED_UNITS ⇒ liệt kê đơn đang giữ chiếc).
 import { useCallback, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
@@ -112,7 +112,7 @@ export function useLotFlow(): {
 
 interface RcUnit { condition: UnitConditionDb; serial: string }
 
-/** Nhận vào kho (từ bất kỳ bước mở nào — Q-011). CR-004 LOT-S1: liệt kê từng chiếc của lô với tình trạng
+/** Nhận vào kho (từ bất kỳ bước mở nào - Q-011). CR-004 LOT-S1: liệt kê từng chiếc của lô với tình trạng
  *  (mặc định Mới) + seri (tuỳ chọn) → receive_lot p_units. Phí ship bắt buộc nếu lô chưa có (BR-02), sửa được nếu đã có.
  *  Xong ⇒ báo đơn Đặt trước tự chốt (A7). */
 function ReceiveSheet({ lotId, onClose, onDone }: { lotId: string; onClose: () => void; onDone: (confirmedIds: string[]) => void }) {
@@ -141,7 +141,7 @@ function ReceiveSheet({ lotId, onClose, onDone }: { lotId: string; onClose: () =
   const allSame = units.length > 0 && units.every((u) => cur(u).condition === cur(units[0]).condition) ? cur(units[0]).condition : ''
 
   const submit = async () => {
-    if (feeVal == null) return setErr('Nhập phí ship về VN của cả lô (BR-02) — có thể dùng gợi ý.')
+    if (feeVal == null) return setErr('Nhập phí ship về VN của cả lô (BR-02) - có thể dùng gợi ý.')
     if (Number.isNaN(feeVal)) return setErr('Phí ship phải là số đồng nguyên ≥ 0.')
     if (!date) return setErr('Chọn ngày nhận.')
     const long = units.find((u) => cur(u).serial.trim().length > 100)
@@ -172,7 +172,7 @@ function ReceiveSheet({ lotId, onClose, onDone }: { lotId: string; onClose: () =
       </div>
       {l.ship_fee_vnd == null && (
         <p className="hint two-hint">
-          Cần để tính giá nhập ₫ (BR-02). Gợi ý theo lô trước: {sug != null ? <>{vnd(sug)} <button type="button" className="link-btn small" onClick={() => setFee(String(sug))}>Dùng gợi ý</button></> : '—'}
+          Cần để tính giá nhập ₫ (BR-02). Gợi ý theo lô trước: {sug != null ? <>{vnd(sug)} <button type="button" className="link-btn small" onClick={() => setFee(String(sug))}>Dùng gợi ý</button></> : '-'}
         </p>
       )}
       {feeVal != null && !Number.isNaN(feeVal) && <CostPreview units={units} rate={Number(l.exchange_rate)} feePct={lotFeePct(l)} fee={feeVal} />}
@@ -210,7 +210,7 @@ function ReceiveSheet({ lotId, onClose, onDone }: { lotId: string; onClose: () =
           </div>
         </>
       )}
-      {held > 0 && <p className="hint">{held} chiếc đang giữ cho đơn Đặt trước — đơn nào đủ mọi chiếc trong kho sẽ tự chuyển Đã chốt (A7).</p>}
+      {held > 0 && <p className="hint">{held} chiếc đang giữ cho đơn Đặt trước - đơn nào đủ mọi chiếc trong kho sẽ tự chuyển Đã chốt (A7).</p>}
       {err && <p className="err-text" role="alert">{err}</p>}
     </Sheet>
   )
@@ -237,7 +237,7 @@ function ShipFeeSheet({ lotId, onClose }: { lotId: string; onClose: () => void }
   const submit = async () => {
     if (val != null && Number.isNaN(val)) return setErr('Phí ship phải là số đồng nguyên ≥ 0.')
     if (received && val == null) return setErr('Lô đã nhận phải có phí ship (BR-02).')
-    if (tooMany) return setErr(`Lô có ${qty} chiếc — quá ${MAX_GROUP_ITEMS} chiếc nên chưa sửa phí ship trước khi nhận được. Nhập phí ship lúc bấm "Nhận vào kho".`)
+    if (tooMany) return setErr(`Lô có ${qty} chiếc - quá ${MAX_GROUP_ITEMS} chiếc nên chưa sửa phí ship trước khi nhận được. Nhập phí ship lúc bấm "Nhận vào kho".`)
     setErr(null); setSending(true)
     try {
       if (received) await rpc('update_lot_ship_fee', { p_lot_id: l.id, p_ship_fee_vnd: val, p_expected_version: l.version })
@@ -261,8 +261,8 @@ function ShipFeeSheet({ lotId, onClose }: { lotId: string; onClose: () => void }
       {received && (
         <div className="note-box way">
           <span>
-            Lô đã nhận: giá nhập ₫ của <b>mọi chiếc không sửa tay</b> được tính lại theo phí ship mới — kể cả chiếc đã bán
-            {soldAuto > 0 ? ` (${soldAuto} chiếc — lãi của đơn đã gửi đổi theo)` : ''} (A3).
+            Lô đã nhận: giá nhập ₫ của <b>mọi chiếc không sửa tay</b> được tính lại theo phí ship mới - kể cả chiếc đã bán
+            {soldAuto > 0 ? ` (${soldAuto} chiếc - lãi của đơn đã gửi đổi theo)` : ''} (A3).
             {overridden > 0 ? ` ${overridden} chiếc có giá sửa tay giữ nguyên.` : ''}
           </span>
         </div>
@@ -308,7 +308,7 @@ function CancelSheet({ lotId, onClose }: { lotId: string; onClose: () => void })
   return (
     <Sheet title="Huỷ lô?" onClose={onClose}
       footer={blocked ? undefined : <button className="btn btn-danger btn-block" disabled={sending} onClick={submit}>{sending ? <><span className="spin" /> Đang huỷ…</> : 'Huỷ lô'}</button>}>
-      {!blocked && <p className="muted" style={{ textAlign: 'center', margin: 0 }}>{code} và {unitsOfLot(d, l.id).length} chiếc của lô sẽ chuyển Huỷ — không tính vào hàng đang về và công nợ trung gian. Không hoàn tác được.</p>}
+      {!blocked && <p className="muted" style={{ textAlign: 'center', margin: 0 }}>{code} và {unitsOfLot(d, l.id).length} chiếc của lô sẽ chuyển Huỷ - không tính vào hàng đang về và công nợ trung gian. Không hoàn tác được.</p>}
       {blocked && (
         <>
           <div className="warn-box"><Icon name="warn" size={18} /><span>Chưa huỷ được {code}: có chiếc đang được giữ cho đơn{blocked.unit_codes?.length ? ` (${codesText(blocked.unit_codes, 6)})` : ''}. Đổi chiếc trong đơn hoặc huỷ đơn trước, rồi huỷ lô.</span></div>

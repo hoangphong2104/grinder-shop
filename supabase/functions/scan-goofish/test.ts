@@ -1,4 +1,4 @@
-// Test cho scan-goofish — chạy: deno test --allow-env --no-config supabase/functions/scan-goofish/test.ts
+// Test cho scan-goofish - chạy: deno test --allow-env --no-config supabase/functions/scan-goofish/test.ts
 // Không gọi mạng thật: fetch được giả lập cho Supabase (Auth / PostgREST / Storage) và Gemini.
 
 // Assert tối giản (không phụ thuộc jsr:@std/assert).
@@ -33,7 +33,7 @@ function aiOut(over: Record<string, unknown> = {}) {
     model_id: { value: "M1", confidence: 0.92, matched_text: "K-Ultra" },
     qty_guess: { value: null, confidence: 0.2 },
     condition_text: "全新未拆",
-    notes: "Có giá gạch ngang ¥1.299 — đã lấy giá hiện tại.",
+    notes: "Có giá gạch ngang ¥1.299 - đã lấy giá hiện tại.",
     ...over,
   };
 }
@@ -61,7 +61,7 @@ Deno.test("cleanAiOutput: bỏ qua variant_id kiểu cũ nếu AI vẫn trả v�
   assertEquals(r.fields.model_id.value, KU);
 });
 
-Deno.test("cleanAiOutput: qty_guess — chỉ nhận số nguyên 2..MAX_QTY đủ tin cậy, không gắn flag", () => {
+Deno.test("cleanAiOutput: qty_guess - chỉ nhận số nguyên 2..MAX_QTY đủ tin cậy, không gắn flag", () => {
   const q = (qty: unknown) => m.cleanAiOutput(aiOut({ qty_guess: qty }), catalog, 0.7).qty_guess;
   assertEquals(q({ value: 2, confidence: 0.9 }), { value: 2, confidence: 0.9 });
   assertEquals(q({ value: "3", confidence: 0.8 }), { value: 3, confidence: 0.8 });
@@ -269,7 +269,7 @@ const textBody = {
 };
 const silent = () => {};
 
-Deno.test("handler: thành công (text) — đúng hợp đồng §5.2 + ai_scan_finish ok", async () => {
+Deno.test("handler: thành công (text) - đúng hợp đồng §5.2 + ai_scan_finish ok", async () => {
   const { fetch, calls } = makeFetch({});
   const h = m.createHandler({ env: makeEnv(), fetch, log: silent });
   const res = await h(post(textBody));
@@ -325,7 +325,7 @@ Deno.test('handler: tin ghi "两台" ⇒ trả qty_guess', async () => {
   assert(!b.flags.includes("qty_guess"));
 });
 
-Deno.test("handler: ảnh — tải từ Storage, gửi inlineData base64", async () => {
+Deno.test("handler: ảnh - tải từ Storage, gửi inlineData base64", async () => {
   const { fetch, calls } = makeFetch({});
   const h = m.createHandler({ env: makeEnv(), fetch, log: silent });
   const res = await h(post({ input: { kind: "image", image_path: `${UID}/goofish/x.jpg` } }));

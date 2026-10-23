@@ -10,7 +10,7 @@ import { validateLotGroup } from './validate.ts';
 
 /* ---------- Codes (D1) ---------- */
 
-/** D1 — `formatUnitCode('ZP6', 1)` → `"ZP6-001"`; at least 3 digits (`1234` → `"ZP6-1234"`). */
+/** D1 - `formatUnitCode('ZP6', 1)` → `"ZP6-001"`; at least 3 digits (`1234` → `"ZP6-1234"`). */
 export function formatUnitCode(prefix: string, seq: number): string {
   if (!Number.isInteger(seq) || seq < 1) throw new RangeError(`formatUnitCode: seq must be a positive integer (${seq})`);
   return `${prefix}-${String(seq).padStart(3, '0')}`;
@@ -25,7 +25,7 @@ export interface LotGroupInput {
   listPrice: Vnd | null;
 }
 
-/** A unit about to be created (preview — the DB assigns the real code from `models.next_seq`). */
+/** A unit about to be created (preview - the DB assigns the real code from `models.next_seq`). */
 export interface DraftUnit {
   code: string;
   modelId: string;
@@ -35,7 +35,7 @@ export interface DraftUnit {
 }
 
 /**
- * A2 — expand the lot form groups into N draft units each, numbering codes per model from
+ * A2 - expand the lot form groups into N draft units each, numbering codes per model from
  * `model.nextSeq` (default 1); several groups of the same model continue the sequence.
  */
 export function expandLotGroups(groups: readonly LotGroupInput[], models: readonly Model[]): Result<DraftUnit[]> {
@@ -73,12 +73,12 @@ export function expandLotGroups(groups: readonly LotGroupInput[], models: readon
 export const isSoldOrder = (o: Pick<Order, 'status'>): boolean => o.status === 'shipped' || o.status === 'completed';
 
 /**
- * Order that has let go of its units: cancelled (§2) or returned (CR-004 "Hoàn hàng" — the DB flags its lines
+ * Order that has let go of its units: cancelled (§2) or returned (CR-004 "Hoàn hàng" - the DB flags its lines
  * `cancelled`). Its units are free again (in stock / incoming) and can be sold to another order.
  */
 export const isReleasedOrder = (o: Pick<Order, 'status'>): boolean => o.status === 'cancelled' || o.status === 'returned';
 
-/** The order holding a unit (not cancelled / returned; each unit belongs to at most one such order — CR §3), or null. */
+/** The order holding a unit (not cancelled / returned; each unit belongs to at most one such order - CR §3), or null. */
 export function holdingOrder(unitId: string, orders: readonly Order[], exceptOrderId?: string): Order | null {
   for (const o of orders) {
     if (isReleasedOrder(o) || o.id === exceptOrderId) continue;
@@ -104,7 +104,7 @@ function statusOf(lot: Pick<Lot, 'status'>, holder: Order | null | undefined): U
 }
 
 /**
- * A5 — Trạng thái chiếc: `cancelled` (lô huỷ) · `sold` (đơn Đã gửi / Hoàn tất) · `reserved` (đơn Đặt trước /
+ * A5 - Trạng thái chiếc: `cancelled` (lô huỷ) · `sold` (đơn Đã gửi / Hoàn tất) · `reserved` (đơn Đặt trước /
  * Đã chốt) · `in_stock` (lô đã nhận, chưa ai giữ) · `incoming` (lô chưa nhận, chưa ai giữ).
  * A cancelled or returned order releases its units (they fall back to in_stock / incoming).
  */
@@ -145,7 +145,7 @@ export function unitDaysInStock(lot: Pick<Lot, 'status' | 'receivedAt'>, holder:
 /* ---------- Aging (CR-004 KHO-S1, LOT-S2, HOME-S1) ---------- */
 
 /**
- * KHO-S1 — mức tuổi tồn từ số ngày tồn: > alertDays ⇒ `alert` (đỏ), > warnDays ⇒ `warn` (cam), else `ok`.
+ * KHO-S1 - mức tuổi tồn từ số ngày tồn: > alertDays ⇒ `alert` (đỏ), > warnDays ⇒ `warn` (cam), else `ok`.
  * Defaults 30 / 60 (Cài đặt). Null days ⇒ null.
  */
 export function agingLevel(days: number | null, t: AgingThresholds = DEFAULT_AGING): AgingLevel | null {
@@ -175,7 +175,7 @@ export function lotDaysOpen(lot: Pick<Lot, 'status' | 'orderedAt'>, today: IsoDa
   return daysBetween(lot.orderedAt, today);
 }
 
-/** LOT-S2 — "Lô về trễ": open lot ordered more than `lateDays` (default 21) days ago. Same as DB `v_lot_summary.is_lot_late`. */
+/** LOT-S2 - "Lô về trễ": open lot ordered more than `lateDays` (default 21) days ago. Same as DB `v_lot_summary.is_lot_late`. */
 export function isLotLate(lot: Pick<Lot, 'status' | 'orderedAt'>, today: IsoDate, lateDays: number = DEFAULT_LOT_LATE_DAYS): boolean {
   const d = lotDaysOpen(lot, today);
   return d != null && d > lateDays;
@@ -197,13 +197,13 @@ export interface UnitView {
   /** Lãi thực tế = giá chốt − giá nhập ₫ hiệu lực, only when sold. */
   profit: Vnd | null;
   daysInStock: number | null;
-  /** CR-004 — mức tuổi tồn (≈ `v_units.aging_level`). */
+  /** CR-004 - mức tuổi tồn (≈ `v_units.aging_level`). */
   agingLevel: AgingLevel | null;
 }
 
 /**
  * One row per unit with status, holder, costs, profit, days in stock and aging level. `units` must contain ALL
- * units of the lots involved (ship fee split), `lots` every unit's lot (missing lot throws — data error).
+ * units of the lots involved (ship fee split), `lots` every unit's lot (missing lot throws - data error).
  */
 export function buildUnitViews(
   units: readonly Unit[],
@@ -241,14 +241,14 @@ export function buildUnitViews(
 
 export interface ModelStock {
   modelId: string;
-  /** Trong kho — received, not held. */
+  /** Trong kho - received, not held. */
   inStock: number;
-  /** Đang về — lot not received yet, not held. */
+  /** Đang về - lot not received yet, not held. */
   incoming: number;
-  /** Đã giữ — held by a pre-order / confirmed order (received or still incoming). */
+  /** Đã giữ - held by a pre-order / confirmed order (received or still incoming). */
   reserved: number;
   sold: number;
-  /** Received and not sold (in_stock + reserved units already received) — what is physically on the shelf. */
+  /** Received and not sold (in_stock + reserved units already received) - what is physically on the shelf. */
   onHand: number;
   /** Có thể bán = Trong kho + Đang về chưa giữ (A9). */
   sellable: number;
@@ -258,7 +258,7 @@ export interface ModelStock {
   stockValue: Vnd;
 }
 
-/** A9 — stock figures per model, in the order of `models`. Same input requirements as `buildUnitViews`. */
+/** A9 - stock figures per model, in the order of `models`. Same input requirements as `buildUnitViews`. */
 export function modelStocks(models: readonly Model[], units: readonly Unit[], lots: readonly Lot[], orders: readonly Order[]): ModelStock[] {
   const lotById = new Map(lots.map((l) => [l.id, l]));
   const costs = unitCosts(units, lots);
@@ -305,10 +305,10 @@ export function stockValue(units: readonly Unit[], lots: readonly Lot[], orders:
 
 const isOpenLot = (lot: Pick<Lot, 'status'>): boolean => lot.status !== 'received' && lot.status !== 'cancelled';
 
-/** BR-02 + Q-011 — a lot can be received from any open status, but only once its ship fee is entered. */
+/** BR-02 + Q-011 - a lot can be received from any open status, but only once its ship fee is entered. */
 export function checkReceiveLot(lot: Lot): Result<true> {
   if (!isOpenLot(lot)) {
-    return fail({ code: 'INVALID_TRANSITION', rule: 'Q-011', message: `Lô đang "${LOT_STATUS_LABEL[lot.status]}" — không nhận hàng được.`, lotId: lot.id });
+    return fail({ code: 'INVALID_TRANSITION', rule: 'Q-011', message: `Lô đang "${LOT_STATUS_LABEL[lot.status]}" - không nhận hàng được.`, lotId: lot.id });
   }
   if (lot.shipFee == null) {
     return fail({ code: 'SHIP_FEE_REQUIRED', rule: 'BR-02', message: 'Nhập phí ship về VN của lô trước khi chuyển "Đã nhận".', field: 'shipFee', lotId: lot.id });
@@ -318,7 +318,7 @@ export function checkReceiveLot(lot: Lot): Result<true> {
 
 /**
  * Cancel a lot: only before it is received (§2), and (AI proposal) not while one of its units is held by a
- * non-cancelled order — the order must be cancelled or edited first, otherwise it would point to a unit that
+ * non-cancelled order - the order must be cancelled or edited first, otherwise it would point to a unit that
  * will never arrive.
  */
 export function checkCancelLot(lot: Lot, units: readonly Unit[], orders: readonly Order[]): Result<true> {
@@ -333,7 +333,7 @@ export function checkCancelLot(lot: Lot, units: readonly Unit[], orders: readonl
       return fail({
         code: 'INVALID_TRANSITION',
         rule: 'A5',
-        message: `Chiếc ${u.code} đang thuộc đơn ${h.code ?? h.id} — huỷ hoặc sửa đơn trước khi huỷ lô.`,
+        message: `Chiếc ${u.code} đang thuộc đơn ${h.code ?? h.id} - huỷ hoặc sửa đơn trước khi huỷ lô.`,
         lotId: lot.id,
         unitId: u.id,
         conflictOrderId: h.id,
@@ -344,7 +344,7 @@ export function checkCancelLot(lot: Lot, units: readonly Unit[], orders: readonl
 }
 
 /**
- * A10 / Q-014 — a received lot may change its ship fee and, per unit, the hand-entered ₫ cost, list price,
+ * A10 / Q-014 - a received lot may change its ship fee and, per unit, the hand-entered ₫ cost, list price,
  * serial / note; it may NOT add / remove units or change the rate, the buying fee % (CR-003), a unit's ¥ price or model.
  * `before` / `after` are the lot with its units; units of other lots are ignored. Open lots are unrestricted.
  */

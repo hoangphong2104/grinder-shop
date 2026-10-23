@@ -40,7 +40,7 @@ export default function Debt() {
   const counts = { all: rows.length, payable: 0, transfer: 0, adjustment: 0 } as Record<KindFilter, number>
   rows.forEach(({ t }) => { counts[t.kind] += 1 })
   const shown = rows.filter(({ t }) => kindF === 'all' || t.kind === kindF)
-  // TIEN-S1: nhóm theo tháng — tổng tăng / giảm nợ trong tháng
+  // TIEN-S1: nhóm theo tháng - tổng tăng / giảm nợ trong tháng
   const monthSum = new Map<string, { up: number; down: number }>()
   shown.forEach(({ t }) => {
     const m = t.txn_date.slice(0, 7), a = effect(t), x = monthSum.get(m) ?? { up: 0, down: 0 }
@@ -76,7 +76,7 @@ export default function Debt() {
             {KIND_FILTERS.map(([k, t]) => <button key={k} className="chip" id={`debt-f-${k}`} aria-pressed={kindF === k} onClick={() => setKindF(k)}>{t} <span className="c">{counts[k]}</span></button>)}
           </div>
           {shown.length === 0
-            ? <div className="empty">{rows.length === 0 ? 'Chưa có giao dịch — mỗi lô Goofish lưu xong sẽ tự ghi “phải trả”.' : 'Không có giao dịch loại này.'}</div>
+            ? <div className="empty">{rows.length === 0 ? 'Chưa có giao dịch - mỗi lô Goofish lưu xong sẽ tự ghi “phải trả”.' : 'Không có giao dịch loại này.'}</div>
             : (
               <div className="ov-list">
                 {shown.map(({ t, bal }, i) => {
@@ -92,10 +92,10 @@ export default function Debt() {
                     const fee = Number(l?.buying_fee_pct ?? 0)
                     const sub = !l ? '' : l.status === 'cancelled' ? 'Lô huỷ' : (l.ship_fee_vnd == null ? 'chưa gồm ship' : `gồm ship ${tr(l.ship_fee_vnd)}`) + (fee > 0 ? ` · phí ${pct(fee)}` : '')
                     row = <Row2 to={`/lo/${t.lot_id}`} a={<><b className="id muted">{dmy(t.txn_date)}</b><b style={{ flex: 'none' }}>Phải trả</b><span className="tx">{d.lotCode[t.lot_id]} · {lotModelsText(d, t.lot_id, 'short')}</span></>}
-                      b={amount} c={<Tx className={l?.ship_fee_vnd == null && l?.status !== 'cancelled' ? 'neg' : ''}>{sub || '—'}</Tx>} d={left} />
+                      b={amount} c={<Tx className={l?.ship_fee_vnd == null && l?.status !== 'cancelled' ? 'neg' : ''}>{sub || '-'}</Tx>} d={left} />
                   } else {
                     row = <Row2 onClick={() => setPicked(t)} a={<><b className="id muted">{dmy(t.txn_date)}</b><span className="tx"><b>{KIND_LABEL[t.kind]}</b></span></>}
-                      b={amount} c={<Tx>{t.note || '—'}</Tx>} d={left} />
+                      b={amount} c={<Tx>{t.note || '-'}</Tx>} d={left} />
                   }
                   return (
                     <Fragment key={t.id}>
@@ -114,7 +114,7 @@ export default function Debt() {
   )
 }
 
-/** Sheet ghi Đã chuyển / Điều chỉnh (ghi thẳng bảng intermediary_txns — RLS chỉ cho 2 loại này). */
+/** Sheet ghi Đã chuyển / Điều chỉnh (ghi thẳng bảng intermediary_txns - RLS chỉ cho 2 loại này). */
 function TxnSheet({ kind, onClose }: { kind: 'transfer' | 'adjustment'; onClose: () => void }) {
   const d = useData()
   const { reload } = useStore()
@@ -170,7 +170,7 @@ function TxnSheet({ kind, onClose }: { kind: 'transfer' | 'adjustment'; onClose:
   )
 }
 
-/** Xem / xoá một giao dịch ghi tay (Phải trả do hệ thống sinh — không xoá được). */
+/** Xem / xoá một giao dịch ghi tay (Phải trả do hệ thống sinh - không xoá được). */
 function TxnInfoSheet({ t, onClose }: { t: TxnRow; onClose: () => void }) {
   const { reload } = useStore()
   const toast = useToast()
@@ -195,7 +195,7 @@ function TxnInfoSheet({ t, onClose }: { t: TxnRow; onClose: () => void }) {
       <dl className="kv">
         <dt>Ngày</dt><dd>{dmy(t.txn_date)}/{t.txn_date.slice(0, 4)}</dd>
         <dt>Ảnh hưởng dư nợ</dt><dd className="num">{a >= 0 ? '+' : '−'}{vnd(Math.abs(a))}</dd>
-        <dt>Ghi chú</dt><dd>{t.note || '—'}</dd>
+        <dt>Ghi chú</dt><dd>{t.note || '-'}</dd>
       </dl>
       {confirming && <p className="warn-box">Xoá giao dịch này? Công nợ trung gian sẽ {a < 0 ? 'tăng' : 'giảm'} {vnd(Math.abs(a))}. Không hoàn tác được.</p>}
       {err && <p className="err-text">{err}</p>}

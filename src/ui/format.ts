@@ -4,10 +4,10 @@ export { formatVnd as vnd, formatTr as tr, formatCny as cny } from '../domain/in
 export const pct = (n: number | null | undefined) =>
   `${Number(n ?? 0).toLocaleString('vi-VN', { maximumFractionDigits: 2 })}%`
 /** 2026-10-22 → 22/10 */
-export const dmy = (iso: string | null | undefined) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—')
+export const dmy = (iso: string | null | undefined) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '-')
 /** Hôm nay theo giờ VN (YYYY-MM-DD). */
 export const todayVn = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())
-/** Đọc số từ ô nhập ("3.600", "1 060", "1060,5") — trả null nếu trống / sai. */
+/** Đọc số từ ô nhập ("3.600", "1 060", "1060,5") - trả null nếu trống / sai. */
 export function parseNum(v: string): number | null {
   const s = v.trim().replace(/[\s₫¥]/g, '')
   if (!s) return null

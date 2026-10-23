@@ -1,5 +1,5 @@
 // Kho dữ liệu dùng chung: tải toàn bộ dữ liệu của người dùng (1 người, dữ liệu nhỏ), nghe Supabase Realtime
-// để máy kia cập nhật ngay (Q-017), và bọc các RPC (mọi thay đổi tiền / kho đi qua RPC — System Design §5).
+// để máy kia cập nhật ngay (Q-017), và bọc các RPC (mọi thay đổi tiền / kho đi qua RPC - System Design §5).
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase.ts'

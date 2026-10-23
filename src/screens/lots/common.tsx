@@ -7,7 +7,7 @@ import { ConditionChip, LOT_FLOW, LOT_LABEL, UnitChip } from '../../ui/status.ts
 import { cny, dmy, todayVn, tr, vnd } from '../../ui/format.ts'
 import { lotDaysOpen } from '../../domain/index.ts'
 
-/** Màn hình máy tính (≥ 960px) — đổi theo kích thước cửa sổ. */
+/** Màn hình máy tính (≥ 960px) - đổi theo kích thước cửa sổ. */
 export function useIsDesk(): boolean {
   const q = '(min-width: 960px)'
   const [desk, setDesk] = useState(() => matchMedia(q).matches)
@@ -27,14 +27,14 @@ export const summaryOf = (d: DbData, lotId: string): LotSummaryRow | undefined =
 /** Phí mua hộ % của lô (CR-003). DB chưa chạy 002_buying_fee.sql ⇒ cột chưa có ⇒ 0. */
 export const lotFeePct = (l: Pick<LotRow, 'buying_fee_pct'> | undefined): number => Number(l?.buying_fee_pct ?? 0)
 
-/** Tiền tố mã của model (KU) — không có thì dùng tên model. */
+/** Tiền tố mã của model (KU) - không có thì dùng tên model. */
 export const prefixOf = (d: DbData, modelId: string, fallback = '?') => d.models.find((m) => m.id === modelId)?.code_prefix ?? fallback
 /** "2 × KU, 1 × JU" từ v_lot_summary.models. */
 export function modelsText(d: DbData, sum: LotSummaryRow | undefined): string {
   const ms = sum?.models ?? []
   return ms.length ? ms.map((m) => `${m.qty} × ${prefixOf(d, m.model_id, m.model_name)}`).join(', ') : 'Chưa có chiếc nào'
 }
-/** Đếm trạng thái chiếc của lô: [nhãn, tone pill] — chỉ các trạng thái có chiếc. */
+/** Đếm trạng thái chiếc của lô: [nhãn, tone pill] - chỉ các trạng thái có chiếc. */
 export function unitCounts(sum: LotSummaryRow | undefined): [string, string][] {
   if (!sum) return []
   const out: [string, string][] = []
@@ -62,9 +62,9 @@ export const LOT_SHORT: Record<LotStatusDb, string> = {
 const LOT_TONE: Record<LotStatusDb, string> = { ordered: 'neu', cn_shipping: 'way', at_forwarder: 'way', vn_shipping: 'way', received: 'ok', cancelled: 'neu' }
 /** Chip bước nhãn ngắn (cùng màu LotChip). */
 export const LotStepPill = ({ s }: { s: LotStatusDb }) => <span className={`pill ${LOT_TONE[s]}`}>{LOT_SHORT[s]}</span>
-/** CR-004 LOT-S2: lô về trễ (v_lot_summary.is_lot_late — DB tính theo Cài đặt lot_late_days). */
+/** CR-004 LOT-S2: lô về trễ (v_lot_summary.is_lot_late - DB tính theo Cài đặt lot_late_days). */
 export const isLate = (d: DbData, l: LotRow): boolean => Boolean(summaryOf(d, l.id)?.is_lot_late)
-/** Số ngày từ ngày đặt (lô còn mở) — null khi đã nhận / huỷ. */
+/** Số ngày từ ngày đặt (lô còn mở) - null khi đã nhận / huỷ. */
 export const daysOpen = (l: LotRow): number | null => lotDaysOpen({ status: l.status, orderedAt: l.ordered_at }, todayVn())
 export const sellerOf = (d: DbData, l: LotRow) => (l.seller_id ? d.sellers.find((s) => s.id === l.seller_id) : undefined)
 /** Mới nhất trước: ngày đặt, rồi thời điểm tạo. */
@@ -156,7 +156,7 @@ export function shortWarning(d: DbData, l: LotRow): [string, string] | null {
   return null
 }
 
-/** Dòng chiếc trong chi tiết lô (điện thoại, dòng Kho §2.4 + tình trạng — CR-004 KHO-S3).
+/** Dòng chiếc trong chi tiết lô (điện thoại, dòng Kho §2.4 + tình trạng - CR-004 KHO-S3).
  *  Dòng 1: mã + model … giá bán dự kiến / giá chốt. Dòng 2: chip trạng thái + chip tình trạng · seri … nhập. */
 export function UnitRow2({ d, u }: { d: DbData; u: UnitViewRow }) {
   const holder = u.holding_order_id ? d.orderCode[u.holding_order_id] : undefined
@@ -164,7 +164,7 @@ export function UnitRow2({ d, u }: { d: DbData; u: UnitViewRow }) {
   return (
     <Link className="lotrow unit" to={`/kho/${u.unit_id}`}>
       <span className="l1"><b className="code num">{u.code}</b><span className="nm">{u.model_name}</span></span>
-      <span className="r1 num">{price != null ? tr(price) : '—'}</span>
+      <span className="r1 num">{price != null ? tr(price) : '-'}</span>
       <span className="l2">
         <UnitChip s={u.status} holder={holder} />
         <ConditionChip c={u.condition ?? 'new'} />

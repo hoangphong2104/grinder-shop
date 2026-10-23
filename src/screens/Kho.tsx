@@ -21,10 +21,10 @@ const isStatus = (s: string | null): s is StatusFilter => STATUS_TABS.some(([k])
 const isSort = (s: string | null): s is UnitSort => UNIT_SORTS.some(([k]) => k === s)
 const isCond = (s: string | null): s is UnitConditionDb => CONDITION_ORDER.includes(s as UnitConditionDb)
 const matchStatus = (u: UnitViewRow, f: StatusFilter) => f === 'all' || (f === 'avail' ? AVAIL.includes(u.status) : u.status === f)
-/** Vốn trong kho = giá nhập chiếc đã về kho chưa bán (Trong kho + Đã giữ đã về) — như v_model_stock.stock_value_vnd. */
+/** Vốn trong kho = giá nhập chiếc đã về kho chưa bán (Trong kho + Đã giữ đã về) - như v_model_stock.stock_value_vnd. */
 const onHand = (u: UnitViewRow) => u.is_received && (u.status === 'in_stock' || u.status === 'reserved')
 
-// SC_02 Kho (CR-001 + CR-004) — danh sách TỪNG CHIẾC cối. Máy tính: bảng · điện thoại: dòng 2 dòng (research §2.4).
+// SC_02 Kho (CR-001 + CR-004) - danh sách TỪNG CHIẾC cối. Máy tính: bảng · điện thoại: dòng 2 dòng (research §2.4).
 // Thanh lọc chuẩn (KHO-M2): ô tìm + 1 hàng chip trạng thái có đếm + nút "Lọc" (model, tình trạng, sắp xếp).
 // URL: ?model= · ?tt= (mặc định "Còn hàng") · ?sx= (KHO-M3, mặc định "ma") · ?tinhtrang= (KHO-S3).
 export default function Kho() {
@@ -49,7 +49,7 @@ export default function Kho() {
 
   const stock = sortedModelStock(d)
   const modelName = d.models.find((m) => m.id === modelF)?.code_prefix ?? d.models.find((m) => m.id === modelF)?.name
-  // Lọc nền (model + tình trạng + tìm) — đếm chip trạng thái trên tập này
+  // Lọc nền (model + tình trạng + tìm) - đếm chip trạng thái trên tập này
   const hit = new Map<string, ReturnType<typeof unitMatch>>()
   const base = d.unitView.filter((u) => {
     if (modelF !== 'all' && u.model_id !== modelF) return false
@@ -104,10 +104,10 @@ export default function Kho() {
 
   const noUnits = d.unitView.length === 0
   const emptyText = noUnits
-    ? <div className="empty">Chưa có chiếc cối nào — bấm <Link to="/lo/new">Nhập lô Goofish</Link> để tạo chiếc (mỗi chiếc có mã riêng).</div>
+    ? <div className="empty">Chưa có chiếc cối nào - bấm <Link to="/lo/new">Nhập lô Goofish</Link> để tạo chiếc (mỗi chiếc có mã riêng).</div>
     : <div className="empty">Không có chiếc nào khớp bộ lọc{q.trim() ? ` “${q.trim()}”` : ''}.</div>
 
-  // Tiêu đề cột sắp xếp được (máy tính) — bấm lần nữa về sắp theo mã
+  // Tiêu đề cột sắp xếp được (máy tính) - bấm lần nữa về sắp theo mã
   const sortTh = (k: UnitSort, label: string, r?: boolean) => (
     <th className={r ? 'r' : undefined} aria-sort={sx === k ? (k === 'ma' ? 'ascending' : 'descending') : 'none'}>
       <button className="sort" id={`kho-th-${k}`} onClick={() => setParam('sx', sx === k ? 'ma' : k, 'ma')}>{label}{sx === k && k !== 'ma' ? ' ↓' : ''}</button>
@@ -137,8 +137,8 @@ export default function Kho() {
                 <td className="r">{cny(Number(u.price_cny))}</td>
                 <td className="r"><CostCell u={u} /></td>
                 <td className="r">{vnd(unitPrice(u))}{u.status === 'sold' && <div className="muted small">giá chốt</div>}</td>
-                <td className={`r ${p.value != null && p.value < 0 ? 'req' : ''}`}>{p.value == null ? '—' : vnd(p.value)}<div className="muted small">{p.value == null ? '' : p.actual ? 'thực tế' : 'dự kiến'}</div></td>
-                <td className={`r ${agingCls(u.aging_level)}`}>{u.days_in_stock ?? (ordered != null ? <span className="muted">đặt {ordered}</span> : '—')}</td>
+                <td className={`r ${p.value != null && p.value < 0 ? 'req' : ''}`}>{p.value == null ? '-' : vnd(p.value)}<div className="muted small">{p.value == null ? '' : p.actual ? 'thực tế' : 'dự kiến'}</div></td>
+                <td className={`r ${agingCls(u.aging_level)}`}>{u.days_in_stock ?? (ordered != null ? <span className="muted">đặt {ordered}</span> : '-')}</td>
               </GoRow>
             )
           })}

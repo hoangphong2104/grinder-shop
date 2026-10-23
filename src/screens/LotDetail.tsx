@@ -1,4 +1,4 @@
-// SC_05 Chi tiết lô: bước trạng thái, chuyển bước / nhận vào kho, khối tiền (v_lot_summary — số do DB tính), phí ship,
+// SC_05 Chi tiết lô: bước trạng thái, chuyển bước / nhận vào kho, khối tiền (v_lot_summary - số do DB tính), phí ship,
 // danh sách chiếc của lô (v_units, CR-001), thông tin tin Goofish, huỷ.
 // CR-004: thanh dính đáy (chuyển bước + phí ship), menu ⋯ (Sửa / Ghi chú / Nhận ngay / Huỷ), chip Về trễ + đặt N ngày,
 // dòng chiếc 2 dòng có tình trạng, khối "Giá nhập từng chiếc" (LOT-M4, LOT-S2, LOT-S3, KHO-S3).
@@ -24,7 +24,7 @@ function goofishHref(url: string | null, itemId: string | null): string | null {
   return itemId ? `https://www.goofish.com/item?id=${itemId}` : null
 }
 
-/** Ảnh chụp tin (bucket private-images) — xem bằng signed URL 1 giờ (ADR-08). */
+/** Ảnh chụp tin (bucket private-images) - xem bằng signed URL 1 giờ (ADR-08). */
 function Screenshot({ path }: { path: string }) {
   const [url, setUrl] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
@@ -60,7 +60,7 @@ export default function LotDetail() {
   if (!l) {
     return (
       <Shell section="lo" title="Lô nhập" back="/lo">
-        <div className="empty">Không tìm thấy lô — có thể đã bị xoá. <Link className="link-btn" to="/lo">Về danh sách lô</Link></div>
+        <div className="empty">Không tìm thấy lô - có thể đã bị xoá. <Link className="link-btn" to="/lo">Về danh sách lô</Link></div>
       </Shell>
     )
   }
@@ -78,7 +78,7 @@ export default function LotDetail() {
   // Đóng menu rồi mới mở sheet khác
   const act = (fn: () => void) => () => { setMenu(false); fn() }
 
-  // LOT-M4: thanh dính đáy — chuyển bước (chính) + phí ship (phụ), chỉ khi lô đang mở
+  // LOT-M4: thanh dính đáy - chuyển bước (chính) + phí ship (phụ), chỉ khi lô đang mở
   const savebar = open && next ? (
     <>
       <button className="btn btn-ghost" id="lot-ship" style={{ flex: 1 }} onClick={() => flow.shipFee(l)}>Phí ship</button>
@@ -106,15 +106,15 @@ export default function LotDetail() {
                 <div key={k} className={`st ${i < idx ? 'done' : i === idx ? 'cur' : ''}`}><span className="dot" /><span className="lb">{LOT_SHORT[k]}</span></div>
               ))}
             </div>
-            {l.status === 'cancelled' && <div className="warn-box">Lô đã huỷ{l.cancelled_at ? ` ngày ${dmy(l.cancelled_at.slice(0, 10))}` : ''} — không tính vào tồn và công nợ.</div>}
+            {l.status === 'cancelled' && <div className="warn-box">Lô đã huỷ{l.cancelled_at ? ` ngày ${dmy(l.cancelled_at.slice(0, 10))}` : ''} - không tính vào tồn và công nợ.</div>}
             <div className="calc">
               <div className="ln"><span>Tiền hàng · {cny(Number(sum?.total_cny ?? 0))} × {rate.toLocaleString('vi-VN')}</span><span>{vnd(sum?.goods_vnd ?? 0)}</span></div>
               <div className="ln"><span>Phí mua hộ {pct(feePct)}</span><span>{vnd(sum?.buying_fee_vnd ?? 0)}</span></div>
               <div className="ln"><span>Phí ship về VN</span><span>{l.ship_fee_vnd == null ? <span className="req">chưa nhập</span> : vnd(l.ship_fee_vnd)}</span></div>
-              <div className="ln"><span>Ship / chiếc ({totalQty})</span><span>{sum?.ship_per_unit_vnd != null ? vnd(sum.ship_per_unit_vnd) : '—'}</span></div>
+              <div className="ln"><span>Ship / chiếc ({totalQty})</span><span>{sum?.ship_per_unit_vnd != null ? vnd(sum.ship_per_unit_vnd) : '-'}</span></div>
               <div className="ln total"><span>Phải trả trung gian</span><span>{vnd(sum?.payable_vnd ?? 0)}</span></div>
               {l.status === 'received' && <div className="formula">Lô đã nhận: phí mua hộ và tỷ giá đã khoá (sai thì ghi Điều chỉnh công nợ).</div>}
-              {provisional && l.status !== 'cancelled' && <div className="formula">Giá nhập ₫ đang tạm tính — chưa gồm phí ship về VN.</div>}
+              {provisional && l.status !== 'cancelled' && <div className="formula">Giá nhập ₫ đang tạm tính - chưa gồm phí ship về VN.</div>}
             </div>
             {l.status === 'received' && (
               <button className="btn btn-ghost btn-block" id="lot-ship-fix" onClick={() => flow.shipFee(l)}>Sửa phí ship</button>
@@ -123,14 +123,14 @@ export default function LotDetail() {
           <div>
             <dl className="kv">
               <dt>Tin Goofish</dt>
-              <dd>{href ? <a className="link-btn small lot-ext" href={href} target="_blank" rel="noopener noreferrer">Mở tin <Icon name="ext" /></a> : '—'}</dd>
-              <dt>Tiêu đề</dt><dd className="small">{l.listing_title || '—'}</dd>
+              <dd>{href ? <a className="link-btn small lot-ext" href={href} target="_blank" rel="noopener noreferrer">Mở tin <Icon name="ext" /></a> : '-'}</dd>
+              <dt>Tiêu đề</dt><dd className="small">{l.listing_title || '-'}</dd>
               <dt>Người bán</dt>
-              <dd>{s ? <><Link className="link-btn small" to={`/nguoiban/${s.id}`}>{s.nickname}</Link>{s.is_avoided && <> <span className="pill err">tránh</span></>}</> : '—'}</dd>
-              <dt>Khu vực</dt><dd>{s?.region || '—'}</dd>
+              <dd>{s ? <><Link className="link-btn small" to={`/nguoiban/${s.id}`}>{s.nickname}</Link>{s.is_avoided && <> <span className="pill err">tránh</span></>}</> : '-'}</dd>
+              <dt>Khu vực</dt><dd>{s?.region || '-'}</dd>
               <dt>Ngày đặt</dt><dd>{dmy(l.ordered_at)}{days != null ? ` · ${days} ngày` : ''}</dd>
               <dt>Ngày nhận</dt><dd>{dmy(l.received_at)}</dd>
-              <dt>Ghi chú</dt><dd className="small">{l.note || '—'}</dd>
+              <dt>Ghi chú</dt><dd className="small">{l.note || '-'}</dd>
             </dl>
             {l.screenshot_path && <Screenshot path={l.screenshot_path} />}
           </div>
@@ -141,7 +141,7 @@ export default function LotDetail() {
           <UnitCounts sum={sum} />
         </div>
         {!units.length
-          ? <div className="empty">Lô chưa có chiếc nào{open ? <> — bấm <Link className="link-btn" to={`/lo/${l.id}/sua`}>Sửa lô</Link> để thêm nhóm chiếc.</> : '.'}</div>
+          ? <div className="empty">Lô chưa có chiếc nào{open ? <> - bấm <Link className="link-btn" to={`/lo/${l.id}/sua`}>Sửa lô</Link> để thêm nhóm chiếc.</> : '.'}</div>
           : desk ? <UnitTable d={d} units={units} /> : <div className="ulist">{units.map((u) => <UnitRow2 key={u.unit_id} d={d} u={u} />)}</div>}
         {units.length > 0 && l.status !== 'cancelled' && <CostBreakdown units={units} rate={rate} feePct={feePct} shipPer={sum?.ship_per_unit_vnd ?? null} />}
         {l.status === 'received' && units.length > 0 && <p className="hint">Sửa giá nhập ₫ (sửa tay), giá bán dự kiến, seri, tình trạng: bấm vào chiếc.</p>}
@@ -220,7 +220,7 @@ function UnitTable({ d, units }: { d: DbData; units: UnitViewRow[] }) {
                 <td><ConditionChip c={u.condition ?? 'new'} /></td>
                 <td className="r">{cny(Number(u.price_cny))}</td>
                 <td className="r"><UnitCost u={u} /></td>
-                <td className="r">{u.list_price_vnd != null ? vnd(u.list_price_vnd) : '—'}</td>
+                <td className="r">{u.list_price_vnd != null ? vnd(u.list_price_vnd) : '-'}</td>
                 <td>
                   {u.holding_order_id
                     ? <Link to={`/don/${u.holding_order_id}`} onClick={(e) => e.stopPropagation()} aria-label={`Mở đơn ${h ?? ''}`}><UnitChip s={u.status} holder={h} /></Link>
@@ -235,7 +235,7 @@ function UnitTable({ d, units }: { d: DbData; units: UnitViewRow[] }) {
   )
 }
 
-/** Ghi chú lô — ghi thẳng cột lots.note (được grant), chặn sửa đồng thời bằng version. */
+/** Ghi chú lô - ghi thẳng cột lots.note (được grant), chặn sửa đồng thời bằng version. */
 function NoteSheet({ lotId, onClose }: { lotId: string; onClose: () => void }) {
   const d = useData()
   const { reload } = useStore()

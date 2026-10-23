@@ -32,7 +32,7 @@ const order = (over: Partial<Order> = {}): Order => ({
 
 /* ---------- A6 availability & status ---------- */
 
-test('A6: availability — in stock / incoming ok; cancelled lot, held, sold rejected', () => {
+test('A6: availability - in stock / incoming ok; cancelled lot, held, sold rejected', () => {
   assert.deepEqual(checkUnitAvailable(units[0]!, received, []), { ok: true, value: 'in_stock' });
   assert.deepEqual(checkUnitAvailable(units[2]!, incoming, []), { ok: true, value: 'incoming' });
   const c = checkUnitAvailable(units[4]!, cancelled, []);
@@ -51,13 +51,13 @@ test('A6: availability — in stock / incoming ok; cancelled lot, held, sold rej
   assert.equal(checkUnitAvailable(units[0]!, received, [order({ id: 'self' })], 'self').ok, true);
 });
 
-test('A6: order status — any incoming unit → preorder, all received → confirmed', () => {
+test('A6: order status - any incoming unit → preorder, all received → confirmed', () => {
   assert.equal(orderStatusFor([units[0]!, units[1]!], lots), 'confirmed');
   assert.equal(orderStatusFor([units[0]!, units[2]!], lots), 'preorder');
   assert.equal(orderStatusFor([units[2]!], lots), 'preorder');
 });
 
-test('A6: checkOrderUnits — empty, duplicate, unknown, conflict, and the resulting status', () => {
+test('A6: checkOrderUnits - empty, duplicate, unknown, conflict, and the resulting status', () => {
   const st = (ids: string[], orders: Order[] = [], forId?: string) => {
     const r = checkOrderUnits(ids, units, lots, orders, forId);
     return r.ok ? r.value.status : r.error.code;
@@ -157,7 +157,7 @@ test('BR-10: refunds count negative; overpayment → negative receivable', () =>
   assert.equal(orderReceivable(order({ payments: [{ kind: 'payment', amount: 5000000 }] })), -500000);
 });
 
-test('Q-009: cancelled order — receivable 0, refund due = net paid until refunded', () => {
+test('Q-009: cancelled order - receivable 0, refund due = net paid until refunded', () => {
   const dep = { kind: 'deposit' as const, amount: 1000000 };
   const c = order({ status: 'cancelled', payments: [dep] });
   assert.equal(orderReceivable(c), 0);

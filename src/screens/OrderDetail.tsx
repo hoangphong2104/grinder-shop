@@ -1,4 +1,4 @@
-// SC_08 Chi tiết đơn — CR-004 DON-M3: thân trang = bước → khối tiền → khách → lãi (gập); thanh dính đáy = bước kế tiếp
+// SC_08 Chi tiết đơn - CR-004 DON-M3: thân trang = bước → khối tiền → khách → lãi (gập); thanh dính đáy = bước kế tiếp
 // (Chốt đơn / Gửi hàng / Hoàn tất) + Thu tiền; việc khác (Sửa, Vận đơn, COD, Sao chép tin, Hoàn hàng, Huỷ) ở menu "⋯".
 // CR-001: mỗi dòng = 1 chiếc cụ thể; lãi = Σ(giá chốt − giá nhập ₫ hiện tại của chiếc) − ship shop chịu (A8, không chụp giá).
 // CR-004: COD (ship_order p_cod_amount_vnd, set_order_cod, khoản thu method 'cod'), Hoàn hàng (return_order), hình thức thu.
@@ -65,7 +65,7 @@ function OrderDetailView({ id }: { id: string }) {
     const u = lk.unit(x.unit_id)
     return { x, u, profit: u ? x.unit_price_vnd - u.cost_vnd : null }
   })
-  // Chiếc còn chưa về kho (lô chưa Đã nhận) — chặn chốt (A7) và gửi (A8).
+  // Chiếc còn chưa về kho (lô chưa Đã nhận) - chặn chốt (A7) và gửi (A8).
   const notIn = rows.filter((r) => !r.u?.is_received)
   const notInText = notIn.map((r) => r.u ? `${r.u.code} (${d.lotCode[r.u.lot_id] ?? 'lô'} · ${LOT_LABEL[r.u.lot_status]})` : '?').join(', ')
   const provisional = rows.some((r) => r.u?.cost_is_provisional)
@@ -82,7 +82,7 @@ function OrderDetailView({ id }: { id: string }) {
   // DON-S2: sao chép ngay trong lúc bấm (giữ "user activation"); không được ⇒ sheet có ô chữ để tự chọn / sao chép.
   const copyConfirm = () => {
     const text = buildConfirmText({ code, o, s, c, lines: rows.map(({ x, u }) => ({ code: u?.code ?? '?', model: u?.model_name ?? '', price: x.unit_price_vnd })), bankLine: d.settings?.bank_info })
-    const ok = () => { setSheet(null); toast(text.includes(BANK_LINE_PLACEHOLDER) ? 'Đã sao chép — điền STK trước khi gửi khách' : 'Đã sao chép tin xác nhận — dán vào Messenger / Zalo') }
+    const ok = () => { setSheet(null); toast(text.includes(BANK_LINE_PLACEHOLDER) ? 'Đã sao chép - điền STK trước khi gửi khách' : 'Đã sao chép tin xác nhận - dán vào Messenger / Zalo') }
     const fallback = () => setSheet({ copy: text })
     try {
       if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(ok, fallback)
@@ -119,7 +119,7 @@ function OrderDetailView({ id }: { id: string }) {
   const pay = payState(s)
   const fbIsUrl = !!c?.fb_url && /^https?:\/\//i.test(c.fb_url)
   const profitLabel = returned ? 'Lãi đơn hoàn hàng' : sent ? 'Lãi đơn' : 'Lãi dự kiến'
-  const profitText = profit.value == null ? '—' : profit.est ? `~${vnd(profit.value)}` : vnd(profit.value)
+  const profitText = profit.value == null ? '-' : profit.est ? `~${vnd(profit.value)}` : vnd(profit.value)
 
   return (
     <Shell section="don" title={code} back="/don" savebar={savebar}
@@ -132,13 +132,13 @@ function OrderDetailView({ id }: { id: string }) {
         <div>
           {stepper}
           {o.status === 'preorder' && (s.all_units_received
-            ? <div className="note-box"><span>Mọi chiếc của đơn đã về kho — bấm “Chốt đơn”.</span></div>
-            : <div className="note-box way"><span>Chờ hàng về — {notInText}. Khi lô được nhận vào kho, đơn tự chuyển Đã chốt.</span></div>)}
+            ? <div className="note-box"><span>Mọi chiếc của đơn đã về kho - bấm “Chốt đơn”.</span></div>
+            : <div className="note-box way"><span>Chờ hàng về - {notInText}. Khi lô được nhận vào kho, đơn tự chuyển Đã chốt.</span></div>)}
           {o.status === 'cancelled' && (
-            <div className="warn-box"><span>Đơn đã huỷ.{s.refund_due_vnd > 0 && <> Cần hoàn khách {vnd(s.refund_due_vnd)} — ghi “Hoàn tiền” khi đã trả lại.</>}</span></div>
+            <div className="warn-box"><span>Đơn đã huỷ.{s.refund_due_vnd > 0 && <> Cần hoàn khách {vnd(s.refund_due_vnd)} - ghi “Hoàn tiền” khi đã trả lại.</>}</span></div>
           )}
           {returned && (
-            <div className="warn-box"><span>Hoàn hàng ngày {dmy(o.returned_at)} — {codesAll} đã về Trong kho. {o.keep_deposit ? 'Shop giữ cọc.' : 'Hoàn cọc cho khách.'}
+            <div className="warn-box"><span>Hoàn hàng ngày {dmy(o.returned_at)} - {codesAll} đã về Trong kho. {o.keep_deposit ? 'Shop giữ cọc.' : 'Hoàn cọc cho khách.'}
               {s.refund_due_vnd > 0 && <> Cần hoàn khách {vnd(s.refund_due_vnd)}.</>}</span></div>
           )}
           {o.completion_forced && o.status === 'completed' && <div className="note-box"><span>Đơn hoàn tất khi chưa thu khớp tiền (đã xác nhận bỏ qua).</span></div>}
@@ -154,7 +154,7 @@ function OrderDetailView({ id }: { id: string }) {
             <div className="ln total"><span>Khách phải trả</span><span>{vnd(total)}</span></div>
             {payments.map((p) => (
               <div key={p.id} className="ln sub-ln">
-                <span><button className="link-btn" onClick={() => setSheet({ delPay: p })} aria-label={`Khoản ${PAY_LABEL[p.kind]} ngày ${dmy(p.paid_at)} — bấm để xoá nếu ghi nhầm`}>{dmy(p.paid_at)} · {PAY_LABEL[p.kind]}</button>
+                <span><button className="link-btn" onClick={() => setSheet({ delPay: p })} aria-label={`Khoản ${PAY_LABEL[p.kind]} ngày ${dmy(p.paid_at)} - bấm để xoá nếu ghi nhầm`}>{dmy(p.paid_at)} · {PAY_LABEL[p.kind]}</button>
                   <span className="pm"> · {PAY_METHOD_LABEL[p.method ?? 'transfer']}{p.note ? ` · ${p.note}` : ''}</span></span>
                 <span>{p.kind === 'refund' ? '−' : ''}{vnd(p.amount_vnd)}</span>
               </div>
@@ -176,14 +176,14 @@ function OrderDetailView({ id }: { id: string }) {
         <div>
           <dl className="kv">
             <dt>Khách</dt><dd>{c ? <Link to={`/don?khach=${c.id}&f=all`}>{c.fb_name}</Link> : s.customer_name}{c?.is_hidden ? <span className="muted small"> (đã ẩn)</span> : null}</dd>
-            <dt>Facebook</dt><dd className="small">{fbIsUrl ? <a href={c!.fb_url!} target="_blank" rel="noreferrer">{c!.fb_url}</a> : c?.fb_url || '—'}</dd>
-            <dt>SĐT</dt><dd>{c?.phone ? <a href={`tel:${c.phone.replace(/\s/g, '')}`}>{c.phone}</a> : '—'}</dd>
-            <dt>Địa chỉ</dt><dd className="small">{c?.address || '—'}</dd>
+            <dt>Facebook</dt><dd className="small">{fbIsUrl ? <a href={c!.fb_url!} target="_blank" rel="noreferrer">{c!.fb_url}</a> : c?.fb_url || '-'}</dd>
+            <dt>SĐT</dt><dd>{c?.phone ? <a href={`tel:${c.phone.replace(/\s/g, '')}`}>{c.phone}</a> : '-'}</dd>
+            <dt>Địa chỉ</dt><dd className="small">{c?.address || '-'}</dd>
             <dt>Ngày đơn</dt><dd>{dmy(o.order_date)}</dd>
             <dt>Ngày gửi</dt><dd>{dmy(o.shipped_at)}</dd>
             {returned && <><dt>Hoàn hàng</dt><dd>{dmy(o.returned_at)}{o.return_ship_fee_vnd > 0 ? ` · ship về ${vnd(o.return_ship_fee_vnd)}` : ''}{o.return_note ? <span className="small muted"> · {o.return_note}</span> : null}</dd></>}
-            <dt>Mã vận đơn</dt><dd>{o.tracking_no || '—'}</dd>
-            <dt>Ghi chú</dt><dd className="small">{o.note || '—'}</dd>
+            <dt>Mã vận đơn</dt><dd>{o.tracking_no || '-'}</dd>
+            <dt>Ghi chú</dt><dd className="small">{o.note || '-'}</dd>
           </dl>
           {o.status !== 'cancelled' && (
             <details className="o-profit" open={desk}>
@@ -200,14 +200,14 @@ function OrderDetailView({ id }: { id: string }) {
                     <div key={x.id} className="ln">
                       <span>
                         {u?.code ?? '?'} · chốt {tr(x.unit_price_vnd)}
-                        <span className="sub">giá nhập {u ? vnd(u.cost_vnd) : '—'}{u?.cost_is_overridden ? ' (sửa tay)' : u?.cost_is_provisional ? ' (tạm tính, chưa có ship lô)' : ''}</span>
+                        <span className="sub">giá nhập {u ? vnd(u.cost_vnd) : '-'}{u?.cost_is_overridden ? ' (sửa tay)' : u?.cost_is_provisional ? ' (tạm tính, chưa có ship lô)' : ''}</span>
                       </span>
-                      <span>{p == null ? '—' : sent ? vnd(p) : `~${vnd(p)}`}</span>
+                      <span>{p == null ? '-' : sent ? vnd(p) : `~${vnd(p)}`}</span>
                     </div>
                   ))}
                   {o.ship_fee_payer === 'shop' && o.ship_fee_vnd > 0 && <div className="ln"><span>Ship shop chịu</span><span>−{vnd(o.ship_fee_vnd)}</span></div>}
                   <div className="ln total"><span>{profitLabel}</span><span>{profitText}</span></div>
-                  <div className="formula">Giá nhập theo từng chiếc — đổi nếu bạn sửa phí ship lô / sửa tay.{provisional ? ' Có chiếc giá nhập tạm tính (lô chưa có phí ship).' : ''}</div>
+                  <div className="formula">Giá nhập theo từng chiếc - đổi nếu bạn sửa phí ship lô / sửa tay.{provisional ? ' Có chiếc giá nhập tạm tính (lô chưa có phí ship).' : ''}</div>
                 </>}
               </div>
             </details>
@@ -228,7 +228,7 @@ function OrderDetailView({ id }: { id: string }) {
             {canPay && (
               <button className="li" onClick={() => setSheet('pay')}><span className="main"><b>{closedMoney ? 'Ghi hoàn tiền' : 'Ghi khoản thu / hoàn tiền'}</b><span className="s">Chuyển khoản · Tiền mặt · COD</span></span><Icon name="chev" size={16} /></button>
             )}
-            <button className="li" onClick={copyConfirm}><span className="main"><b>Sao chép tin xác nhận đơn</b><span className="s">Mã chiếc, giá, ship, cọc, còn lại — dán Messenger / Zalo</span></span><Icon name="chev" size={16} /></button>
+            <button className="li" onClick={copyConfirm}><span className="main"><b>Sao chép tin xác nhận đơn</b><span className="s">Mã chiếc, giá, ship, cọc, còn lại - dán Messenger / Zalo</span></span><Icon name="chev" size={16} /></button>
             {o.status === 'shipped' && (
               <button className="li danger" onClick={() => setSheet('return')}><span className="main"><b>Hoàn hàng / khách không nhận</b><span className="s">Chiếc về lại kho, chọn giữ hay hoàn cọc</span></span><Icon name="chev" size={16} /></button>
             )}
@@ -262,7 +262,7 @@ function OrderDetailView({ id }: { id: string }) {
           footer={<button className="btn btn-primary btn-block" disabled={busy} onClick={() => complete(true)}>Vẫn hoàn tất</button>}>
           <p className="muted" style={{ textAlign: 'center', margin: 0 }}>
             {due > 0
-              ? <>Còn phải thu {vnd(due)}{s.cod_pending_vnd > 0 && <> (trong đó COD hãng chưa chuyển {vnd(s.cod_pending_vnd)} — ghi “Nhận COD” khi tiền về)</>}. Vẫn hoàn tất đơn? (BR-10)</>
+              ? <>Còn phải thu {vnd(due)}{s.cod_pending_vnd > 0 && <> (trong đó COD hãng chưa chuyển {vnd(s.cod_pending_vnd)} - ghi “Nhận COD” khi tiền về)</>}. Vẫn hoàn tất đơn? (BR-10)</>
               : `Khách trả dư ${vnd(-due)}. Vẫn hoàn tất đơn? (Q-010)`}
           </p>
         </Sheet>
@@ -273,7 +273,7 @@ function OrderDetailView({ id }: { id: string }) {
             onClick={() => run(() => rpc('cancel_order', { p_order_id: o.id, p_expected_version: o.version }),
               s.paid_vnd > 0 ? `Đã huỷ ${code} · cần hoàn ${tr(s.paid_vnd)}` : `Đã huỷ ${code}`)}>Huỷ đơn</button>}>
           <p className="muted" style={{ textAlign: 'center', margin: 0 }}>
-            Bỏ giữ {codesAll} cho {code} — các chiếc trả về Trong kho / Đang về. Tiền cọc đã thu cần ghi “Hoàn tiền” nếu trả lại khách.{s.paid_vnd > 0 ? ` Đã thu ${vnd(s.paid_vnd)}.` : ''} Không hoàn tác được.
+            Bỏ giữ {codesAll} cho {code} - các chiếc trả về Trong kho / Đang về. Tiền cọc đã thu cần ghi “Hoàn tiền” nếu trả lại khách.{s.paid_vnd > 0 ? ` Đã thu ${vnd(s.paid_vnd)}.` : ''} Không hoàn tác được.
           </p>
         </Sheet>
       )}
@@ -307,7 +307,7 @@ function OrderDetailView({ id }: { id: string }) {
             await reload()
           }, 'Đã xoá khoản thu')}>Xoá khoản thu</button>}>
           <p className="muted" style={{ textAlign: 'center', margin: 0 }}>
-            {PAY_LABEL[sheet.delPay.kind]} · {PAY_METHOD_LABEL[sheet.delPay.method ?? 'transfer']} {vnd(sheet.delPay.amount_vnd)} ngày {dmy(sheet.delPay.paid_at)}. Chỉ xoá khi ghi nhầm — còn phải thu sẽ tính lại.
+            {PAY_LABEL[sheet.delPay.kind]} · {PAY_METHOD_LABEL[sheet.delPay.method ?? 'transfer']} {vnd(sheet.delPay.amount_vnd)} ngày {dmy(sheet.delPay.paid_at)}. Chỉ xoá khi ghi nhầm - còn phải thu sẽ tính lại.
           </p>
         </Sheet>
       )}
@@ -332,13 +332,13 @@ function ShipSheet({ onClose, onOk, busy, tracking, shortText, codes, due }: {
   return (
     <Sheet title="Gửi hàng" onClose={onClose}
       footer={<button className="btn btn-primary btn-block" disabled={busy || !!shortText || !date} onClick={submit}>{busy ? 'Đang lưu…' : 'Xác nhận đã gửi'}</button>}>
-      {shortText && <div className="warn-box"><span>Còn chiếc chưa về kho — chưa gửi được: {shortText}.</span></div>}
+      {shortText && <div className="warn-box"><span>Còn chiếc chưa về kho - chưa gửi được: {shortText}.</span></div>}
       <label className="f" htmlFor="sh-tracking">Mã vận đơn<input className="input" id="sh-tracking" value={tk} onChange={(e) => setTk(e.target.value)} placeholder="VD: GHTK 1234" maxLength={100} /></label>
       <label className="f" htmlFor="sh-cod">Tiền COD shipper thu (₫)
         <input className="input money" id="sh-cod" inputMode="numeric" value={cod} onChange={(e) => setCod(e.target.value)} placeholder="0" aria-invalid={!!err} />
         {err && <span className="err-text">{err}</span>}
         <span className="hint">
-          {codN != null && codN > due ? `Lớn hơn số còn phải thu (${vnd(due)}) — kiểm tra lại. ` : ''}
+          {codN != null && codN > due ? `Lớn hơn số còn phải thu (${vnd(due)}) - kiểm tra lại. ` : ''}
           Còn phải thu {vnd(due)}. Để 0 nếu khách đã chuyển khoản đủ.
         </span>
       </label>
@@ -377,7 +377,7 @@ function ReturnSheet({ onClose, onOk, busy, codes, paid, deposit, codPending, sh
   onOk: (r: { keep: boolean; fee: number; date: string; note: string; refund: number; version: number }) => void
 }) {
   const [ver] = useState(version)
-  // Giữ / hoàn cọc: bắt chọn rõ (không mặc định) — trừ khi đơn không có cọc.
+  // Giữ / hoàn cọc: bắt chọn rõ (không mặc định) - trừ khi đơn không có cọc.
   const [keep, setKeep] = useState<boolean | null>(deposit > 0 ? null : false)
   const [fee, setFee] = useState('')
   const [date, setDate] = useState(() => { const t = todayVn(); return t < shippedAt ? shippedAt : t })
@@ -424,11 +424,11 @@ function ReturnSheet({ onClose, onOk, busy, codes, paid, deposit, codPending, sh
       <label className="f" htmlFor="rt-note">Ghi chú<input className="input" id="rt-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="VD: Khách không nghe máy, GHTK chuyển hoàn" maxLength={1000} /></label>
       <div className="calc o-preview" aria-live="polite">
         <div className="ln"><span>Đã thu của khách</span><span>{vnd(paid)}</span></div>
-        <div className="ln"><span>Shop giữ lại</span><span>{keep == null ? '—' : vnd(kept)}</span></div>
-        <div className="ln total"><span>Cần hoàn khách</span><span className={refund > 0 && keep != null ? 'req' : undefined}>{keep == null ? '—' : vnd(refund)}</span></div>
+        <div className="ln"><span>Shop giữ lại</span><span>{keep == null ? '-' : vnd(kept)}</span></div>
+        <div className="ln total"><span>Cần hoàn khách</span><span className={refund > 0 && keep != null ? 'req' : undefined}>{keep == null ? '-' : vnd(refund)}</span></div>
         {shipShop > 0 && <div className="ln"><span>Ship đi shop chịu</span><span>−{vnd(shipShop)}</span></div>}
         <div className="ln"><span>Ship chiều về</span><span>{(feeN ?? 0) > 0 ? '−' : ''}{vnd(feeN ?? 0)}</span></div>
-        <div className="ln total"><span>{profitV < 0 ? 'Lỗ đơn' : 'Lãi đơn'}</span><span className={profitV < 0 ? 'req' : undefined}>{keep == null ? '—' : vnd(profitV)}</span></div>
+        <div className="ln total"><span>{profitV < 0 ? 'Lỗ đơn' : 'Lãi đơn'}</span><span className={profitV < 0 ? 'req' : undefined}>{keep == null ? '-' : vnd(profitV)}</span></div>
         <div className="formula">
           Lãi = shop giữ − ship shop chịu − ship về (không trừ giá nhập vì chiếc về kho), tính vào tháng hoàn hàng.
           {refund > 0 && keep != null ? ' Cần hoàn hiện ở đơn tới khi bạn ghi “Hoàn tiền”.' : ''}
@@ -480,7 +480,7 @@ function PaySheet({ onClose, onOk, busy, prefill, defaultKind, defaultMethod, re
         </div>
       </div>
       {kind === 'refund' && <p className="hint">Hoàn tiền trừ vào số đã thu của đơn.</p>}
-      {method === 'cod' && <p className="hint">Tiền hãng ship chuyển về sau khi giao — trừ vào “COD chờ về”.</p>}
+      {method === 'cod' && <p className="hint">Tiền hãng ship chuyển về sau khi giao - trừ vào “COD chờ về”.</p>}
       <label className="f" htmlFor="p-date">Ngày<input className="input" id="p-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
       <label className="f" htmlFor="p-note">Ghi chú<input className="input" id="p-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder={method === 'cod' ? 'VD: GHN đối soát 25/10' : 'VD: CK Vietcombank'} maxLength={1000} /></label>
     </Sheet>
@@ -497,15 +497,15 @@ function CopySheet({ text, onClose }: { text: string; onClose: () => void }) {
     el.select()
     const ok = () => { toast('Đã sao chép'); onClose() }
     try {
-      if (navigator.clipboard?.writeText) { navigator.clipboard.writeText(v).then(ok, () => toast('Đã chọn hết chữ — bấm giữ rồi chọn “Sao chép”')); return }
+      if (navigator.clipboard?.writeText) { navigator.clipboard.writeText(v).then(ok, () => toast('Đã chọn hết chữ - bấm giữ rồi chọn “Sao chép”')); return }
     } catch { /* rơi xuống cách cũ */ }
     try { if (document.execCommand('copy')) { ok(); return } } catch { /* bỏ qua */ }
-    toast('Đã chọn hết chữ — bấm giữ rồi chọn “Sao chép”')
+    toast('Đã chọn hết chữ - bấm giữ rồi chọn “Sao chép”')
   }
   return (
     <Sheet title="Tin xác nhận đơn" onClose={onClose}
       footer={<button className="btn btn-primary btn-block" onClick={() => copy(document.getElementById('o-copy') as HTMLTextAreaElement | null)}>Sao chép</button>}>
-      <p className="hint" style={{ margin: 0 }}>Không tự sao chép được — sửa nếu cần (vd. dòng STK), rồi bấm “Sao chép” hoặc bấm giữ trong ô để chọn.</p>
+      <p className="hint" style={{ margin: 0 }}>Không tự sao chép được - sửa nếu cần (vd. dòng STK), rồi bấm “Sao chép” hoặc bấm giữ trong ô để chọn.</p>
       <textarea className="input o-copy" id="o-copy" value={v} onChange={(e) => setV(e.target.value)} aria-label="Nội dung tin xác nhận" />
     </Sheet>
   )

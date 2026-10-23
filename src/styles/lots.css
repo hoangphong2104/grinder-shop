@@ -1,4 +1,4 @@
-/* Nhóm màn Lô nhập — bổ sung nhỏ ngoài app.css (ảnh thật trong ô ảnh tin, xem trước ảnh quét, dòng hàng của form). */
+/* Nhóm màn Lô nhập - bổ sung nhỏ ngoài app.css (ảnh thật trong ô ảnh tin, xem trước ảnh quét, dòng hàng của form). */
 .lot-shot { align-self: center; overflow: hidden; text-align: center; padding: 4px; }
 a.lot-shot { padding: 0; }
 .lot-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -47,7 +47,7 @@ a.lot-shot { padding: 0; }
 .lot-units-head .pill { font-size: 12px; }
 .menu-danger { color: var(--bad) !important; }
 
-/* Sheet nhận hàng: mỗi chiếc 1 khối — mã + model, rồi tình trạng | seri thẳng hàng (LOT-S1) */
+/* Sheet nhận hàng: mỗi chiếc 1 khối - mã + model, rồi tình trạng | seri thẳng hàng (LOT-S1) */
 .rc-units { flex: none; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; background: var(--surface); }
 .rc-unit { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 6px 8px; padding: 10px 12px; border-bottom: 1px solid var(--line-2); }
 .rc-unit:last-child { border-bottom: 0; }

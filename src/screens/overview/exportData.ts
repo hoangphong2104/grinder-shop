@@ -1,4 +1,4 @@
-// Xuất Excel (Q-018: tiện ích tuỳ chọn; NFR-07) — CR-001: lô, từng chiếc cối, đơn, dòng đơn (mã chiếc), thu tiền,
+// Xuất Excel (Q-018: tiện ích tuỳ chọn; NFR-07) - CR-001: lô, từng chiếc cối, đơn, dòng đơn (mã chiếc), thu tiền,
 // tồn theo model, sổ công nợ trung gian, ghi chú. CR-003: cột phí mua hộ % / ₫ (lô) và % (chiếc).
 // DB chưa chạy 002_buying_fee.sql ⇒ cột phí chưa có ⇒ xuất 0.
 import type { DbData } from '../../data/types.ts'

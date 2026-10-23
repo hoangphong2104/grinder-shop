@@ -92,7 +92,7 @@ export default function Settings() {
     save({ ai_scan_monthly_cap: c, ai_confidence_threshold: Math.round(p) / 100 }, 'Đã lưu cài đặt AI')
   }
 
-  /** CR-003: phí mua hộ mặc định cho lô mới — 0..100 %, cho phép thập phân (2,5). Lô cũ không đổi. */
+  /** CR-003: phí mua hộ mặc định cho lô mới - 0..100 %, cho phép thập phân (2,5). Lô cũ không đổi. */
   function saveFee() {
     const v = fee.trim() ? parseNum(fee) : 0
     if (v == null || !isBuyingFeePct(v)) {
@@ -127,7 +127,7 @@ export default function Settings() {
 
   function doExport() {
     setExporting(true)
-    try { exportExcel(d); toast('Đã tạo file Excel') } catch { toast('Không tạo được file Excel — thử lại.') } finally { setExporting(false) }
+    try { exportExcel(d); toast('Đã tạo file Excel') } catch { toast('Không tạo được file Excel - thử lại.') } finally { setExporting(false) }
   }
 
   const payer: ShipPayerDb = st?.default_ship_fee_payer ?? 'customer'
@@ -154,8 +154,8 @@ export default function Settings() {
               onChange={(e) => save({ ai_scan_enabled: e.target.checked }, e.target.checked ? 'Đã bật AI quét tin' : 'Đã tắt AI quét tin')} />
           </div>
           <div className="li" style={{ cursor: 'default' }}>
-            <div className="main"><b>Lượt quét tháng này</b><div className="s">Gemini gói miễn phí — hết lượt thì nhập tay</div></div>
-            <span className="v">{scans == null ? '—' : scans} / {st?.ai_scan_monthly_cap ?? 100} lượt</span>
+            <div className="main"><b>Lượt quét tháng này</b><div className="s">Gemini gói miễn phí - hết lượt thì nhập tay</div></div>
+            <span className="v">{scans == null ? '-' : scans} / {st?.ai_scan_monthly_cap ?? 100} lượt</span>
           </div>
         </div>
         <div className="two">
@@ -182,11 +182,11 @@ export default function Settings() {
 
         <p className="section-title">Ngưỡng ngày (tồn lâu, lô về trễ)</p>
         <div className="two ov-two">
-          <label className="f">Tồn lâu — cam sau (ngày)
+          <label className="f">Tồn lâu - cam sau (ngày)
             <input className={`input money ${errs.warn ? 'invalid' : ''}`} id="age-warn" inputMode="numeric" value={warn} onChange={(e) => setWarn(e.target.value)} />
             {errs.warn && <span className="field-err">{errs.warn}</span>}
           </label>
-          <label className="f">Tồn lâu — đỏ sau (ngày)
+          <label className="f">Tồn lâu - đỏ sau (ngày)
             <input className={`input money ${errs.alert ? 'invalid' : ''}`} id="age-alert" inputMode="numeric" value={alert} onChange={(e) => setAlert(e.target.value)} />
             {errs.alert && <span className="field-err">{errs.alert}</span>}
           </label>
@@ -225,7 +225,7 @@ export default function Settings() {
 
         <p className="section-title">Tài khoản</p>
         <div className="list">
-          <div className="li" style={{ cursor: 'default' }}><div className="main"><b>{session?.user.email ?? '—'}</b><div className="s">Dữ liệu đồng bộ giữa máy tính và điện thoại</div></div></div>
+          <div className="li" style={{ cursor: 'default' }}><div className="main"><b>{session?.user.email ?? '-'}</b><div className="s">Dữ liệu đồng bộ giữa máy tính và điện thoại</div></div></div>
           <button className="li" id="sign-out" onClick={() => { void signOut() }}><div className="main"><b>Đăng xuất</b></div></button>
         </div>
       </div>

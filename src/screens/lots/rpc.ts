@@ -1,4 +1,4 @@
-// Gọi RPC mà vẫn giữ mã lỗi + detail (JSON) của DB — useStore().rpc chỉ trả câu tiếng Việt, mà màn lô cần
+// Gọi RPC mà vẫn giữ mã lỗi + detail (JSON) của DB - useStore().rpc chỉ trả câu tiếng Việt, mà màn lô cần
 // detail để báo cụ thể (LOT_HAS_RESERVED_UNITS → mã đơn, UNIT_RESERVED → mã chiếc). Thành công ⇒ tải lại dữ liệu.
 import { useCallback } from 'react'
 import { supabase } from '../../lib/supabase.ts'
@@ -15,7 +15,7 @@ export class RpcError extends Error {
   }
 }
 
-/** Đọc detail của exception (chuỗi JSON hoặc text) — không parse được ⇒ trả chuỗi gốc. */
+/** Đọc detail của exception (chuỗi JSON hoặc text) - không parse được ⇒ trả chuỗi gốc. */
 function parseDetail(raw: unknown): unknown {
   if (typeof raw !== 'string' || !raw) return null
   try { return JSON.parse(raw) } catch { return raw }

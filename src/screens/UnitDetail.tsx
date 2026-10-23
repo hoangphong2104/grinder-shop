@@ -9,7 +9,7 @@ import { CONDITION_LABEL, CONDITION_ORDER, ConditionChip, LotChip, ORDER_LABEL, 
 import { cny, dmy, parseNum, pct, vnd } from '../ui/format.ts'
 import { CostCell, HowTo, LotRow, OrderRow, agingCls, daysSince, holderCode, thresholds, unitProfit } from './overview/common.tsx'
 
-const fullDate = (iso: string | null | undefined) => (iso ? `${dmy(iso)}/${iso.slice(0, 4)}` : '—')
+const fullDate = (iso: string | null | undefined) => (iso ? `${dmy(iso)}/${iso.slice(0, 4)}` : '-')
 const numStr = (n: number | null | undefined) => (n == null ? '' : String(n))
 
 // SC_03 Chi tiết 1 chiếc cối (CR-001): mã, model, seri, lô, người bán, trạng thái + đơn giữ / bán;
@@ -20,7 +20,7 @@ export default function UnitDetail() {
   const d = useData()
   const u = d.unitView.find((x) => x.unit_id === id)
   if (!u) {
-    return <Shell section="kho" title="Không tìm thấy" back="/kho"><div className="empty"><b>Không tìm thấy chiếc cối này</b><br />Có thể chiếc đã bị bỏ khỏi lô — quay lại Kho.</div></Shell>
+    return <Shell section="kho" title="Không tìm thấy" back="/kho"><div className="empty"><b>Không tìm thấy chiếc cối này</b><br />Có thể chiếc đã bị bỏ khỏi lô - quay lại Kho.</div></Shell>
   }
   return <UnitView u={u} />
 }
@@ -56,9 +56,9 @@ function UnitView({ u }: { u: UnitViewRow }) {
           <dl className="kv">
             <dt>Model</dt><dd>{u.model_name}</dd>
             <dt>Lô nhập</dt><dd><Link className="link-btn" style={{ padding: 0 }} to={`/lo/${u.lot_id}`}>{d.lotCode[u.lot_id] ?? 'Lô'}</Link> <LotChip s={u.lot_status} /></dd>
-            <dt>Người bán</dt><dd>{seller ? <Link className="link-btn" style={{ padding: 0 }} to={`/nguoiban/${seller.id}`}>{seller.nickname}</Link> : '—'}</dd>
+            <dt>Người bán</dt><dd>{seller ? <Link className="link-btn" style={{ padding: 0 }} to={`/nguoiban/${seller.id}`}>{seller.nickname}</Link> : '-'}</dd>
             <dt>Ngày đặt</dt><dd>{fullDate(u.ordered_at)}</dd>
-            <dt>Ngày nhận</dt><dd>{u.received_at ? fullDate(u.received_at) : u.status === 'cancelled' ? '— (lô huỷ)' : '— (đang về)'}</dd>
+            <dt>Ngày nhận</dt><dd>{u.received_at ? fullDate(u.received_at) : u.status === 'cancelled' ? '- (lô huỷ)' : '- (đang về)'}</dd>
             <dt>Tình trạng</dt><dd>{CONDITION_LABEL[u.condition ?? 'new']}</dd>
             <dt>{u.status === 'sold' ? 'Số ngày tồn (tới lúc gửi)' : 'Số ngày tồn'}</dt><dd className="num"><Aging u={u} /></dd>
             {u.status === 'sold' && <><dt>Ngày gửi</dt><dd>{fullDate(u.sold_at)}</dd></>}
@@ -71,7 +71,7 @@ function UnitView({ u }: { u: UnitViewRow }) {
             <dt>Phí mua hộ</dt><dd className="num">{pct(Number(lot?.buying_fee_pct ?? 0))}</dd>
             <dt>Ship / chiếc</dt><dd className="num">{ls?.ship_per_unit_vnd != null ? vnd(ls.ship_per_unit_vnd) : <span className="req">chưa nhập phí ship lô</span>}</dd>
             <dt>Giá nhập tự tính</dt><dd className="num">{vnd(u.cost_vnd_auto)}{u.lot_ship_fee_vnd == null && <> <span className="pill way">tạm tính</span></>}</dd>
-            <dt>Giá nhập sửa tay</dt><dd className="num">{u.cost_vnd_override != null ? vnd(u.cost_vnd_override) : '—'}</dd>
+            <dt>Giá nhập sửa tay</dt><dd className="num">{u.cost_vnd_override != null ? vnd(u.cost_vnd_override) : '-'}</dd>
             <dt><b>Giá nhập dùng tính lãi</b></dt><dd className="num"><b><CostCell u={u} /></b></dd>
             <dt>Giá bán dự kiến</dt><dd className="num">{vnd(u.list_price_vnd)}</dd>
             {u.order_unit_price_vnd != null && <><dt>{u.status === 'sold' ? 'Giá chốt (đã bán)' : 'Giá chốt trên đơn'}</dt><dd className="num">{vnd(u.order_unit_price_vnd)}</dd></>}
@@ -101,7 +101,7 @@ function Aging({ u }: { u: UnitViewRow }) {
   const th = thresholds(d)
   if (u.days_in_stock == null) {
     const n = u.status === 'incoming' ? daysSince(u.ordered_at) : null
-    return <>{n != null ? <span className="muted">— (đã đặt {n} ngày)</span> : '—'}</>
+    return <>{n != null ? <span className="muted">- (đã đặt {n} ngày)</span> : '-'}</>
   }
   const note = u.aging_level === 'alert' ? ` · tồn lâu, quá ${th.alert} ngày` : u.aging_level === 'warn' ? ` · quá ${th.warn} ngày` : ''
   return <span className={agingCls(u.aging_level)}>{u.days_in_stock} ngày{note}</span>

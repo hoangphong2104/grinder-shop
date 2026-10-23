@@ -22,9 +22,9 @@ function groupThousands(intAbs: number): string {
   return String(intAbs).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }
 
-/** `3936000` → `"3.936.000 ₫"`; negative → `"−2.872.000 ₫"`; null/undefined → `"—"`. */
+/** `3936000` → `"3.936.000 ₫"`; negative → `"−2.872.000 ₫"`; null/undefined → `"-"`. */
 export function formatVnd(n: Vnd | null | undefined): string {
-  if (n == null) return '—';
+  if (n == null) return '-';
   const r = roundVnd(n);
   return (r < 0 ? MINUS : '') + groupThousands(Math.abs(r)) + ' ₫';
 }
@@ -36,7 +36,7 @@ export function formatVnd(n: Vnd | null | undefined): string {
  */
 export function formatTr(n: Vnd | null | undefined): string {
   // Gọn nhưng đủ chính xác (Chủ dự án 2026-10-23: "ít nhất phải hiện là 4.038k"): làm tròn tới nghìn đồng, nhóm nghìn kiểu vi-VN.
-  if (n == null) return '—';
+  if (n == null) return '-';
   const r = roundVnd(n);
   const sign = r < 0 ? MINUS : '';
   const a = Math.abs(r);
@@ -46,7 +46,7 @@ export function formatTr(n: Vnd | null | undefined): string {
 
 /** `1010` → `"¥1.010"`; decimals use a comma (`99.5` → `"¥99,5"`). */
 export function formatCny(n: number | null | undefined): string {
-  if (n == null) return '—';
+  if (n == null) return '-';
   const [i, d] = String(Math.abs(n)).split('.');
   return (n < 0 ? MINUS : '') + '¥' + groupThousands(Number(i)) + (d ? `,${d}` : '');
 }

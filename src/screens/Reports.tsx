@@ -16,7 +16,7 @@ const addMonths = (ym: string, k: number) => {
 const BUCKETS: [string, number, number][] = [['0–30 ngày', 0, 30], ['31–60 ngày', 31, 60], ['61–90 ngày', 61, 90], ['> 90 ngày', 91, Infinity]]
 
 // SC_11 Báo cáo (CR-001 + CR-004):
-//  - Lãi theo tháng gom theo profit_date (ngày gửi; đơn Hoàn hàng = ngày hoàn, lãi thường âm) — 6 tháng gần nhất.
+//  - Lãi theo tháng gom theo profit_date (ngày gửi; đơn Hoàn hàng = ngày hoàn, lãi thường âm) - 6 tháng gần nhất.
 //  - Bấm 1 tháng → lãi TỪNG CHIẾC đã bán trong tháng + ship shop chịu + đơn hoàn hàng = lãi tháng (BC-M2).
 //  - Tuổi tồn 0–30 / 31–60 / 61–90 / > 90 ngày: số chiếc + vốn (BC-S1).
 //  - Theo model (chọn kỳ BC-S3): số chiếc bán, doanh thu, lãi, % lãi, tỷ lệ bán, ngày tồn TB (BC-M1, BC-S2).
@@ -46,7 +46,7 @@ export default function Reports() {
   const selTotal = byMonth.get(sel) ?? 0
   const unitSum = selUnits.reduce((a, u) => a + (u.actual_profit_vnd ?? 0), 0)
 
-  // Tuổi tồn: chiếc đã về kho, chưa bán (Trong kho + Đã giữ đã về) — như vốn trong kho
+  // Tuổi tồn: chiếc đã về kho, chưa bán (Trong kho + Đã giữ đã về) - như vốn trong kho
   const onHand = d.unitView.filter((u) => u.is_received && (u.status === 'in_stock' || u.status === 'reserved') && u.days_in_stock != null)
   const buckets = BUCKETS.map(([t, lo, hi]) => {
     const us = onHand.filter((u) => u.days_in_stock! >= lo && u.days_in_stock! <= hi)
@@ -66,7 +66,7 @@ export default function Reports() {
   const sold = d.unitView.filter((u) => u.status === 'sold' && inPeriod(u))
   const mi = modelOrder(d)
   const avg = (us: UnitViewRow[]) => { const w = us.filter((u) => u.days_in_stock != null); return w.length ? Math.round(w.reduce((a, u) => a + (u.days_in_stock ?? 0), 0) / w.length) : null }
-  const pctOf = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : '—')
+  const pctOf = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : '-')
   const rows = d.models.map((m) => {
     const us = sold.filter((u) => u.model_id === m.id)
     const stockN = onHand.filter((u) => u.model_id === m.id).length
@@ -92,7 +92,7 @@ export default function Reports() {
         <div>
           <p className="section-title">Lãi theo tháng <span className="muted">bấm cột để xem từng chiếc</span></p>
           {counted.length === 0
-            ? <div className="empty">Chưa có đơn đã gửi — lãi được tính khi bấm “Gửi hàng” trên đơn.</div>
+            ? <div className="empty">Chưa có đơn đã gửi - lãi được tính khi bấm “Gửi hàng” trên đơn.</div>
             : (
               <div>
                 <div className="bars" role="group" aria-label="Lãi theo tháng">
@@ -112,9 +112,9 @@ export default function Reports() {
             ? <p className="muted small" style={{ margin: 0 }}>Không có chiếc nào gửi đi trong tháng này.</p>
             : (
               <div className="ov-list">
-                {selUnits.map((u) => <UnitRow key={u.unit_id} d={d} u={u} sub={<>gửi {u.sold_at ? `${u.sold_at.slice(8, 10)}/${u.sold_at.slice(5, 7)}` : '—'} · nhập {tr(u.cost_vnd)}</>} />)}
+                {selUnits.map((u) => <UnitRow key={u.unit_id} d={d} u={u} sub={<>gửi {u.sold_at ? `${u.sold_at.slice(8, 10)}/${u.sold_at.slice(5, 7)}` : '-'} · nhập {tr(u.cost_vnd)}</>} />)}
                 {shopShip > 0 && <Row2 a={<Tx>Ship shop chịu</Tx>} b={<Money n={-shopShip} />} />}
-                {selReturned.map((o) => <OrderRow key={o.order_id} d={d} o={o} sub={<>hoàn {o.returned_at ? `${o.returned_at.slice(8, 10)}/${o.returned_at.slice(5, 7)}` : '—'} · ship về {tr(o.return_ship_fee_vnd)}</>} right2={<Money n={o.profit_vnd} prefix="lãi " />} />)}
+                {selReturned.map((o) => <OrderRow key={o.order_id} d={d} o={o} sub={<>hoàn {o.returned_at ? `${o.returned_at.slice(8, 10)}/${o.returned_at.slice(5, 7)}` : '-'} · ship về {tr(o.return_ship_fee_vnd)}</>} right2={<Money n={o.profit_vnd} prefix="lãi " />} />)}
                 <Row2 className="static" a={<Tx><b>Tổng lãi tháng</b></Tx>} b={<b><Money n={selTotal} /></b>}
                   c={<Tx>{selUnits.length} chiếc · lãi chiếc {tr(unitSum)}</Tx>} />
               </div>
@@ -133,7 +133,7 @@ export default function Reports() {
             <>
               <p className="section-title">Hoàn hàng <span className="muted">{returned.length} đơn · <Money n={returnedLoss} /></span></p>
               <div className="ov-list">
-                {returned.slice(0, 10).map((o) => <OrderRow key={o.order_id} d={d} o={o} sub={<>hoàn {o.returned_at ? `${o.returned_at.slice(8, 10)}/${o.returned_at.slice(5, 7)}` : '—'} · {o.keep_deposit ? 'giữ cọc' : 'hoàn cọc'} · ship về {tr(o.return_ship_fee_vnd)}</>} right2={<Money n={o.profit_vnd} prefix="lãi " />} />)}
+                {returned.slice(0, 10).map((o) => <OrderRow key={o.order_id} d={d} o={o} sub={<>hoàn {o.returned_at ? `${o.returned_at.slice(8, 10)}/${o.returned_at.slice(5, 7)}` : '-'} · {o.keep_deposit ? 'giữ cọc' : 'hoàn cọc'} · ship về {tr(o.return_ship_fee_vnd)}</>} right2={<Money n={o.profit_vnd} prefix="lãi " />} />)}
               </div>
             </>
           )}
@@ -156,10 +156,10 @@ export default function Reports() {
                 <tbody>
                   {rows.map((r) => (
                     <tr key={r.m.id}><td>{r.m.name}</td><td className="r">{r.n}</td><td className="r">{tr(r.rev)}</td><td className={`r ${r.p < 0 ? 'req' : ''}`}>{tr(r.p)}</td>
-                      <td className="r">{pctOf(r.p, r.rev)}</td><td className="r">{pctOf(r.n, r.n + r.stockN)}</td><td className="r">{r.avgDays ?? '—'}</td></tr>
+                      <td className="r">{pctOf(r.p, r.rev)}</td><td className="r">{pctOf(r.n, r.n + r.stockN)}</td><td className="r">{r.avgDays ?? '-'}</td></tr>
                   ))}
                   {rows.length > 1 && <tr className="tot"><td>Tổng</td><td className="r">{tot.n}</td><td className="r">{tr(tot.rev)}</td><td className="r">{tr(tot.p)}</td>
-                    <td className="r">{pctOf(tot.p, tot.rev)}</td><td className="r">{pctOf(tot.n, tot.n + tot.stockN)}</td><td className="r">{totDays ?? '—'}</td></tr>}
+                    <td className="r">{pctOf(tot.p, tot.rev)}</td><td className="r">{pctOf(tot.n, tot.n + tot.stockN)}</td><td className="r">{totDays ?? '-'}</td></tr>}
                 </tbody>
               </table></div>
             ) : (

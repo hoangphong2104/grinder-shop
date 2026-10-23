@@ -1,4 +1,4 @@
-// SC_09 Đơn bán mới (/don/new) và Sửa đơn chưa gửi (/don/:id/sua) — CR-001: mỗi dòng = 1 chiếc cụ thể (A6).
+// SC_09 Đơn bán mới (/don/new) và Sửa đơn chưa gửi (/don/:id/sua) - CR-001: mỗi dòng = 1 chiếc cụ thể (A6).
 // Lưu 1 lệnh RPC save_order: tạo khách mới (p_order.new_customer) + đơn + cọc (p_order.deposit_vnd) trong cùng
 // transaction; DB quyết trạng thái (có chiếc Đang về ⇒ Đặt trước, tất cả Trong kho ⇒ Đã chốt).
 import { useMemo, useState } from 'react'
@@ -22,10 +22,10 @@ interface Draft {
 }
 type Errs = Partial<Record<string, string>>
 const LOCKED_MSG: Partial<Record<OrderStatusDb, string>> = {
-  shipped: 'Đơn đã gửi — không sửa được chiếc / giá (khách bom ⇒ dùng “Hoàn hàng”).',
-  completed: 'Đơn đã hoàn tất — không sửa được chiếc / giá.',
-  cancelled: 'Đơn đã huỷ — không sửa được. Tạo đơn mới nếu khách mua lại.',
-  returned: 'Đơn đã hoàn hàng — chiếc đã về Trong kho, đơn không sửa được. Bán lại chiếc bằng đơn mới.',
+  shipped: 'Đơn đã gửi - không sửa được chiếc / giá (khách bom ⇒ dùng “Hoàn hàng”).',
+  completed: 'Đơn đã hoàn tất - không sửa được chiếc / giá.',
+  cancelled: 'Đơn đã huỷ - không sửa được. Tạo đơn mới nếu khách mua lại.',
+  returned: 'Đơn đã hoàn hàng - chiếc đã về Trong kho, đơn không sửa được. Bán lại chiếc bằng đơn mới.',
 }
 const MAX_LINES = 50 // save_order: TOO_MANY_LINES khi > 50
 const fmt = (n: number | null | undefined) => (n != null ? n.toLocaleString('vi-VN') : '')
@@ -74,7 +74,7 @@ function OrderForm({ editId }: { editId: string | null }) {
   }
   if (order && order.status !== 'preorder' && order.status !== 'confirmed') {
     return <Shell section="don" title={`Sửa ${d.orderCode[order.id]}`} back={back}>
-      <div className="warn-box"><span>{LOCKED_MSG[order.status] ?? 'Đơn đã gửi — không sửa được chiếc / giá.'} Mã vận đơn và ghi chú sửa ở chi tiết đơn (menu “⋯”).</span></div>
+      <div className="warn-box"><span>{LOCKED_MSG[order.status] ?? 'Đơn đã gửi - không sửa được chiếc / giá.'} Mã vận đơn và ghi chú sửa ở chi tiết đơn (menu “⋯”).</span></div>
       <Link className="btn btn-ghost btn-block" to={back}>Về chi tiết đơn</Link>
     </Shell>
   }
@@ -115,12 +115,12 @@ function OrderForm({ editId }: { editId: string | null }) {
         if (u.lot_status === 'cancelled') return `${u.code} (lô đã huỷ)`
         const by = u.holding_order_id ? d.orderCode[u.holding_order_id] ?? 'đơn khác' : 'đơn khác'
         return `${u.code} (${u.status === 'sold' ? `đã bán · ${by}` : `đã giữ cho ${by}`})`
-      }).join(', ')} — bỏ chiếc này khỏi đơn.`,
+      }).join(', ')} - bỏ chiếc này khỏi đơn.`,
     }
   } else if (rows.length) {
     preview = incomingLots.length
       ? { st: 'preorder', msg: `→ Đặt trước, chờ ${incomingLots.map((id) => d.lotCode[id] ?? 'lô').join(', ')} về. Khi lô nhận vào kho, đơn tự chuyển Đã chốt.` }
-      : { st: 'confirmed', msg: '→ Đã chốt — mọi chiếc đều đang trong kho.' }
+      : { st: 'confirmed', msg: '→ Đã chốt - mọi chiếc đều đang trong kho.' }
   }
 
   // Tiền xem trước (số chính thức do DB tính sau khi lưu).
@@ -139,8 +139,8 @@ function OrderForm({ editId }: { editId: string | null }) {
   function validate(): Errs {
     const e: Errs = {}
     if (!f.custId && !f.newName.trim()) e['o-name'] = 'Nhập tên Facebook của khách.'
-    if (f.custId && !selCust) e['o-cust'] = 'Khách không còn — chọn lại.'
-    if (!f.lines.length) e['o-units'] = 'Chọn ít nhất 1 chiếc — bấm "+ Chọn chiếc".'
+    if (f.custId && !selCust) e['o-cust'] = 'Khách không còn - chọn lại.'
+    if (!f.lines.length) e['o-units'] = 'Chọn ít nhất 1 chiếc - bấm "+ Chọn chiếc".'
     for (const r of rows) {
       const p = r.price
       if (!r.l.price.trim()) e[`o-price-${r.l.unitId}`] = 'Nhập giá chốt cho chiếc này.'
@@ -215,7 +215,7 @@ function OrderForm({ editId }: { editId: string | null }) {
           </>}
 
         <p className="section-title full">Chiếc bán{rows.length ? ` · ${rows.length}` : ''}</p>
-        {rows.length === 0 && <div className="empty full">Chưa chọn chiếc nào — bấm “+ Chọn chiếc”.</div>}
+        {rows.length === 0 && <div className="empty full">Chưa chọn chiếc nào - bấm “+ Chọn chiếc”.</div>}
         {rows.map((r) => (
           <div key={r.l.unitId} className="full ord-line">
             <div className="lrow">
@@ -257,7 +257,7 @@ function OrderForm({ editId }: { editId: string | null }) {
             <button type="button" aria-pressed={f.shipPayer === 'customer'} onClick={() => set('shipPayer', 'customer')}>Khách trả</button>
             <button type="button" aria-pressed={f.shipPayer === 'shop'} onClick={() => set('shipPayer', 'shop')}>Shop chịu</button>
           </div>
-          <span className="hint">{f.shipPayer === 'customer' ? 'Thu hộ — cộng vào tiền khách trả, không tính lãi.' : 'Shop chịu — trừ vào lãi đơn.'}</span>
+          <span className="hint">{f.shipPayer === 'customer' ? 'Thu hộ - cộng vào tiền khách trả, không tính lãi.' : 'Shop chịu - trừ vào lãi đơn.'}</span>
         </div>
         {editId
           ? <div className="hint" style={{ alignSelf: 'end' }}>Cọc / thu tiền ghi ở chi tiết đơn (đã thu {vnd(paidBefore)}).</div>
@@ -293,8 +293,8 @@ function OrderForm({ editId }: { editId: string | null }) {
           {editId
             ? <div className="ln"><span>Đã thu</span><span>{vnd(paidBefore)}</span></div>
             : <div className="ln"><span>Cọc</span><span>{vnd(dep)}</span></div>}
-          <div className="ln total"><span>Còn phải thu</span><span>{total != null ? vnd(total - (editId ? paidBefore : dep)) : '—'}</span></div>
-          <div className="ln"><span>Lãi dự kiến</span><span>{profit != null ? vnd(profit) : '—'}</span></div>
+          <div className="ln total"><span>Còn phải thu</span><span>{total != null ? vnd(total - (editId ? paidBefore : dep)) : '-'}</span></div>
+          <div className="ln"><span>Lãi dự kiến</span><span>{profit != null ? vnd(profit) : '-'}</span></div>
           <div className="formula">= Σ(giá chốt − giá nhập ₫ hiện tại){f.shipPayer === 'shop' ? ' − ship shop chịu' : ''}{provisional ? ' · có chiếc giá nhập tạm tính' : ''}</div>
         </div>
       </div>
@@ -342,11 +342,11 @@ function UnitPicker({ d, editId, chosen, full, onToggle, onClose }: {
           {models.map(([id, m]) => <button key={id} type="button" className="chip" aria-pressed={model === id} onClick={() => setModel(id)}>{m.name}<span className="c">{m.n}</span></button>)}
         </div>
       )}
-      {full && <p className="hint">Đơn đã đủ {MAX_LINES} chiếc — tối đa {MAX_LINES} chiếc / đơn.</p>}
+      {full && <p className="hint">Đơn đã đủ {MAX_LINES} chiếc - tối đa {MAX_LINES} chiếc / đơn.</p>}
       {avail.length === 0
         ? <div className="empty">Không còn chiếc nào Trong kho / Đang về chưa giữ. <Link to="/lo/new">Nhập lô Goofish</Link> trước.</div>
         : list.length === 0
-          ? <div className="empty">Không có chiếc khớp — đổi model hoặc từ khoá.</div>
+          ? <div className="empty">Không có chiếc khớp - đổi model hoặc từ khoá.</div>
           : (
             <div className="list up-list">
               {list.map((u) => {

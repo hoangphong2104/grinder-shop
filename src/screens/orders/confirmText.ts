@@ -1,4 +1,4 @@
-// CR-004 DON-S2 — "Sao chép tin xác nhận đơn": chữ thuần để dán Messenger / Zalo (mã chiếc + model + giá chốt, ship,
+// CR-004 DON-S2 - "Sao chép tin xác nhận đơn": chữ thuần để dán Messenger / Zalo (mã chiếc + model + giá chốt, ship,
 // đã cọc, còn lại, COD, mã vận đơn, địa chỉ giao). Số lấy từ v_order_summary (số chính thức), không tính lại.
 import type { CustomerRow, OrderRow, OrderSummaryRow } from '../../data/types.ts'
 import { vnd } from '../../ui/format.ts'
@@ -40,7 +40,7 @@ export function buildConfirmText(p: {
   } else {
     out.push('Đã thanh toán đủ.')
   }
-  if (s.status === 'preorder') out.push('Hàng đặt trước — shop báo ngay khi hàng về kho.')
+  if (s.status === 'preorder') out.push('Hàng đặt trước - shop báo ngay khi hàng về kho.')
   if (o.tracking_no) out.push(`Mã vận đơn: ${o.tracking_no}`)
   const ship = [c?.phone, c?.address].filter(Boolean).join(' · ')
   if (ship && s.status !== 'cancelled' && s.status !== 'returned') out.push(`Giao tới: ${ship}`)

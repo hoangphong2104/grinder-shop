@@ -20,10 +20,10 @@ test('formatVnd', () => {
   assert.equal(formatVnd(0), '0 ₫');
   assert.equal(formatVnd(-2872000), '−2.872.000 ₫');
   assert.equal(formatVnd(999.6), '1.000 ₫');
-  assert.equal(formatVnd(null), '—');
+  assert.equal(formatVnd(null), '-');
 });
 
-test('formatTr — làm tròn tới nghìn đồng, hiện "4.038k"', () => {
+test('formatTr - làm tròn tới nghìn đồng, hiện "4.038k"', () => {
   assert.equal(formatTr(4038000), '4.038k');
   assert.equal(formatTr(4037600), '4.038k');
   assert.equal(formatTr(5400000), '5.400k');
@@ -34,7 +34,7 @@ test('formatTr — làm tròn tới nghìn đồng, hiện "4.038k"', () => {
   assert.equal(formatTr(999600), '1.000k');
   assert.equal(formatTr(500), '500');
   assert.equal(formatTr(-2872000), '−2.872k');
-  assert.equal(formatTr(undefined), '—');
+  assert.equal(formatTr(undefined), '-');
 });
 
 test('formatCny', () => {
@@ -42,5 +42,5 @@ test('formatCny', () => {
   assert.equal(formatCny(99.5), '¥99,5');
   assert.equal(formatCny(745.5), '¥745,5');
   assert.equal(formatCny(-12), '−¥12');
-  assert.equal(formatCny(null), '—');
+  assert.equal(formatCny(null), '-');
 });

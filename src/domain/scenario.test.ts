@@ -95,7 +95,7 @@ test('scenario: model stock (A9) and stock value = 21.461.600', () => {
   assert.equal(stockValue(units, lots, orders), 8875200 + 8146400 + 4440000);
 });
 
-test('scenario: profit by ship month — Sep 4.263.000, Oct 5.579.000', () => {
+test('scenario: profit by ship month - Sep 4.263.000, Oct 5.579.000', () => {
   // Sep: D-001 4.600.000 − 2.955.600 − 35.000 (shop ship) = 1.609.400; D-002 6.800.000 − 4.146.400 = 2.653.600 (ship 40.000 pass-through)
   // Oct: D-003 7.300.000 − 4.440.000 − 45.000 = 2.815.000; D-004 6.700.000 − 3.936.000 = 2.764.000
   assert.deepEqual(profitByMonth(orders, costs()), [

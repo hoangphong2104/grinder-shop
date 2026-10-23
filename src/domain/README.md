@@ -1,4 +1,4 @@
-# Grinder Shop — domain core (CR-001: quản lý từng chiếc)
+# Grinder Shop - domain core (CR-001: quản lý từng chiếc)
 
 Pure TypeScript, no runtime dependencies, no I/O. The DB is the source of truth; these functions power form
 previews and checks and must give the same numbers as the DB views (`v_units`, `v_model_stock`,
@@ -32,7 +32,7 @@ a code sequence < 1. Inputs are never mutated.
 giá nhập ₫ tự tính  = round(giá ¥ × tỷ giá × (1 + phí mua hộ %/100) + (phí ship lô ?? 0) ÷ số chiếc của lô)   D2, CR-003
 giá nhập ₫ hiệu lực = giá sửa tay ?? giá tự tính                                          D2, CR §3
 phải trả lô          = round(Σ giá ¥ × tỷ giá × (1 + phí mua hộ %/100) + phí ship lô); lô huỷ = 0   A4 (BR-12), CR-003
-tiền hàng lô         = round(Σ giá ¥ × tỷ giá) — chưa gồm phí; phí mua hộ lô = round(Σ giá ¥ × tỷ giá × %/100)   CR-003
+tiền hàng lô         = round(Σ giá ¥ × tỷ giá) - chưa gồm phí; phí mua hộ lô = round(Σ giá ¥ × tỷ giá × %/100)   CR-003
 trạng thái chiếc     = lô huỷ → cancelled · đơn Đã gửi/Hoàn tất → sold · đơn Đặt trước/Đã chốt → reserved
                        · lô đã nhận → in_stock · còn lại → incoming                       A5
 có thể bán (model)   = in_stock + incoming (both already exclude reserved); sắp hết ⇔ ≤ ngưỡng   A9
@@ -51,7 +51,7 @@ lô về trễ            = lô chưa nhận / chưa huỷ, hôm nay − ngày �
 ```
 
 The ship fee is divided by **all** units of the lot (every model, sold or not). Costs are never frozen:
-correcting a lot's ship fee / rate / ¥ moves the cost — and the profit of already-sold orders — of every
+correcting a lot's ship fee / rate / ¥ moves the cost - and the profit of already-sold orders - of every
 unit without a hand-entered cost (A3). CR worked example: 2 × ¥1.010, rate 3.600, ship 600.000 → each
 3.936.000, payable 7.872.000; override one to 4.000.000 → payable unchanged; ship → 800.000 → the other unit
 4.036.000, the overridden one stays 4.000.000. CR-003 example (phí mua hộ 3%): each round(1010 × 3600 × 1,03 +
@@ -62,12 +62,12 @@ the pre-CR-003 numbers exactly; the fee is locked once the lot is received (`che
 
 | Old | Now |
 |---|---|
-| BR-01 cost per lot line | D2 per-unit auto cost (+ override) — `autoUnitCost`, `effectiveCost` |
-| BR-04 weighted average, BR-05 cost snapshot on shipment, Q-008 / Q-008b | **Removed** — per-unit cost, profit uses current cost (A3, A8) |
-| BR-06 stock per variant, DO_012 | A5 unit status + A9 counts per model — `unitStatus`, `modelStocks` |
-| BR-07 new-order status from quantities | A6 — `checkOrderUnits`, `orderStatusFor` |
-| BR-08 notify pre-orders + Q-013 manual pick | A7 auto-confirm — `preordersToAutoConfirm` |
-| BR-09 on hand ≥ qty to ship | A8 — `canShip` |
+| BR-01 cost per lot line | D2 per-unit auto cost (+ override) - `autoUnitCost`, `effectiveCost` |
+| BR-04 weighted average, BR-05 cost snapshot on shipment, Q-008 / Q-008b | **Removed** - per-unit cost, profit uses current cost (A3, A8) |
+| BR-06 stock per variant, DO_012 | A5 unit status + A9 counts per model - `unitStatus`, `modelStocks` |
+| BR-07 new-order status from quantities | A6 - `checkOrderUnits`, `orderStatusFor` |
+| BR-08 notify pre-orders + Q-013 manual pick | A7 auto-confirm - `preordersToAutoConfirm` |
+| BR-09 on hand ≥ qty to ship | A8 - `canShip` |
 | Q-003 colour variants, Q-016 | A1 (no variants), A9 |
 
 Kept: BR-02, BR-03, BR-10, BR-11 (with A8 cost), BR-12 (A4), Q-006, Q-007, Q-009, Q-010, Q-011, Q-014 (A10), Q-015.

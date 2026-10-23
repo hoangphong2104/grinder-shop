@@ -1,5 +1,5 @@
 /**
- * Grinder Shop — domain types after CR-001 (per-unit tracking, no weighted average, no colour variants).
+ * Grinder Shop - domain types after CR-001 (per-unit tracking, no weighted average, no colour variants).
  * Sources: 1.5-change-control/draft/CR_001_quan-ly-tung-chiec.md (D1–D4, A1–A11, §3) and the rules still
  * in force from 1.0-requirements/approved/data-and-rules-v1.md (BR-02, BR-03, BR-10..BR-14, §6).
  * Pure data shapes only: no I/O, no runtime dependencies.
@@ -23,23 +23,23 @@ export type LotStatus = 'ordered' | 'cn_shipping' | 'at_forwarder' | 'vn_shippin
 
 /**
  * Đơn bán: preorder / confirmed → shipped → completed; cancelled before shipped;
- * returned (CR-004 "Hoàn hàng": khách bom / chuyển hoàn) only from shipped — its units go back to stock.
+ * returned (CR-004 "Hoàn hàng": khách bom / chuyển hoàn) only from shipped - its units go back to stock.
  */
 export type OrderStatus = 'preorder' | 'confirmed' | 'shipped' | 'completed' | 'cancelled' | 'returned';
 
-/** Trạng thái chiếc (A5) — derived, never entered. */
+/** Trạng thái chiếc (A5) - derived, never entered. */
 export type UnitStatus = 'incoming' | 'in_stock' | 'reserved' | 'sold' | 'cancelled';
 
 /** Thu tiền khách: cọc / thanh toán / hoàn tiền (refund counts negative). `amount` is always positive. */
 export type PaymentKind = 'deposit' | 'payment' | 'refund';
 
-/** CR-004 DON-S1 — hình thức thu: chuyển khoản (mặc định) / tiền mặt / COD (hãng ship chuyển về; chỉ cho `payment`). */
+/** CR-004 DON-S1 - hình thức thu: chuyển khoản (mặc định) / tiền mặt / COD (hãng ship chuyển về; chỉ cho `payment`). */
 export type PaymentMethod = 'transfer' | 'cash' | 'cod';
 
-/** CR-004 KHO-S3 — tình trạng từng chiếc (mặc định `new`). */
+/** CR-004 KHO-S3 - tình trạng từng chiếc (mặc định `new`). */
 export type UnitCondition = 'new' | 'like_new' | 'used' | 'defect';
 
-/** CR-004 KHO-S1 — mức tuổi tồn của chiếc đã về kho chưa bán: ≤ warn ngày `ok`, > warn `warn` (cam), > alert `alert` (đỏ). */
+/** CR-004 KHO-S1 - mức tuổi tồn của chiếc đã về kho chưa bán: ≤ warn ngày `ok`, > warn `warn` (cam), > alert `alert` (đỏ). */
 export type AgingLevel = 'ok' | 'warn' | 'alert';
 
 /** Ngưỡng tuổi tồn (Cài đặt, DB settings.aging_warn_days / aging_alert_days). */
@@ -120,7 +120,7 @@ export interface Model {
   name: string;
   /** Tiền tố mã chiếc, e.g. `ZP6` (D1). */
   codePrefix: string;
-  /** Giá bán mặc định ₫ — prefilled as the list price of new units (A1). */
+  /** Giá bán mặc định ₫ - prefilled as the list price of new units (A1). */
   defaultListPrice: Vnd | null;
   /** Ngưỡng sắp hết (A9). */
   lowStockThreshold: number;
@@ -132,7 +132,7 @@ export interface Model {
 export interface Lot {
   id: string;
   code?: string;
-  /** Ngày đặt — dates the lot's "Phải trả" in the intermediary ledger. */
+  /** Ngày đặt - dates the lot's "Phải trả" in the intermediary ledger. */
   orderedAt?: IsoDate;
   /** Tỷ giá ₫ per ¥ (entered per lot, BR-03). */
   rate: number;
@@ -148,7 +148,7 @@ export interface Lot {
   receivedAt: IsoDate | null;
 }
 
-/** Unit — one physical grinder (replaces lot lines + variants, CR §3). */
+/** Unit - one physical grinder (replaces lot lines + variants, CR §3). */
 export interface Unit {
   id: string;
   /** App-assigned code, e.g. `ZP6-001` (D1), unique per user, never reused. */
@@ -167,7 +167,7 @@ export interface Unit {
   condition?: UnitCondition;
 }
 
-/** DO_009 Dòng đơn — exactly one unit per line (A6). */
+/** DO_009 Dòng đơn - exactly one unit per line (A6). */
 export interface OrderLine {
   unitId: string;
   /** Giá chốt ₫ of this unit (D3). */
@@ -190,20 +190,20 @@ export interface Order {
   code?: string;
   orderDate?: IsoDate;
   status: OrderStatus;
-  /** Ngày gửi — profit is reported in the month of this date. */
+  /** Ngày gửi - profit is reported in the month of this date. */
   shippedAt?: IsoDate | null;
   /** Phí ship VN, ₫. */
   shipFee: Vnd;
   shipPayer: ShipPayer;
   lines: OrderLine[];
   payments: Payment[];
-  /** CR-004 DON-S1 — tiền hãng ship thu hộ (COD), set when shipping. Missing = 0. */
+  /** CR-004 DON-S1 - tiền hãng ship thu hộ (COD), set when shipping. Missing = 0. */
   codAmount?: Vnd;
-  /** CR-004 DON-S3 — ngày hoàn hàng (status `returned`); profit of a returned order is reported in this month. */
+  /** CR-004 DON-S3 - ngày hoàn hàng (status `returned`); profit of a returned order is reported in this month. */
   returnedAt?: IsoDate | null;
-  /** CR-004 — phí ship chiều về (₫), borne by the shop. Missing = 0. */
+  /** CR-004 - phí ship chiều về (₫), borne by the shop. Missing = 0. */
   returnShipFee?: Vnd;
-  /** CR-004 — on return: true = shop keeps the deposits (Σ `deposit`), false = everything paid is refunded. */
+  /** CR-004 - on return: true = shop keeps the deposits (Σ `deposit`), false = everything paid is refunded. */
   keepDeposit?: boolean;
 }
 

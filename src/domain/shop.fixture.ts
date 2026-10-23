@@ -10,7 +10,7 @@
  *        JU → 4.140.000 + 300.000 = 4.440.000 · ZP6 → 2.664.000 + 300.000 = 2.964.000
  *   L5 2 × KU ¥1.050, rate 3.610, ship blank (vn_shipping) → provisional 3.790.500
  *   L6 2 × ZP6 ¥745,5, rate 3.620, ship blank (cn_shipping) → provisional 2.698.710
- *   L7 1 × JU ¥1.180, rate 3.615 — cancelled
+ *   L7 1 × JU ¥1.180, rate 3.615 - cancelled
  */
 import type { Lot, Model, Order, Transfer, Unit } from './types.ts';
 

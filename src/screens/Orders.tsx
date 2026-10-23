@@ -1,4 +1,4 @@
-// SC_07 Đơn bán — CR-004: ô tìm + 1 hàng chip lọc có đếm (DON-M2), dòng 2 dòng (DON-M1), chip trạng thái đơn và
+// SC_07 Đơn bán - CR-004: ô tìm + 1 hàng chip lọc có đếm (DON-M2), dòng 2 dòng (DON-M1), chip trạng thái đơn và
 // thanh toán tách riêng (DON-M4). Máy tính: bảng hoặc "Theo trạng thái" (cột, gồm cột Hoàn hàng).
 // Trạng thái xem / lọc giữ trên URL (?v=board, ?f=todo|pre|wait|sent|cod|due|refund|ret|all, ?khach=<id>, ?q=) để quay lại không mất.
 import { useMemo } from 'react'
@@ -13,7 +13,7 @@ import { codesText, daysBetween, fold, makeLookup, ORDER_FILTERS, parseOrderFilt
 import { OrderRow2 } from './orders/OrderRow.tsx'
 import '../styles/orders.css'
 
-// Cột "Theo trạng thái" (máy tính): luồng chính + Hoàn hàng ở cuối (đơn Huỷ không có cột — xem chip "Tất cả").
+// Cột "Theo trạng thái" (máy tính): luồng chính + Hoàn hàng ở cuối (đơn Huỷ không có cột - xem chip "Tất cả").
 const FLOW: [OrderStatusDb, string][] = [['preorder', 'var(--way)'], ['confirmed', 'var(--hold)'], ['shipped', 'var(--faint)'], ['completed', 'var(--ok)'], ['returned', 'var(--bad)']]
 
 function PayPill({ s }: { s: OrderSummaryRow }) {
@@ -160,9 +160,9 @@ export default function Orders() {
                     <td className="r">
                       {s.refund_due_vnd > 0 ? <span className="req">Cần hoàn {vnd(s.refund_due_vnd)}</span>
                         : s.receivable_vnd > 0 ? <span className="req">{vnd(s.receivable_vnd)}</span>
-                          : s.receivable_vnd < 0 ? <span className="muted">trả dư {vnd(-s.receivable_vnd)}</span> : '—'}
+                          : s.receivable_vnd < 0 ? <span className="muted">trả dư {vnd(-s.receivable_vnd)}</span> : '-'}
                     </td>
-                    <td className="r">{p.value == null ? '—' : p.est ? <span className="muted">~{vnd(p.value)}</span> : vnd(p.value)}</td>
+                    <td className="r">{p.value == null ? '-' : p.est ? <span className="muted">~{vnd(p.value)}</span> : vnd(p.value)}</td>
                   </tr>
                 )
               })}
@@ -175,7 +175,7 @@ export default function Orders() {
     }
   }
 
-  // NAV-M2: trên điện thoại tạo đơn qua nút "+" giữa thanh tab — header không lặp nút "+".
+  // NAV-M2: trên điện thoại tạo đơn qua nút "+" giữa thanh tab - header không lặp nút "+".
   return (
     <Shell section="don" title="Đơn bán"
       actions={desk && <Link className="btn btn-primary btn-sm" to={khach ? `/don/new?khach=${khach}` : '/don/new'}><Icon name="plus" />Đơn bán</Link>}>

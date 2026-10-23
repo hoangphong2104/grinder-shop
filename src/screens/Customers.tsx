@@ -1,4 +1,4 @@
-// SC_13 Khách — CR-004 TIEN-S4: dòng 2 dòng (tên | còn nợ; SĐT · địa chỉ | số đơn), ô tìm + chip lọc Còn nợ / Đã ẩn.
+// SC_13 Khách - CR-004 TIEN-S4: dòng 2 dòng (tên | còn nợ; SĐT · địa chỉ | số đơn), ô tìm + chip lọc Còn nợ / Đã ẩn.
 // Danh sách (tên, SĐT, địa chỉ, FB, số đơn, còn nợ); bấm → sheet sửa thông tin, Ẩn / Hiện lại (BR-14), xem đơn.
 // Bảng customers ghi trực tiếp được (grant); sửa kèm điều kiện version để bắt sửa đồng thời 2 máy.
 import { useCallback, useMemo, useState } from 'react'
@@ -21,7 +21,7 @@ export default function Customers() {
   const [editing, setEditing] = useState<CustomerRow | null>(null)
   const close = useCallback(() => setEditing(null), [])
 
-  // Số đơn + còn nợ theo khách (đơn Huỷ không tính nợ — Q-009).
+  // Số đơn + còn nợ theo khách (đơn Huỷ không tính nợ - Q-009).
   const stats = useMemo(() => {
     const m = new Map<string, { n: number; due: number; refund: number }>()
     for (const s of d.orderSummary) {

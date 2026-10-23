@@ -1,4 +1,4 @@
-/** Grinder Shop domain core (CR-001: per-unit tracking) — public API. Pure, UI- and storage-independent. */
+/** Grinder Shop domain core (CR-001: per-unit tracking) - public API. Pure, UI- and storage-independent. */
 export type * from './types.ts';
 export {
   LOT_STATUS_LABEL,

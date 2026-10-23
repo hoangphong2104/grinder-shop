@@ -1,5 +1,5 @@
 // Dùng chung cho nhóm Tổng quan / Kho / Công nợ / Báo cáo / Người bán / Model / Cài đặt (CR-001: quản lý từng chiếc).
-// CR-004: dòng danh sách 2 dòng (UI-M1, research §1.3) — Row2 + UnitRow / LotRow / OrderRow.
+// CR-004: dòng danh sách 2 dòng (UI-M1, research §1.3) - Row2 + UnitRow / LotRow / OrderRow.
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import type { AgingLevelDb, DbData, LotRow as LotDbRow, ModelStockRow, OrderSummaryRow, UnitStatusDb, UnitViewRow } from '../../data/types.ts'
@@ -8,7 +8,7 @@ import { CONDITION_LABEL, LotChip, OrderChip, UNIT_LABEL } from '../../ui/status
 import { todayVn, tr, vnd } from '../../ui/format.ts'
 import '../../styles/overview.css'
 
-/** Máy tính (≥ 960px) — đổi bảng ↔ thẻ như prototype. */
+/** Máy tính (≥ 960px) - đổi bảng ↔ thẻ như prototype. */
 export function useDesk(): boolean {
   const q = '(min-width: 960px)'
   const [desk, setDesk] = useState(() => matchMedia(q).matches)
@@ -40,7 +40,7 @@ export function thresholds(d: DbData) {
 /** Class màu chữ theo tuổi tồn (KHO-S1): ok thường · warn cam · alert đỏ. */
 export const agingCls = (a: AgingLevelDb | null | undefined) => (a === 'alert' ? 'age-alert' : a === 'warn' ? 'age-warn' : '')
 
-/** Thứ tự model như danh mục (sort_order rồi thứ tự tạo — d.models đã sắp sẵn). */
+/** Thứ tự model như danh mục (sort_order rồi thứ tự tạo - d.models đã sắp sẵn). */
 export function modelOrder(d: DbData): Map<string, number> {
   return new Map(d.models.map((m, i) => [m.id, i]))
 }
@@ -84,7 +84,7 @@ export function sortUnits(d: DbData, list: UnitViewRow[], sx: UnitSort = 'ma'): 
   return [...list].sort(cmp)
 }
 
-/** KHO-S2: tìm theo mã (gõ "zp6001", "zp6 1" vẫn khớp ZP6-001), seri, tên model, ghi chú — không phân biệt dấu. */
+/** KHO-S2: tìm theo mã (gõ "zp6001", "zp6 1" vẫn khớp ZP6-001), seri, tên model, ghi chú - không phân biệt dấu. */
 export function unitMatch(u: UnitViewRow, q: string): false | 'code' | 'serial' | 'other' {
   const f = fold(q.trim())
   if (!f) return 'other'
@@ -114,7 +114,7 @@ export function CostCell({ u, short }: { u: UnitViewRow; short?: boolean }) {
       {short ? tr(u.cost_vnd) : vnd(u.cost_vnd)}
       {u.cost_is_overridden
         ? <> <span className="pill" title="Giá nhập đã sửa tay">sửa tay</span></>
-        : u.cost_is_provisional ? <> <span className="pill way" title="Lô chưa có phí ship — giá nhập tạm tính">tạm tính</span></> : null}
+        : u.cost_is_provisional ? <> <span className="pill way" title="Lô chưa có phí ship - giá nhập tạm tính">tạm tính</span></> : null}
     </>
   )
 }
@@ -145,7 +145,7 @@ export function orderUnitsText(d: DbData, orderId: string): string {
 /** Số tiền ô KPI: máy tính đủ đồng (không ký hiệu), điện thoại "5.400k". */
 export const kpiAmount = (n: number, desk: boolean) => (desk ? vnd(n).replace(' ₫', '') : tr(n))
 
-/** Tháng tính lãi của đơn (CR-004: theo profit_date — ngày gửi, đơn Hoàn hàng = ngày hoàn). */
+/** Tháng tính lãi của đơn (CR-004: theo profit_date - ngày gửi, đơn Hoàn hàng = ngày hoàn). */
 export const profitMonth = (o: OrderSummaryRow) => (o.profit_vnd != null && o.profit_date ? o.profit_date.slice(0, 7) : null)
 
 // ---------- Dòng danh sách 2 dòng (UI-M1) ----------
@@ -179,7 +179,7 @@ export function UnitRow({ d, u, right2, sub }: { d: DbData; u: UnitViewRow; righ
   return (
     <Row2 to={`/kho/${u.unit_id}`}
       a={<Ident id={u.code} text={u.model_name} />}
-      b={unitPrice(u) != null ? tr(unitPrice(u)) : '—'}
+      b={unitPrice(u) != null ? tr(unitPrice(u)) : '-'}
       c={<><UnitChipShort u={u} holder={holder} />{cond}<Tx>{sub ?? age}</Tx></>}
       d={right2 ?? (u.status === 'sold' ? <Money n={p.value} prefix="lãi " /> : <>nhập {tr(u.cost_vnd)}</>)} />
   )
@@ -199,12 +199,12 @@ export function LotRow({ d, l, noChip }: { d: DbData; l: LotDbRow; noChip?: bool
       d={`${s?.total_qty ?? 0} chiếc`} />
   )
 }
-const dmyShort = (iso: string | null | undefined) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—')
+const dmyShort = (iso: string | null | undefined) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '-')
 
 /** Thanh toán dạng chữ màu (research §4.4 Dòng 2 phải). */
 export function PayText({ o }: { o: OrderSummaryRow }) {
   if (o.refund_due_vnd > 0) return <span className="neg">hoàn {tr(o.refund_due_vnd)}</span>
-  if (o.status === 'cancelled') return <span>—</span>
+  if (o.status === 'cancelled') return <span>-</span>
   if (o.status === 'returned') return <Money n={o.profit_vnd} prefix="lãi " />
   if (o.cod_pending_vnd > 0) return <span className="age-warn">COD {tr(o.cod_pending_vnd)}</span>
   if (o.receivable_vnd > 0) return <span className="neg">còn {tr(o.receivable_vnd)}</span>
@@ -228,7 +228,7 @@ export function HowTo({ children, title = 'Cách tính' }: { children: ReactNode
   return <details className="ov-how"><summary>ⓘ {title}</summary><div className="hint">{children}</div></details>
 }
 
-/** Dòng bảng bấm được (cả hàng) — ô đầu có Link cho bàn phím. */
+/** Dòng bảng bấm được (cả hàng) - ô đầu có Link cho bàn phím. */
 export function GoRow({ to, children, className }: { to: string; children: ReactNode; className?: string }) {
   const nav = useNavigate()
   return (
@@ -241,14 +241,14 @@ export function GoRow({ to, children, className }: { to: string; children: React
 export function writeError(e: unknown, what = 'Mục này'): string {
   const err = (e ?? {}) as { code?: string; message?: string }
   const msg = String(err.message ?? e ?? '')
-  if (err.code === '23503') return `${what} đã có lô / chiếc cối / đơn dùng tới — không xoá được, hãy Ẩn (BR-14).`
-  if (err.code === '23505') return /prefix/i.test(msg) ? 'Tiền tố mã này đã dùng cho model khác — chọn tiền tố khác.' : 'Tên này đã có — chọn tên khác.'
+  if (err.code === '23503') return `${what} đã có lô / chiếc cối / đơn dùng tới - không xoá được, hãy Ẩn (BR-14).`
+  if (err.code === '23505') return /prefix/i.test(msg) ? 'Tiền tố mã này đã dùng cho model khác - chọn tiền tố khác.' : 'Tên này đã có - chọn tên khác.'
   if (err.code === '23514') return 'Dữ liệu nhập chưa hợp lệ (độ dài / số âm / ký tự).'
   if (err.code === '42501') return 'Không có quyền thực hiện thao tác này.'
-  if (/Failed to fetch|NetworkError|network/i.test(msg)) return 'Mất kết nối mạng — chưa lưu. Thử lại khi có mạng.'
+  if (/Failed to fetch|NetworkError|network/i.test(msg)) return 'Mất kết nối mạng - chưa lưu. Thử lại khi có mạng.'
   return msg || 'Có lỗi xảy ra.'
 }
-export const CONFLICT_MSG = 'Dữ liệu vừa được sửa trên máy khác. App đã tải lại — thử lại thao tác.'
+export const CONFLICT_MSG = 'Dữ liệu vừa được sửa trên máy khác. App đã tải lại - thử lại thao tác.'
 
 /** Ghi bảng trực tiếp kèm kiểm tra version (2 máy sửa cùng lúc). Ném Error tiếng Việt khi lỗi / xung đột. */
 export async function updateVersioned(table: string, id: string, version: number, patch: Record<string, unknown>, what?: string): Promise<void> {
