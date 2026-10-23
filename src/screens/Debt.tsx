@@ -5,7 +5,7 @@ import type { TxnRow } from '../data/types.ts'
 import { supabase } from '../lib/supabase.ts'
 import { Shell } from '../ui/Shell.tsx'
 import { Sheet, useToast } from '../ui/feedback.tsx'
-import { dmy, parseNum, todayVn, tr, vnd } from '../ui/format.ts'
+import { dmy, parseNum, pct, todayVn, tr, vnd } from '../ui/format.ts'
 import { CONFLICT_MSG, lotModelsText, useDesk, writeError } from './overview/common.tsx'
 
 const KIND_LABEL = { payable: 'Phải trả', transfer: 'Đã chuyển', adjustment: 'Điều chỉnh' } as const
@@ -47,7 +47,7 @@ export default function Debt() {
           </dl>
           <button className="btn btn-primary btn-block" onClick={() => setForm('transfer')}>Ghi đã chuyển tiền</button>
           <button className="btn btn-ghost btn-block" onClick={() => setForm('adjustment')}>Ghi điều chỉnh</button>
-          <p className="hint">Mỗi lô tự ghi “phải trả” = Σ giá web các chiếc × tỷ giá + phí ship (BR-12, không theo giá nhập sửa tay). Phí ship nhập sau sẽ tự cộng thêm. Điều chỉnh dùng khi trung gian tính khác (phí, chênh tỷ giá…).</p>
+          <p className="hint">Mỗi lô tự ghi “phải trả” = Σ giá web các chiếc × tỷ giá × (1 + phí mua hộ %) + phí ship (BR-12, CR-003; không theo giá nhập sửa tay). Phí ship nhập sau sẽ tự cộng thêm. Điều chỉnh dùng khi trung gian tính khác (phí, chênh tỷ giá…).</p>
         </div>
         <div>
           <p className="section-title">Sổ giao dịch <span className="muted">{rows.length}</span></p>
@@ -58,7 +58,9 @@ export default function Debt() {
               const amount = <span className="r"><span className="num" style={{ fontSize: 15 }}>{a >= 0 ? '+' : '−'}{tr(Math.abs(a))}</span><span className="ledger-bal">dư {tr(bal)}</span></span>
               if (t.kind === 'payable' && t.lot_id) {
                 const l = d.lots.find((x) => x.id === t.lot_id)
-                const sub = !l ? '' : l.status === 'cancelled' ? 'Lô huỷ' : l.ship_fee_vnd == null ? 'chưa gồm ship' : `gồm ship ${tr(l.ship_fee_vnd)}`
+                const fee = Number(l?.buying_fee_pct ?? 0)
+                const feeTxt = fee > 0 ? ` · gồm phí mua hộ ${pct(fee)}` : ''
+                const sub = !l ? '' : l.status === 'cancelled' ? 'Lô huỷ' : (l.ship_fee_vnd == null ? 'chưa gồm ship' : `gồm ship ${tr(l.ship_fee_vnd)}`) + feeTxt
                 return (
                   <Link key={t.id} className="shot item" to={`/lo/${t.lot_id}`}>
                     <span className="t">{dmy(t.txn_date)} · Phải trả</span>

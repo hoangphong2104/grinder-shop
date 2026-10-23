@@ -44,7 +44,11 @@ export function validateModel(m: Model): Result<Model> {
   return ok(m);
 }
 
-/** BR-03 rate > 0; BR-02 ship fee null or whole đồng ≥ 0. */
+/** CR-003 — phí mua hộ %: số từ 0 đến 100, tối đa 2 chữ số thập phân (DB numeric(5,2)). */
+export const isBuyingFeePct = (n: unknown): n is number =>
+  isFiniteNumber(n) && n >= 0 && n <= 100 && Math.abs(n * 100 - Math.round(n * 100)) < 1e-6;
+
+/** BR-03 rate > 0; BR-02 ship fee null or whole đồng ≥ 0; CR-003 phí mua hộ 0..100 % (missing = 0). */
 export function validateLot(lot: Lot): Result<Lot> {
   const at = { lotId: lot.id };
   if (!isFiniteNumber(lot.rate) || lot.rate <= 0) {
@@ -52,6 +56,9 @@ export function validateLot(lot: Lot): Result<Lot> {
   }
   if (lot.shipFee !== null && !isNonNegativeInt(lot.shipFee)) {
     return fail(invalid('BR-02', 'Phí ship về VN phải là số đồng nguyên ≥ 0 (hoặc để trống).', 'shipFee', at));
+  }
+  if (lot.buyingFeePct != null && !isBuyingFeePct(lot.buyingFeePct)) {
+    return fail(invalid('CR-003', 'Phí mua hộ là số % từ 0 đến 100 (tối đa 2 chữ số thập phân, vd. 2,5).', 'buyingFeePct', at));
   }
   return ok(lot);
 }

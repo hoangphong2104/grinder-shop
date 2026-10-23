@@ -6,7 +6,7 @@ import { Shell } from '../ui/Shell.tsx'
 import { useToast } from '../ui/feedback.tsx'
 import { Gpic } from '../ui/icons.tsx'
 import { LotChip, ORDER_LABEL, UnitChip } from '../ui/status.tsx'
-import { cny, dmy, parseNum, vnd } from '../ui/format.ts'
+import { cny, dmy, parseNum, pct, vnd } from '../ui/format.ts'
 import { CostCell, LotShot, OrderShot, holderCode, unitProfit } from './overview/common.tsx'
 
 const fullDate = (iso: string | null | undefined) => (iso ? `${dmy(iso)}/${iso.slice(0, 4)}` : '—')
@@ -64,6 +64,7 @@ function UnitView({ u }: { u: UnitViewRow }) {
           <dl className="kv">
             <dt>Giá web</dt><dd className="num">{cny(Number(u.price_cny))}</dd>
             <dt>Tỷ giá</dt><dd className="num">{Number(u.exchange_rate).toLocaleString('vi-VN')}</dd>
+            <dt>Phí mua hộ</dt><dd className="num">{pct(Number(lot?.buying_fee_pct ?? 0))}</dd>
             <dt>Ship / chiếc</dt><dd className="num">{ls?.ship_per_unit_vnd != null ? vnd(ls.ship_per_unit_vnd) : <span className="req">chưa nhập phí ship lô</span>}</dd>
             <dt>Giá nhập tự tính</dt><dd className="num">{vnd(u.cost_vnd_auto)}{u.lot_ship_fee_vnd == null && <> <span className="pill way">tạm tính</span></>}</dd>
             <dt>Giá nhập sửa tay</dt><dd className="num">{u.cost_vnd_override != null ? vnd(u.cost_vnd_override) : '—'}</dd>
@@ -72,7 +73,7 @@ function UnitView({ u }: { u: UnitViewRow }) {
             {u.order_unit_price_vnd != null && <><dt>{u.status === 'sold' ? 'Giá chốt (đã bán)' : 'Giá chốt trên đơn'}</dt><dd className="num">{vnd(u.order_unit_price_vnd)}</dd></>}
             <dt>{p.actual ? 'Lãi thực tế' : 'Lãi dự kiến'}</dt><dd className={`num ${p.value != null && p.value < 0 ? 'req' : ''}`}>{vnd(p.value)}</dd>
           </dl>
-          <p className="hint">Giá nhập tự tính = giá web × tỷ giá + phí ship lô ÷ {ls?.total_qty ?? 'số'} chiếc; tự cập nhật khi đổi tỷ giá / phí ship (kể cả chiếc đã bán). Đã sửa tay thì giữ số sửa tay.</p>
+          <p className="hint">Giá nhập tự tính = giá web × tỷ giá × (1 + phí mua hộ {pct(Number(lot?.buying_fee_pct ?? 0))}) + phí ship lô ÷ {ls?.total_qty ?? 'số'} chiếc; tự cập nhật khi đổi tỷ giá / phí mua hộ / phí ship (kể cả chiếc đã bán). Đã sửa tay thì giữ số sửa tay.</p>
         </div>
         <div>
           <UnitEditor u={u} />

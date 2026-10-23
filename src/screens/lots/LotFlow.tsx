@@ -8,15 +8,16 @@ import type { DbData, LotRow, UnitViewRow } from '../../data/types.ts'
 import { Sheet, useToast } from '../../ui/feedback.tsx'
 import { Icon } from '../../ui/icons.tsx'
 import { LOT_LABEL } from '../../ui/status.tsx'
-import { cny, dmy, parseNum, todayVn, vnd } from '../../ui/format.ts'
+import { cny, dmy, parseNum, pct, todayVn, vnd } from '../../ui/format.ts'
 import { autoUnitCost, roundVnd } from '../../domain/index.ts'
-import { codesText, nextStatus, unitsOfLot } from './common.tsx'
+import { codesText, lotFeePct, nextStatus, unitsOfLot } from './common.tsx'
 import { errText, RpcError, useRpcDetail } from './rpc.ts'
 
 /** save_lot nhận tối đa 1050 phần tử p_groups (≤ 1000 chiếc giữ lại + nhóm mới; lô tối đa 1000 chiếc). */
 export const MAX_GROUP_ITEMS = 1050
 
-/** Đối số save_lot giữ nguyên mọi trường + mọi chiếc của lô chưa nhận, chỉ đổi phần truyền vào. */
+/** Đối số save_lot giữ nguyên mọi trường + mọi chiếc của lô chưa nhận, chỉ đổi phần truyền vào.
+ *  Không gửi buying_fee_pct ⇒ DB giữ nguyên phí mua hộ của lô (CR-003). */
 export function saveLotArgs(l: LotRow, units: UnitViewRow[], patch: { ship_fee_vnd?: number | null }) {
   return {
     p_lot_id: l.id,
@@ -43,14 +44,14 @@ function readFee(v: string): number | null {
   return Number.isInteger(n) && n >= 0 ? n : NaN
 }
 
-/** Xem trước giá nhập ₫ tự tính với phí ship mới (D2), gom theo model + giá ¥. Chiếc sửa tay giữ giá sửa tay. */
-function CostPreview({ units, rate, fee }: { units: UnitViewRow[]; rate: number; fee: number }) {
+/** Xem trước giá nhập ₫ tự tính với phí ship mới (D2 + CR-003 phí mua hộ), gom theo model + giá ¥. Chiếc sửa tay giữ giá sửa tay. */
+function CostPreview({ units, rate, feePct, fee }: { units: UnitViewRow[]; rate: number; feePct: number; fee: number }) {
   if (!units.length) return null
   const groups = new Map<string, { label: string; codes: string[]; cost: number }>()
   for (const u of units) {
     if (u.cost_is_overridden) continue
     const k = `${u.model_id}|${Number(u.price_cny)}`
-    const g = groups.get(k) ?? { label: `${u.model_name} @ ${cny(Number(u.price_cny))}`, codes: [], cost: autoUnitCost({ priceCny: Number(u.price_cny) }, { rate, shipFee: fee }, units.length) }
+    const g = groups.get(k) ?? { label: `${u.model_name} @ ${cny(Number(u.price_cny))}`, codes: [], cost: autoUnitCost({ priceCny: Number(u.price_cny) }, { rate, shipFee: fee, buyingFeePct: feePct }, units.length) }
     g.codes.push(u.code)
     groups.set(k, g)
   }
@@ -61,7 +62,7 @@ function CostPreview({ units, rate, fee }: { units: UnitViewRow[]; rate: number;
         <div className="ln" key={g.label}><span>{codesText(g.codes, 3)} · {g.label}</span><span>{vnd(g.cost)}</span></div>
       ))}
       {over.length > 0 && <div className="formula">Giữ giá sửa tay: {codesText(over.map((u) => u.code), 3)}</div>}
-      <div className="formula">= giá ¥ × tỷ giá + ship lô ÷ {units.length} chiếc</div>
+      <div className="formula">= giá ¥ × tỷ giá × (1 + phí {pct(feePct)}) + ship lô ÷ {units.length} chiếc</div>
     </div>
   )
 }
@@ -158,7 +159,7 @@ function ReceiveSheet({ lotId, onClose, onDone }: { lotId: string; onClose: () =
       ) : (
         <p className="muted" style={{ textAlign: 'center', margin: 0 }}>{qty} chiếc vào kho · phí ship {vnd(l.ship_fee_vnd)}.</p>
       )}
-      {feeVal != null && !Number.isNaN(feeVal) && <CostPreview units={units} rate={Number(l.exchange_rate)} fee={feeVal} />}
+      {feeVal != null && !Number.isNaN(feeVal) && <CostPreview units={units} rate={Number(l.exchange_rate)} feePct={lotFeePct(l)} fee={feeVal} />}
       {held > 0 && <p className="hint">{held} chiếc đang giữ cho đơn Đặt trước — đơn nào đủ mọi chiếc trong kho sẽ tự chuyển Đã chốt (A7).</p>}
       <label className="f">Ngày nhận<input className="input" id="rc-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
       {err && <p className="err-text" role="alert">{err}</p>}
@@ -217,7 +218,7 @@ function ShipFeeSheet({ lotId, onClose }: { lotId: string; onClose: () => void }
           </span>
         </div>
       )}
-      {val != null && !Number.isNaN(val) && <CostPreview units={units} rate={Number(l.exchange_rate)} fee={val} />}
+      {val != null && !Number.isNaN(val) && <CostPreview units={units} rate={Number(l.exchange_rate)} feePct={lotFeePct(l)} fee={val} />}
       {err && <p className="err-text" role="alert">{err}</p>}
     </Sheet>
   )

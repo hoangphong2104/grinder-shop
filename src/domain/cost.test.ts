@@ -6,6 +6,8 @@ import {
   effectiveCost,
   effectiveCosts,
   isCostProvisional,
+  buyingFeePctOf,
+  lotBuyingFeeVnd,
   lotGoodsVnd,
   lotPayable,
   lotUnitCount,
@@ -107,4 +109,53 @@ test('effectiveCost = override ?? auto; bad inputs are caller bugs (throw)', () 
   assert.equal(effectiveCost({ costOverride: 0 }, 3936000), 0);
   assert.throws(() => autoUnitCost({ priceCny: 1 }, lot(), 0), RangeError);
   assert.throws(() => unitCosts([unit('a', { lotId: 'missing' })], [lot()]), /missing/);
+});
+
+/* ---------- CR-003 phí mua hộ (% giá trị hàng) ---------- */
+
+test('CR-003 CR example: 2 × ¥1.010, rate 3.600, fee 3%, ship 600.000 → each round(1010×3600×1,03 + 300.000) = 4.045.080', () => {
+  const l = lot({ buyingFeePct: 3 });
+  const us = crUnits();
+  assert.equal(autoUnitCost(us[0]!, l, 2), 4045080);
+  assert.deepEqual([...effectiveCosts(us, [l]).values()], [4045080, 4045080]);
+});
+
+test('CR-003: payable = round(2020×3600×1,03 + 600.000) = 8.090.160; tiền hàng chưa gồm phí; phí = 218.160', () => {
+  const l = lot({ buyingFeePct: 3 });
+  assert.equal(lotPayable(l, crUnits()), 8090160);
+  assert.equal(lotGoodsVnd(l, crUnits()), 7272000);
+  assert.equal(lotBuyingFeeVnd(l, crUnits()), 218160);
+  assert.equal(lotGoodsVnd(l, crUnits()) + lotBuyingFeeVnd(l, crUnits()) + 600000, lotPayable(l, crUnits()));
+});
+
+test('CR-003: fee missing / 0 ⇒ exactly the pre-CR-003 numbers (existing lots unchanged)', () => {
+  assert.equal(buyingFeePctOf(lot()), 0);
+  assert.equal(autoUnitCost(unit('001'), lot(), 2), 3936000);
+  assert.equal(autoUnitCost(unit('001'), lot({ buyingFeePct: 0 }), 2), 3936000);
+  assert.equal(lotPayable(lot(), crUnits()), 7872000);
+  assert.equal(lotBuyingFeeVnd(lot(), crUnits()), 0);
+});
+
+test('CR-003: override is not affected by the fee; payable ignores the override', () => {
+  const l = lot({ buyingFeePct: 3 });
+  const us = crUnits({ costOverride: 4000000 });
+  const c = unitCosts(us, [l]);
+  assert.deepEqual(c.get('002'), { auto: 4045080, effective: 4000000, overridden: true, provisional: false });
+  assert.equal(c.get('001')!.effective, 4045080);
+  assert.equal(lotPayable(l, us), 8090160);
+  // ship 800.000 → non-overridden round(3.745.080 + 400.000) = 4.145.080; override stays
+  const l8 = lot({ buyingFeePct: 3, shipFee: 800000 });
+  assert.deepEqual([...effectiveCosts(us, [l8]).values()], [4145080, 4000000]);
+  assert.equal(lotPayable(l8, us), 8290160);
+});
+
+test('CR-003: decimals (2,5% / 1,75%), ship blank (provisional), cancelled lot = 0', () => {
+  const u100 = [unit('A', { priceCny: 100 })];
+  assert.equal(autoUnitCost(u100[0]!, lot({ buyingFeePct: 2.5, shipFee: 0 }), 1), 369000);
+  assert.equal(autoUnitCost(u100[0]!, lot({ buyingFeePct: 1.75, shipFee: 0 }), 1), 366300);
+  assert.equal(unitCostBeforeShip(unit('001'), lot({ buyingFeePct: 3 })), 3745080);
+  assert.equal(autoUnitCost(unit('001'), lot({ buyingFeePct: 3, shipFee: null }), 2), 3745080);
+  assert.equal(lotPayable(lot({ buyingFeePct: 3, shipFee: null }), crUnits()), 7490160);
+  assert.equal(lotPayable(lot({ buyingFeePct: 3, status: 'cancelled' }), crUnits()), 0);
+  assert.equal(lotPayable(lot({ buyingFeePct: 100, shipFee: null }), [unit('A', { priceCny: 10 })]), 72000);
 });

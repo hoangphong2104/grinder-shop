@@ -7,8 +7,8 @@ import type { LotStatusDb } from '../data/types.ts'
 import { Shell } from '../ui/Shell.tsx'
 import { Icon } from '../ui/icons.tsx'
 import { LOT_FLOW, LOT_LABEL, LotChip } from '../ui/status.tsx'
-import { dmy, vnd } from '../ui/format.ts'
-import { byNewest, LotCard, LotRowItem, modelsText, sellerOf, summaryOf, UnitCounts, useIsDesk } from './lots/common.tsx'
+import { dmy, pct, vnd } from '../ui/format.ts'
+import { byNewest, LotCard, LotRowItem, lotFeePct, modelsText, sellerOf, summaryOf, UnitCounts, useIsDesk } from './lots/common.tsx'
 import { useLotFlow } from './lots/LotFlow.tsx'
 
 type View = 'board' | 'list'
@@ -92,7 +92,7 @@ export default function Lots() {
     body = !ls.length ? <div className="empty">{emptyMsg}</div> : desk ? (
       <div className="tbl-wrap">
         <table className="tbl">
-          <thead><tr><th>Lô</th><th>Ngày đặt</th><th>Hàng</th><th>Người bán</th><th>Trạng thái</th><th>Chiếc</th><th className="r">Tiền hàng</th><th className="r">Ship về VN</th><th className="r">Ship / chiếc</th><th className="r">Phải trả TG</th></tr></thead>
+          <thead><tr><th>Lô</th><th>Ngày đặt</th><th>Hàng</th><th>Người bán</th><th>Trạng thái</th><th>Chiếc</th><th className="r">Tiền hàng</th><th className="r">Phí mua hộ</th><th className="r">Ship về VN</th><th className="r">Ship / chiếc</th><th className="r">Phải trả TG</th></tr></thead>
           <tbody>
             {ls.map((l) => {
               const s = sellerOf(d, l), sum = summaryOf(d, l.id)
@@ -105,6 +105,7 @@ export default function Lots() {
                   <td><LotChip s={l.status} /></td>
                   <td><UnitCounts sum={sum} /></td>
                   <td className="r">{vnd(sum?.goods_vnd ?? 0)}</td>
+                  <td className="r">{vnd(sum?.buying_fee_vnd ?? 0)} <span className="muted small">{pct(lotFeePct(l))}</span></td>
                   <td className="r">{l.ship_fee_vnd == null ? <span className="pill bad">chưa nhập</span> : vnd(l.ship_fee_vnd)}</td>
                   <td className="r">{sum?.ship_per_unit_vnd != null ? vnd(sum.ship_per_unit_vnd) : '—'}</td>
                   <td className="r">{vnd(sum?.payable_vnd ?? 0)}</td>

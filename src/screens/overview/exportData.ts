@@ -1,5 +1,6 @@
 // Xuất Excel (Q-018: tiện ích tuỳ chọn; NFR-07) — CR-001: lô, từng chiếc cối, đơn, dòng đơn (mã chiếc), thu tiền,
-// tồn theo model, sổ công nợ trung gian, ghi chú.
+// tồn theo model, sổ công nợ trung gian, ghi chú. CR-003: cột phí mua hộ % / ₫ (lô) và % (chiếc).
+// DB chưa chạy 002_buying_fee.sql ⇒ cột phí chưa có ⇒ xuất 0.
 import type { DbData } from '../../data/types.ts'
 import { LOT_LABEL, ORDER_LABEL, UNIT_LABEL } from '../../ui/status.tsx'
 import { todayVn } from '../../ui/format.ts'
@@ -16,26 +17,28 @@ export function exportExcel(d: DbData): void {
   const ordById = new Map(d.orders.map((o) => [o.id, o]))
   const cust = new Map(d.customers.map((c) => [c.id, c]))
   const unit = new Map(d.unitView.map((u) => [u.unit_id, u]))
+  const lotById = new Map(d.lots.map((l) => [l.id, l]))
+  const feePct = (lotId: string) => Number(lotById.get(lotId)?.buying_fee_pct ?? 0)
   const day = (s: string | null | undefined) => (s ? s.slice(0, 10) : '')
   const holder = (id: string | null) => (id ? d.orderCode[id] ?? '' : '')
 
   const sheets: SheetData[] = [
     {
       name: 'Lô nhập',
-      rows: [['Mã lô', 'Ngày đặt', 'Người bán', 'Trạng thái', 'Model', 'Số chiếc', 'Tỷ giá', 'Tổng ¥', 'Tiền hàng ₫', 'Phí ship ₫', 'Ship / chiếc ₫', 'Phải trả ₫', 'Tổng giá nhập ₫', 'Giá nhập tạm tính', 'Ngày nhận', 'Mã tin Goofish', 'Link', 'Tiêu đề tin', 'Ghi chú'],
+      rows: [['Mã lô', 'Ngày đặt', 'Người bán', 'Trạng thái', 'Model', 'Số chiếc', 'Tỷ giá', 'Tổng ¥', 'Tiền hàng ₫', 'Phí mua hộ %', 'Phí mua hộ ₫', 'Phí ship ₫', 'Ship / chiếc ₫', 'Phải trả ₫', 'Tổng giá nhập ₫', 'Giá nhập tạm tính', 'Ngày nhận', 'Mã tin Goofish', 'Link', 'Tiêu đề tin', 'Ghi chú'],
         ...d.lots.map((l) => {
           const s = lotSum.get(l.id)
           return [d.lotCode[l.id], l.ordered_at, seller.get(l.seller_id ?? '') ?? '', LOT_LABEL[l.status],
             (s?.models ?? []).map((m) => `${m.qty} × ${m.model_name}`).join(', '), s?.total_qty, Number(l.exchange_rate), Number(s?.total_cny ?? 0),
-            s?.goods_vnd, l.ship_fee_vnd, s?.ship_per_unit_vnd, s?.payable_vnd, s?.total_cost_vnd, s?.cost_is_provisional ?? false,
+            s?.goods_vnd, feePct(l.id), s?.buying_fee_vnd ?? 0, l.ship_fee_vnd, s?.ship_per_unit_vnd, s?.payable_vnd, s?.total_cost_vnd, s?.cost_is_provisional ?? false,
             day(l.received_at), l.goofish_item_id, l.goofish_url, l.listing_title, l.note]
         })],
     },
     {
       name: 'Chiếc cối',
-      rows: [['Mã chiếc', 'Model', 'Số seri', 'Lô', 'Trạng thái', 'Đơn', 'Khách', 'Giá ¥', 'Tỷ giá', 'Giá nhập tự tính ₫', 'Giá nhập sửa tay ₫', 'Giá nhập ₫', 'Tạm tính (chưa có ship)', 'Giá bán dự kiến ₫', 'Giá chốt ₫', 'Ngày gửi', 'Lãi dự kiến ₫', 'Lãi thực tế ₫', 'Ngày đặt', 'Ngày nhận', 'Số ngày tồn', 'Ghi chú'],
+      rows: [['Mã chiếc', 'Model', 'Số seri', 'Lô', 'Trạng thái', 'Đơn', 'Khách', 'Giá ¥', 'Tỷ giá', 'Phí mua hộ %', 'Giá nhập tự tính ₫', 'Giá nhập sửa tay ₫', 'Giá nhập ₫', 'Tạm tính (chưa có ship)', 'Giá bán dự kiến ₫', 'Giá chốt ₫', 'Ngày gửi', 'Lãi dự kiến ₫', 'Lãi thực tế ₫', 'Ngày đặt', 'Ngày nhận', 'Số ngày tồn', 'Ghi chú'],
         ...d.unitView.map((u) => [u.code, u.model_name, u.serial_no, d.lotCode[u.lot_id], UNIT_LABEL[u.status], holder(u.holding_order_id), u.holding_customer_name,
-          Number(u.price_cny), Number(u.exchange_rate), u.cost_vnd_auto, u.cost_vnd_override, u.cost_vnd, u.cost_is_provisional, u.list_price_vnd,
+          Number(u.price_cny), Number(u.exchange_rate), feePct(u.lot_id), u.cost_vnd_auto, u.cost_vnd_override, u.cost_vnd, u.cost_is_provisional, u.list_price_vnd,
           u.order_unit_price_vnd, day(u.sold_at), u.status === 'sold' ? null : u.expected_profit_vnd, u.actual_profit_vnd,
           u.ordered_at, day(u.received_at), u.days_in_stock, u.note])],
     },

@@ -291,7 +291,7 @@ export function checkCancelLot(lot: Lot, units: readonly Unit[], orders: readonl
 
 /**
  * A10 / Q-014 — a received lot may change its ship fee and, per unit, the hand-entered ₫ cost, list price,
- * serial / note; it may NOT add / remove units or change the rate, a unit's ¥ price or model.
+ * serial / note; it may NOT add / remove units or change the rate, the buying fee % (CR-003), a unit's ¥ price or model.
  * `before` / `after` are the lot with its units; units of other lots are ignored. Open lots are unrestricted.
  */
 export function checkLotEdit(before: { lot: Lot; units: readonly Unit[] }, after: { lot: Lot; units: readonly Unit[] }): Result<true> {
@@ -299,6 +299,9 @@ export function checkLotEdit(before: { lot: Lot; units: readonly Unit[] }, after
   const locked = (message: string, extra: Partial<RuleError> = {}): Result<true> =>
     fail({ code: 'LOT_LOCKED', rule: 'A10', message, lotId: before.lot.id, ...extra });
   if (after.lot.rate !== before.lot.rate) return locked('Lô đã nhận: không đổi được tỷ giá (sai thì ghi Điều chỉnh công nợ).', { field: 'rate' });
+  if ((after.lot.buyingFeePct ?? 0) !== (before.lot.buyingFeePct ?? 0)) {
+    return locked('Lô đã nhận: không đổi được phí mua hộ (sai thì ghi Điều chỉnh công nợ).', { field: 'buyingFeePct' });
+  }
   const prev = new Map(before.units.filter((u) => u.lotId === before.lot.id).map((u) => [u.id, u]));
   const next = after.units.filter((u) => u.lotId === before.lot.id);
   if (next.length !== prev.size || next.some((u) => !prev.has(u.id))) {

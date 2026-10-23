@@ -5,6 +5,8 @@
 --   Q-014, Q-015, Q-017..Q-019; RLS theo user_id + quyền theo cột; RPC SECURITY DEFINER search_path = '';
 --   khoá lạc quan version + p_expected_version; mã lỗi qua RAISE ... MESSAGE '<CODE>' (SQLSTATE P0001).
 -- Gộp thêm CR-002 (CR file §6): bảng public.notes (tab Ghi chú) — client ghi trực tiếp, RLS theo user, có realtime.
+-- Gộp thêm CR-003 (CR file §7, v0.3): phí mua hộ % — settings.default_buying_fee_pct, lots.buying_fee_pct (cột cuối
+--   bảng, để cài mới = v2 + 002_buying_fee.sql). DB đang chạy v2 có dữ liệu: chạy 002_buying_fee.sql (cộng thêm).
 -- Cài trên project đang có v1: chạy 000_reset_v1.sql trước (hoặc dán 1 lần setup-v2.sql).
 --
 -- Nguyên tắc:
@@ -13,10 +15,12 @@
 --   * Mỗi chiếc cối = 1 dòng public.units, mã tự đặt <tiền tố model>-<số thứ tự 3 chữ số> (D1),
 --     cấp từ models.next_seq trong transaction (khoá dòng model) — KHÔNG tái dùng (mã của chiếc bị bỏ
 --     ghi vào private.unit_code_retired; bộ cấp mã bỏ qua mã đã có / đã bỏ).
---   * Giá nhập ₫ tự tính (cost_vnd_auto) = round(giá ¥ × tỷ giá + phí ship lô ÷ số chiếc lô) (D2),
+--   * Giá nhập ₫ tự tính (cost_vnd_auto) = round(giá ¥ × tỷ giá × (1 + phí mua hộ %/100) + phí ship lô ÷ số chiếc lô)
+--     (D2 + CR-003),
 --     DB tính lại cho MỌI chiếc của lô (kể cả đã bán — A3) mỗi khi đổi giá ¥ / tỷ giá / phí ship / số chiếc.
 --     Giá hiệu lực = coalesce(cost_vnd_override, cost_vnd_auto). Ship chưa nhập ⇒ tạm tính với 0.
---   * Phải trả trung gian / lô = round(Σ giá ¥ × tỷ giá + phí ship) — không phụ thuộc giá sửa tay (A4, BR-12).
+--   * Phải trả trung gian / lô = round(Σ giá ¥ × tỷ giá × (1 + phí mua hộ %/100) + phí ship) — không phụ thuộc
+--     giá sửa tay (A4, BR-12, CR-003). Phí mua hộ của lô khoá sau khi nhận như tỷ giá (Q-014/A10).
 --   * Trạng thái chiếc TÍNH RA (A5) trong v_units: incoming | in_stock | reserved | sold | cancelled.
 --   * 1 chiếc thuộc tối đa 1 đơn chưa huỷ: order_lines.cancelled + unique index một phần (unit_id) where not cancelled.
 --
@@ -31,7 +35,7 @@
 --   NOT_AUTHENTICATED        chưa đăng nhập (auth.uid() null)
 --   VERSION_CONFLICT         p_expected_version khác version hiện tại (máy khác vừa sửa)
 --   INVALID_INPUT            JSON sai dạng / khoá không hợp lệ (detail cho biết khoá)
---   INVALID_AMOUNT           số tiền / giá ¥ không hợp lệ (giá ¥ ≤ 0, tiền < 0)
+--   INVALID_AMOUNT           số tiền / giá ¥ / phí mua hộ không hợp lệ (giá ¥ ≤ 0, tiền < 0, phí % ngoài 0..100)
 --   INVALID_QTY              số lượng nhóm ngoài 1..1000
 --   EXCHANGE_RATE_REQUIRED   thiếu tỷ giá hoặc ≤ 0 (BR-03)
 --   SHIP_FEE_REQUIRED        nhận lô / sửa phí ship mà không có phí ship (BR-02)
@@ -40,7 +44,7 @@
 --   TOO_MANY_LINES           > 1050 phần tử p_groups (≤ 1000 chiếc giữ lại + nhóm mới) · > 50 phần tử p_lines
 --   TOO_MANY_UNITS           lô > 1000 chiếc
 --   LOT_NOT_FOUND            không có lô (hoặc của người khác)
---   LOT_LOCKED               lô Đã nhận / Huỷ — không sửa qua save_lot / set_lot_status (A10, Q-014)
+--   LOT_LOCKED               lô Đã nhận / Huỷ — không sửa qua save_lot / set_lot_status (A10, Q-014; gồm phí mua hộ CR-003)
 --   LOT_ALREADY_RECEIVED     nhận / huỷ lô đã nhận
 --   LOT_CANCELLED            nhận / huỷ lô đã huỷ
 --   LOT_NOT_RECEIVED         update_lot_ship_fee trên lô chưa nhận (dùng save_lot)
@@ -201,6 +205,7 @@ create table public.lots (
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now(),
   version          int not null default 1,
+  buying_fee_pct   numeric(5,2) not null default 0 check (buying_fee_pct between 0 and 100),  -- CR-003: phí mua hộ %
   unique (id, user_id),
   foreign key (seller_id, user_id) references public.sellers (id, user_id) on delete restrict,
   constraint lots_received_requires_ship check (status <> 'received' or (ship_fee_vnd is not null and received_at is not null)),
@@ -349,7 +354,8 @@ create table public.settings (
   ai_confidence_threshold  numeric(3,2) not null default 0.70 check (ai_confidence_threshold between 0 and 1),
   default_ship_fee_payer   text not null default 'customer' check (default_ship_fee_payer in ('customer','shop')),
   updated_at               timestamptz not null default now(),
-  version                  int not null default 1
+  version                  int not null default 1,
+  default_buying_fee_pct   numeric(5,2) not null default 0 check (default_buying_fee_pct between 0 and 100)  -- CR-003
 );
 
 -- Nhật ký quét AI (Q-012)
@@ -549,7 +555,9 @@ from public.models m
 left join public.v_units vu on vu.model_id = m.id
 group by m.id;
 
--- Lô: số chiếc, tiền hàng, phải trả (BR-12, A4), đếm theo trạng thái chiếc, tóm tắt theo model
+-- Lô: số chiếc, tiền hàng, phải trả (BR-12, A4), đếm theo trạng thái chiếc, tóm tắt theo model.
+-- CR-003 (cột thêm ở CUỐI để 002 dùng được create or replace view): buying_fee_pct, buying_fee_vnd = round(Σ¥ × tỷ giá × %/100).
+-- goods_vnd giữ nghĩa cũ (Σ¥ × tỷ giá, CHƯA gồm phí mua hộ).
 create view public.v_lot_summary with (security_invoker = true) as
 select l.id as lot_id, l.user_id, l.status, l.ordered_at, l.received_at, l.exchange_rate, l.ship_fee_vnd,
        l.seller_id, s.nickname as seller_nickname, l.goofish_url, l.goofish_item_id, l.listing_title,
@@ -563,7 +571,9 @@ select l.id as lot_id, l.user_id, l.status, l.ordered_at, l.received_at, l.excha
        (l.ship_fee_vnd is null)                                               as cost_is_provisional,
        agg.total_cost_vnd,
        agg.incoming_count, agg.in_stock_count, agg.reserved_count, agg.sold_count,
-       agg.models
+       agg.models,
+       l.buying_fee_pct,
+       round(agg.total_cny * l.exchange_rate * (l.buying_fee_pct / 100))::bigint   as buying_fee_vnd
 from public.lots l
 left join public.sellers s on s.id = l.seller_id
 left join lateral (
@@ -632,7 +642,8 @@ select user_id,
 from public.intermediary_txns
 group by user_id;
 
--- Gợi ý: tỷ giá lô gần nhất (BR-03), phí ship/chiếc của lô gần nhất có phí (BR-02)
+-- Gợi ý: tỷ giá lô gần nhất (BR-03), phí ship/chiếc của lô gần nhất có phí (BR-02), phí mua hộ % lô gần nhất (CR-003;
+-- lô mới vẫn lấy mặc định từ settings.default_buying_fee_pct — cột này chỉ để tham khảo)
 create view public.v_suggestions with (security_invoker = true) as
 select st.user_id,
        (select l.exchange_rate from public.lots l
@@ -641,7 +652,10 @@ select st.user_id,
        (select round(l.ship_fee_vnd::numeric / nullif((select count(*) from public.units u where u.lot_id = l.id), 0))::bigint
           from public.lots l
          where l.user_id = st.user_id and l.ship_fee_vnd is not null and l.status <> 'cancelled'
-         order by coalesce(l.received_at, l.ordered_at) desc, l.created_at desc limit 1) as last_ship_fee_per_unit_vnd
+         order by coalesce(l.received_at, l.ordered_at) desc, l.created_at desc limit 1) as last_ship_fee_per_unit_vnd,
+       (select l.buying_fee_pct from public.lots l
+         where l.user_id = st.user_id and l.status <> 'cancelled'
+         order by l.created_at desc limit 1) as last_buying_fee_pct
 from public.settings st;
 
 grant select on public.v_units, public.v_model_stock, public.v_lot_summary, public.v_order_summary,
@@ -651,8 +665,11 @@ grant select on public.v_units, public.v_model_stock, public.v_lot_summary, publ
 -- 4. Hàm nội bộ (schema private — PostgREST không lộ ra)
 -- -----------------------------------------------------------------------------
 
--- D2 + A3 + A4/BR-12: tính lại giá nhập ₫ tự tính của MỌI chiếc trong lô (kể cả đã bán; giá sửa tay
+-- D2 + A3 + A4/BR-12 + CR-003: tính lại giá nhập ₫ tự tính của MỌI chiếc trong lô (kể cả đã bán; giá sửa tay
 -- nằm ở cột khác nên được giữ) và khoản Phải trả của lô (không dùng giá sửa tay; Huỷ ⇒ 0).
+--   giá tự tính / chiếc = round(giá ¥ × tỷ giá × (1 + phí mua hộ %/100) + phí ship ÷ số chiếc)
+--   phải trả lô         = round(Σ giá ¥ × tỷ giá × (1 + phí mua hộ %/100) + phí ship)
+-- (1 + %/100) tính bằng numeric chính xác; phí 0% ⇒ đúng bằng công thức v2 cũ (lô cũ không đổi số).
 create or replace function private.recalc_lot(p_lot_id uuid) returns void
 language plpgsql set search_path = '' as $$
 declare
@@ -660,22 +677,24 @@ declare
   v_n    int;
   v_cny  numeric;
   v_pay  bigint;
+  v_mul  numeric;
 begin
   select * into v_lot from public.lots where id = p_lot_id;
   select count(*), coalesce(sum(price_cny), 0) into v_n, v_cny from public.units where lot_id = p_lot_id;
   if v_n = 0 then
     raise exception using errcode = 'P0001', message = 'LOT_HAS_NO_LINES';
   end if;
+  v_mul := 1 + coalesce(v_lot.buying_fee_pct, 0) / 100;                 -- CR-003
 
   update public.units u
      set cost_vnd_auto = c.cost
-    from (select id, round(price_cny * v_lot.exchange_rate
+    from (select id, round(price_cny * v_lot.exchange_rate * v_mul
                            + coalesce(v_lot.ship_fee_vnd, 0)::numeric / v_n)::bigint as cost
             from public.units where lot_id = p_lot_id) c
    where u.id = c.id and u.cost_vnd_auto is distinct from c.cost;   -- không đổi thì không tăng version
 
   v_pay := case when v_lot.status = 'cancelled' then 0
-                else round(v_cny * v_lot.exchange_rate + coalesce(v_lot.ship_fee_vnd, 0))::bigint end;
+                else round(v_cny * v_lot.exchange_rate * v_mul + coalesce(v_lot.ship_fee_vnd, 0))::bigint end;
 
   insert into public.intermediary_txns (user_id, txn_date, kind, amount_vnd, lot_id, note)
   values (v_lot.user_id, v_lot.ordered_at, 'payable', v_pay, p_lot_id, 'Tự sinh từ lô')
@@ -741,7 +760,9 @@ end $$;
 -- Tạo / sửa lô CHƯA NHẬN (A2, A10). p_lot_id null = tạo mới.
 --   p_lot = { goofish_url, goofish_item_id, seller_id | new_seller: {nickname, region, profile_url},
 --             screenshot_path, listing_title, ordered_at 'YYYY-MM-DD', exchange_rate (bắt buộc > 0),
---             ship_fee_vnd (null = chưa biết), status ('ordered'|'cn_shipping'|'at_forwarder'|'vn_shipping'), note }
+--             ship_fee_vnd (null = chưa biết), status ('ordered'|'cn_shipping'|'at_forwarder'|'vn_shipping'), note,
+--             buying_fee_pct (CR-003: phí mua hộ % 0..100; thiếu / null ⇒ TẠO: lấy settings.default_buying_fee_pct,
+--                             SỬA: giữ nguyên; lô đã nhận ⇒ LOT_LOCKED như tỷ giá) }
 --     (thay thế toàn bộ trường lô như v1; goofish_item_id tự tách từ ?id= của link nếu trống)
 --   p_groups = mảng (≤ 50) gồm 2 loại phần tử:
 --     * nhóm mới  {model_id, qty 1..1000, price_cny > 0, list_price_vnd?}  → tạo qty chiếc, mỗi chiếc 1 mã;
@@ -764,6 +785,7 @@ declare
   v_item      text;
   v_rate      numeric;
   v_ship      bigint;
+  v_fee       numeric;
   v_dups      uuid[];
   e           jsonb;
   r           record;
@@ -794,6 +816,7 @@ begin
   v_url    := nullif(btrim(p_lot->>'goofish_url'), '');
   v_rate   := nullif(p_lot->>'exchange_rate', '')::numeric;
   v_ship   := nullif(p_lot->>'ship_fee_vnd', '')::bigint;
+  v_fee    := nullif(p_lot->>'buying_fee_pct', '')::numeric;                -- CR-003
 
   if v_status not in ('ordered','cn_shipping','at_forwarder','vn_shipping') then
     raise exception using errcode = 'P0001', message = 'INVALID_STATUS_FOR_SAVE';
@@ -803,6 +826,9 @@ begin
   end if;
   if v_ship < 0 then
     raise exception using errcode = 'P0001', message = 'INVALID_AMOUNT', detail = 'ship_fee_vnd';
+  end if;
+  if v_fee < 0 or v_fee > 100 then
+    raise exception using errcode = 'P0001', message = 'INVALID_AMOUNT', detail = 'buying_fee_pct';
   end if;
 
   -- Kiểm tra từng phần tử trước khi ghi
@@ -860,10 +886,11 @@ begin
 
   if p_lot_id is null then
     insert into public.lots (user_id, goofish_url, goofish_item_id, seller_id, screenshot_path, listing_title,
-                             ordered_at, exchange_rate, ship_fee_vnd, status, note)
+                             ordered_at, exchange_rate, ship_fee_vnd, status, note, buying_fee_pct)
     values (v_uid, v_url, v_item, v_seller, nullif(p_lot->>'screenshot_path', ''), nullif(p_lot->>'listing_title', ''),
             coalesce(nullif(p_lot->>'ordered_at', '')::date, private.today_vn()),
-            v_rate, v_ship, v_status, nullif(p_lot->>'note', ''))
+            v_rate, v_ship, v_status, nullif(p_lot->>'note', ''),
+            coalesce(v_fee, (select st.default_buying_fee_pct from public.settings st where st.user_id = v_uid), 0))
     returning id into v_id;
   else
     select * into v_lot from public.lots where id = p_lot_id and user_id = v_uid for update;
@@ -887,7 +914,8 @@ begin
       goofish_url = v_url, goofish_item_id = v_item, seller_id = v_seller,
       screenshot_path = nullif(p_lot->>'screenshot_path', ''), listing_title = nullif(p_lot->>'listing_title', ''),
       ordered_at = coalesce(nullif(p_lot->>'ordered_at', '')::date, v_lot.ordered_at),
-      exchange_rate = v_rate, ship_fee_vnd = v_ship, status = v_status, note = nullif(p_lot->>'note', '')
+      exchange_rate = v_rate, ship_fee_vnd = v_ship, status = v_status, note = nullif(p_lot->>'note', ''),
+      buying_fee_pct = coalesce(v_fee, v_lot.buying_fee_pct)
     where id = v_id;
 
     -- Bỏ chiếc không còn trong danh sách

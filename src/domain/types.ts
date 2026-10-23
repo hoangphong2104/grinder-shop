@@ -103,6 +103,11 @@ export interface Lot {
   rate: number;
   /** Phí ship về VN of the whole lot, ₫. Null until known; required to receive (BR-02). */
   shipFee: Vnd | null;
+  /**
+   * Phí mua hộ % (CR-003) on the goods value, 0..100 (2 decimals, e.g. 2,5). Missing = 0.
+   * Defaults from settings for a new lot; locked after the lot is received (like the rate, Q-014 / A10).
+   */
+  buyingFeePct?: number;
   status: LotStatus;
   /** Ngày nhận (date or timestamp). Null until received. */
   receivedAt: IsoDate | null;

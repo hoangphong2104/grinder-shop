@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import type { DbData, LotRow, ModelStockRow, OrderRow, UnitViewRow } from '../../data/types.ts'
 import { supabase } from '../../lib/supabase.ts'
 import { LotChip, OrderChip } from '../../ui/status.tsx'
-import { cny, dmy, tr, vnd } from '../../ui/format.ts'
+import { cny, dmy, pct, tr, vnd } from '../../ui/format.ts'
 import '../../styles/overview.css'
 
 /** Máy tính (≥ 960px) — đổi bảng ↔ thẻ như prototype. */
@@ -91,7 +91,7 @@ export function LotShot({ d, l }: { d: DbData; l: LotRow }) {
       <span className="t">{d.lotCode[l.id]} · đặt {dmy(l.ordered_at)} · {seller?.nickname ?? '(chưa rõ người bán)'}</span>
       <span className="b">{lotModelsText(d, l.id)}</span>
       <span className="r"><LotChip s={l.status} /><span className="num small">{tr(s?.payable_vnd ?? 0)}</span></span>
-      <span className="f">{cny(Number(s?.total_cny ?? 0))} × {Number(l.exchange_rate).toLocaleString('vi-VN')} · ship {l.ship_fee_vnd == null ? <span className="req">chưa nhập</span> : tr(l.ship_fee_vnd)}</span>
+      <span className="f">{cny(Number(s?.total_cny ?? 0))} × {Number(l.exchange_rate).toLocaleString('vi-VN')}{Number(l.buying_fee_pct ?? 0) > 0 && <> · phí {pct(Number(l.buying_fee_pct))}</>} · ship {l.ship_fee_vnd == null ? <span className="req">chưa nhập</span> : tr(l.ship_fee_vnd)}</span>
     </Link>
   )
 }

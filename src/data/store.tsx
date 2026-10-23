@@ -35,7 +35,7 @@ async function fetchAll(): Promise<DbData> {
   return {
     models, units, sellers, lots, txns, customers, orders, orderLines, payments, settings, unitView, modelStock, lotSummary, orderSummary, notes,
     balance: balance ?? EMPTY_BAL,
-    suggestions: suggestions ?? { last_exchange_rate: null, last_ship_fee_per_unit_vnd: null },
+    suggestions: suggestions ?? { last_exchange_rate: null, last_ship_fee_per_unit_vnd: null, last_buying_fee_pct: null },
     lotCode: code(lots, 'L'), orderCode: code(orders, 'D'),
   } as DbData
 }

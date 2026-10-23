@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Model, Order, Transfer, Unit } from './types.ts';
-import { validateLot, validateModel, validateOrder, validatePayment, validateTransfer, validateUnit } from './validate.ts';
+import { isBuyingFeePct, validateLot, validateModel, validateOrder, validatePayment, validateTransfer, validateUnit } from './validate.ts';
 
 const field = (r: { ok: boolean; error?: { field?: string } }) => (r.ok ? 'ok' : r.error?.field);
 
@@ -22,6 +22,14 @@ test('validateLot: rate > 0 (BR-03), ship fee null or whole đồng ≥ 0 (BR-02
   assert.equal(field(validateLot({ ...l, rate: 0 })), 'rate');
   assert.equal(field(validateLot({ ...l, shipFee: -1 })), 'shipFee');
   assert.equal(field(validateLot({ ...l, shipFee: 0.5 })), 'shipFee');
+});
+
+test('CR-003 validateLot: phí mua hộ 0..100 %, tối đa 2 chữ số thập phân; thiếu = 0', () => {
+  const l = { id: 'L', rate: 3600, shipFee: null, status: 'ordered' as const, receivedAt: null };
+  for (const p of [0, 2.5, 3, 1.75, 100]) assert.equal(validateLot({ ...l, buyingFeePct: p }).ok, true, String(p));
+  for (const p of [-0.5, 100.01, 2.555, Number.NaN]) assert.equal(field(validateLot({ ...l, buyingFeePct: p })), 'buyingFeePct', String(p));
+  assert.equal(isBuyingFeePct(2.5), true);
+  assert.equal(isBuyingFeePct('3'), false);
 });
 
 test('validateUnit: ¥ > 0, override / list price null or whole đồng ≥ 0', () => {

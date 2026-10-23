@@ -168,6 +168,8 @@ test('A10 / Q-014: received lot — ship fee, override, list price, serial edita
     return r.ok ? 'ok' : `${r.error.code}:${r.error.field}`;
   };
   assert.equal(code({ lot: lot({ rate: 3650 }), units: before.units }), 'LOT_LOCKED:rate');
+  assert.equal(code({ lot: lot({ buyingFeePct: 3 }), units: before.units }), 'LOT_LOCKED:buyingFeePct'); // CR-003
+  assert.equal(code({ lot: lot({ buyingFeePct: 0 }), units: before.units }), 'ok'); // missing = 0 ⇒ không đổi
   assert.equal(code({ lot: lot(), units: [unit('1')] }), 'LOT_LOCKED:units');
   assert.equal(code({ lot: lot(), units: [...before.units, unit('3')] }), 'LOT_LOCKED:units');
   assert.equal(code({ lot: lot(), units: [unit('1', { priceCny: 1000 }), unit('2')] }), 'LOT_LOCKED:priceCny');
@@ -175,4 +177,5 @@ test('A10 / Q-014: received lot — ship fee, override, list price, serial edita
   // open lot: anything goes
   const open = { lot: lot({ status: 'ordered', receivedAt: null }), units: before.units };
   assert.equal(checkLotEdit(open, { lot: lot({ status: 'ordered', rate: 3700 }), units: [unit('1', { priceCny: 999 })] }).ok, true);
+  assert.equal(checkLotEdit(open, { lot: lot({ status: 'ordered', buyingFeePct: 2.5 }), units: before.units }).ok, true);
 });

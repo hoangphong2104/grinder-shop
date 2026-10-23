@@ -15,7 +15,7 @@ Status / kind codes are the **DB codes** (`ordered…cancelled`, `preorder…can
 |---|---|
 | `types.ts` | `Model`, `Lot`, `Unit`, `Order` / `OrderLine` (1 line = 1 unit), `Payment`, `Transfer`, status types, `UnitStatus`, labels, `Result` / `RuleError` |
 | `money.ts` | `roundVnd` (Q-006), `formatVnd`, `formatTr`, `formatCny` |
-| `cost.ts` | `autoUnitCost` (D2), `effectiveCost`, `isCostProvisional`, `unitCosts` / `effectiveCosts` (by unit id), `unitCostBeforeShip`, `lotUnitCount`, `unitsOfLot`, `lotGoodsCny` / `lotGoodsVnd`, `lotPayable` (A4) |
+| `cost.ts` | `autoUnitCost` (D2 + CR-003), `effectiveCost`, `isCostProvisional`, `unitCosts` / `effectiveCosts` (by unit id), `unitCostBeforeShip`, `lotUnitCount`, `unitsOfLot`, `lotGoodsCny` / `lotGoodsVnd`, `lotBuyingFeeVnd` / `buyingFeePctOf` (CR-003), `lotPayable` (A4 + CR-003) |
 | `units.ts` | `formatUnitCode` (D1), `expandLotGroups` (A2), `unitStatus` / `holdingOrder` / `holderIndex` / `unitStatusLabel` (A5, D4), `daysBetween` / `unitDaysInStock`, `buildUnitViews` (≈ `v_units`), `modelStocks` / `modelStock` / `stockValue` (A9), `checkReceiveLot` (BR-02, Q-011), `checkCancelLot`, `checkLotEdit` (A10, Q-014) |
 | `orders.ts` | `checkUnitAvailable`, `checkOrderUnits`, `orderStatusFor` (A6), `canShip` (A8, Q-007), `preordersToAutoConfirm` (A7), `checkCancelOrder`, `completeOrder` (BR-10, Q-010), `orderTotal` / `orderPaid` / `orderReceivable` / `orderRefundDue` / `customersTotalDue` / `totalRefundDue` (BR-10, Q-009, Q-015), `orderMargin` / `orderProfit` / `profitForMonth` / `profitByMonth` (BR-11 + A8) |
 | `debt.ts` | `intermediaryBalance` (≈ `v_intermediary_balance`), `intermediaryDebt`, `totalPayable`, `transferEffect` (BR-12) |
@@ -29,9 +29,10 @@ a code sequence < 1. Inputs are never mutated.
 ## Formulas
 
 ```
-giá nhập ₫ tự tính  = round(giá ¥ × tỷ giá + (phí ship lô ?? 0) ÷ số chiếc của lô)      D2
+giá nhập ₫ tự tính  = round(giá ¥ × tỷ giá × (1 + phí mua hộ %/100) + (phí ship lô ?? 0) ÷ số chiếc của lô)   D2, CR-003
 giá nhập ₫ hiệu lực = giá sửa tay ?? giá tự tính                                          D2, CR §3
-phải trả lô          = round(Σ giá ¥ × tỷ giá + phí ship lô); lô huỷ = 0                  A4 (BR-12)
+phải trả lô          = round(Σ giá ¥ × tỷ giá × (1 + phí mua hộ %/100) + phí ship lô); lô huỷ = 0   A4 (BR-12), CR-003
+tiền hàng lô         = round(Σ giá ¥ × tỷ giá) — chưa gồm phí; phí mua hộ lô = round(Σ giá ¥ × tỷ giá × %/100)   CR-003
 trạng thái chiếc     = lô huỷ → cancelled · đơn Đã gửi/Hoàn tất → sold · đơn Đặt trước/Đã chốt → reserved
                        · lô đã nhận → in_stock · còn lại → incoming                       A5
 có thể bán (model)   = in_stock + incoming (both already exclude reserved); sắp hết ⇔ ≤ ngưỡng   A9
@@ -46,7 +47,9 @@ The ship fee is divided by **all** units of the lot (every model, sold or not). 
 correcting a lot's ship fee / rate / ¥ moves the cost — and the profit of already-sold orders — of every
 unit without a hand-entered cost (A3). CR worked example: 2 × ¥1.010, rate 3.600, ship 600.000 → each
 3.936.000, payable 7.872.000; override one to 4.000.000 → payable unchanged; ship → 800.000 → the other unit
-4.036.000, the overridden one stays 4.000.000.
+4.036.000, the overridden one stays 4.000.000. CR-003 example (phí mua hộ 3%): each round(1010 × 3600 × 1,03 +
+300.000) = 4.045.080, payable round(2020 × 3600 × 1,03 + 600.000) = 8.090.160. `Lot.buyingFeePct` missing = 0 ⇒
+the pre-CR-003 numbers exactly; the fee is locked once the lot is received (`checkLotEdit`, like the rate).
 
 ## Rules replaced by CR-001 (no longer implemented)
 

@@ -9,9 +9,9 @@ import { Sheet, useToast } from '../ui/feedback.tsx'
 import { Icon } from '../ui/icons.tsx'
 import type { DbData, UnitViewRow } from '../data/types.ts'
 import { LOT_FLOW, LOT_LABEL, UnitChip } from '../ui/status.tsx'
-import { cny, dmy, vnd } from '../ui/format.ts'
+import { cny, dmy, pct, vnd } from '../ui/format.ts'
 import { errorMessage } from '../data/errors.ts'
-import { isOpen, modelsText, nextStatus, sellerOf, summaryOf, UnitCost, UnitCounts, unitsOfLot, useIsDesk } from './lots/common.tsx'
+import { isOpen, lotFeePct, modelsText, nextStatus, sellerOf, summaryOf, UnitCost, UnitCounts, unitsOfLot, useIsDesk } from './lots/common.tsx'
 import { useLotFlow } from './lots/LotFlow.tsx'
 import '../styles/lots.css'
 
@@ -66,6 +66,7 @@ export default function LotDetail() {
   const totalQty = sum?.total_qty ?? units.length
   const href = goofishHref(l.goofish_url, l.goofish_item_id)
   const provisional = sum?.cost_is_provisional ?? l.ship_fee_vnd == null
+  const feePct = lotFeePct(l)
 
   return (
     <Shell section="lo" title={d.lotCode[l.id] ?? 'Lô'} back="/lo"
@@ -88,10 +89,12 @@ export default function LotDetail() {
             <div className="ln"><span>Hàng</span><span>{modelsText(d, sum)}</span></div>
             <div className="ln"><span>Tiền hàng ({cny(Number(sum?.total_cny ?? 0))} × tỷ giá)</span><span>{vnd(sum?.goods_vnd ?? 0)}</span></div>
             <div className="ln"><span>Tỷ giá</span><span>{Number(l.exchange_rate).toLocaleString('vi-VN')} ₫/¥</span></div>
+            <div className="ln"><span>Phí mua hộ ({pct(feePct)})</span><span>{vnd(sum?.buying_fee_vnd ?? 0)}</span></div>
             <div className="ln"><span>Phí ship về VN (cả lô)</span><span>{l.ship_fee_vnd == null ? <span className="req">chưa nhập</span> : vnd(l.ship_fee_vnd)}</span></div>
             <div className="ln"><span>Ship / chiếc ({totalQty} chiếc)</span><span>{sum?.ship_per_unit_vnd != null ? vnd(sum.ship_per_unit_vnd) : '—'}</span></div>
             <div className="ln total"><span>Phải trả trung gian</span><span>{vnd(sum?.payable_vnd ?? 0)}</span></div>
-            <div className="formula">Giá nhập ₫ / chiếc = giá ¥ của chiếc × tỷ giá + ship lô ÷ {totalQty} chiếc (sửa tay được từng chiếc)</div>
+            <div className="formula">Giá nhập ₫ / chiếc = giá ¥ của chiếc × tỷ giá × (1 + phí {pct(feePct)}) + ship lô ÷ {totalQty} chiếc (sửa tay được từng chiếc)</div>
+            {l.status === 'received' && <div className="formula">Lô đã nhận: phí mua hộ và tỷ giá đã khoá (sai thì ghi Điều chỉnh công nợ).</div>}
             {provisional && l.status !== 'cancelled' && <div className="formula">Giá nhập ₫ đang tạm tính — chưa gồm phí ship về VN.</div>}
           </div>
           {l.status !== 'cancelled' && (

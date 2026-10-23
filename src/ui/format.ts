@@ -1,5 +1,8 @@
 // Định dạng hiển thị (vi-VN). Tiền / làm tròn dùng chung với domain (Q-006).
 export { formatVnd as vnd, formatTr as tr, formatCny as cny } from '../domain/index.ts'
+/** Phần trăm kiểu VN: 3 → "3%", 2.5 → "2,5%", 1.75 → "1,75%" (CR-003 phí mua hộ). */
+export const pct = (n: number | null | undefined) =>
+  `${Number(n ?? 0).toLocaleString('vi-VN', { maximumFractionDigits: 2 })}%`
 /** 2026-10-22 → 22/10 */
 export const dmy = (iso: string | null | undefined) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—')
 /** Hôm nay theo giờ VN (YYYY-MM-DD). */

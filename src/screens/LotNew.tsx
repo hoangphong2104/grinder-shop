@@ -2,6 +2,8 @@
 // (model, số lượng N, giá ¥ / chiếc, giá bán dự kiến / chiếc) → DB tạo N chiếc, mỗi chiếc 1 mã (D1). Sửa lô chưa
 // nhận: sửa / bỏ từng chiếc cũ (không bỏ được chiếc đang giữ cho đơn — UNIT_RESERVED) và thêm nhóm mới.
 // Khối AI quét ở đầu form (BR-13: chỉ điền sẵn, không tự lưu). Xem trước bằng src/domain; số chính thức do DB tính.
+// v0.3 (CR-003): ô "Phí mua hộ %" cạnh tỷ giá — lô mới điền sẵn mặc định trong Cài đặt; tính vào giá nhập ₫ / chiếc
+// và phải trả trung gian. Lô đã nhận thì phí khoá như tỷ giá (form sửa không mở cho lô đã nhận).
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useData, useStore } from '../data/store.tsx'
@@ -11,9 +13,9 @@ import { Shell } from '../ui/Shell.tsx'
 import { useToast } from '../ui/feedback.tsx'
 import { Icon } from '../ui/icons.tsx'
 import { UnitChip } from '../ui/status.tsx'
-import { parseNum, todayVn, tr, vnd } from '../ui/format.ts'
-import { autoUnitCost, formatUnitCode, lotGoodsVnd, lotPayable, unitCostBeforeShip, type Unit } from '../domain/index.ts'
-import { codesText, rangeText, unitsOfLot } from './lots/common.tsx'
+import { parseNum, pct, todayVn, tr, vnd } from '../ui/format.ts'
+import { autoUnitCost, formatUnitCode, isBuyingFeePct, lotBuyingFeeVnd, lotGoodsVnd, lotPayable, unitCostBeforeShip, type Unit } from '../domain/index.ts'
+import { codesText, lotFeePct, rangeText, unitsOfLot } from './lots/common.tsx'
 import { MAX_GROUP_ITEMS } from './lots/LotFlow.tsx'
 import { errText, RpcError, useRpcDetail } from './lots/rpc.ts'
 import { invokeScan, matchModelByAlias, MAX_TEXT, uploadScreenshot, type ScanResponse } from './lots/scan.ts'
@@ -28,7 +30,7 @@ interface UnitDraft {
 }
 interface Draft {
   url: string; title: string; sellerNick: string; region: string; groups: GroupDraft[]; units: UnitDraft[]
-  rate: string; shipFee: string; orderedAt: string; note: string
+  rate: string; feePct: string; shipFee: string; orderedAt: string; note: string
 }
 type MarkKey = 'title' | 'seller' | 'region' | 'model' | 'qty' | 'cny'
 type Marks = Partial<Record<MarkKey, 'ai' | 'low'>>
@@ -72,7 +74,8 @@ function initDraft(lot: LotRow | undefined, d: DbData, modelId?: string | null):
     if (modelId && d.models.some((m) => m.id === modelId && m.is_active)) { g.modelId = modelId; g.list = defaultList(d, modelId) }
     return {
       url: '', title: '', sellerNick: '', region: '', groups: [g], units: [],
-      rate: numStr(d.suggestions.last_exchange_rate), shipFee: '', orderedAt: todayVn(), note: '',
+      rate: numStr(d.suggestions.last_exchange_rate), feePct: numStr(Number(d.settings?.default_buying_fee_pct ?? 0)),
+      shipFee: '', orderedAt: todayVn(), note: '',
     }
   }
   const s = lot.seller_id ? d.sellers.find((x) => x.id === lot.seller_id) : undefined
@@ -85,7 +88,7 @@ function initDraft(lot: LotRow | undefined, d: DbData, modelId?: string | null):
     url: lot.goofish_url ?? (lot.goofish_item_id ? `https://www.goofish.com/item?id=${lot.goofish_item_id}` : ''),
     title: lot.listing_title ?? '', sellerNick: s?.nickname ?? '', region: s?.region ?? '',
     groups: units.length ? [] : [newGroup()], units,
-    rate: numStr(Number(lot.exchange_rate)), shipFee: lot.ship_fee_vnd == null ? '' : String(lot.ship_fee_vnd),
+    rate: numStr(Number(lot.exchange_rate)), feePct: numStr(lotFeePct(lot)), shipFee: lot.ship_fee_vnd == null ? '' : String(lot.ship_fee_vnd),
     orderedAt: lot.ordered_at, note: lot.note ?? '',
   }
 }
@@ -154,7 +157,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
   const set = <K extends keyof Draft>(k: K, v: Draft[K], mark?: MarkKey) => {
     setDraft((p) => ({ ...p, [k]: v }))
     if (mark) clearMark(mark)
-    clearErr(`f-${k === 'orderedAt' ? 'date' : k === 'shipFee' ? 'ship' : k === 'sellerNick' ? 'seller' : k}`)
+    clearErr(`f-${k === 'orderedAt' ? 'date' : k === 'shipFee' ? 'ship' : k === 'sellerNick' ? 'seller' : k === 'feePct' ? 'fee' : k}`)
   }
   const setGroup = (i: number, patch: Partial<GroupDraft>) => {
     setDraft((p) => ({ ...p, groups: p.groups.map((g, j) => (j === i ? { ...g, ...patch } : g)) }))
@@ -253,9 +256,12 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
     } finally { setScanning(false) }
   }
 
-  // ---- Xem trước (domain): mã sẽ tạo, giá nhập ₫ tự tính / chiếc, tiền hàng, phải trả ----
+  // ---- Xem trước (domain): mã sẽ tạo, giá nhập ₫ tự tính / chiếc, tiền hàng, phí mua hộ, phải trả ----
   const rate = parseNum(draft.rate), ship = parseNum(draft.shipFee)
-  const rateOk = rate != null && rate > 0
+  // Phí mua hộ % (CR-003): trống = 0; "2,5" / "2.5" = 2,5%; ngoài 0..100 hoặc > 2 chữ số thập phân ⇒ lỗi (null)
+  const feeIn = draft.feePct.trim() ? parseNum(draft.feePct) : 0
+  const feeVal = feeIn != null && isBuyingFeePct(feeIn) ? feeIn : null
+  const calcOk = rate != null && rate > 0 && feeVal != null   // tỷ giá + phí mua hộ hợp lệ ⇒ xem trước được
   const shipVal = draft.shipFee.trim() && ship != null && Number.isInteger(ship) && ship >= 0 ? ship : null
   const seq = new Map<string, number>()
   const groupCodes: string[][] = draft.groups.map((g) => {
@@ -270,7 +276,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
   })
   const lotId = lot?.id ?? 'draft'
   const pUnits: Unit[] = []
-  let previewOk = rateOk
+  let previewOk = calcOk
   for (const u of kept) {
     const c = parseNum(u.cny)
     if (cnyError(u.cny)) { previewOk = false; continue }
@@ -282,8 +288,8 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
     for (const cd of groupCodes[i]) pUnits.push({ id: cd, code: cd, modelId: g.modelId, lotId, priceCny: c!, costOverride: null, listPrice: listVal(g.list) })
   })
   const N = pUnits.length
-  const pLot = { id: lotId, rate: rate ?? 0, shipFee: shipVal, status: 'ordered' as const }
-  const autoCost = (priceCny: number) => (rateOk && N > 0
+  const pLot = { id: lotId, rate: rate ?? 0, shipFee: shipVal, status: 'ordered' as const, buyingFeePct: feeVal ?? 0 }
+  const autoCost = (priceCny: number) => (calcOk && N > 0
     ? (shipVal != null ? autoUnitCost({ priceCny }, pLot, N) : unitCostBeforeShip({ priceCny }, pLot))
     : null)
   const costText = (priceCny: number | null) => {
@@ -320,6 +326,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
     else if (items > MAX_GROUP_ITEMS) e['f-groups'] = `Tối đa ${MAX_GROUP_ITEMS} dòng mỗi lần lưu (mỗi chiếc cũ + mỗi nhóm mới là 1 dòng) — bớt nhóm hoặc gộp nhóm cùng model, cùng giá.`
     else if (kept.length + draft.groups.reduce((a, g) => a + (parseNum(g.qty) ?? 0), 0) > MAX_LOT_UNITS) e['f-groups'] = 'Một lô tối đa 1.000 chiếc.'
     if (rate == null || rate <= 0 || rate >= 1e8) e['f-rate'] = 'Nhập tỷ giá ₫/¥ (lớn hơn 0).'
+    if (feeVal == null) e['f-fee'] = 'Phí mua hộ là số % từ 0 đến 100 (vd. 3 hoặc 2,5), tối đa 2 chữ số thập phân.'
     if (draft.shipFee.trim() && shipVal == null) e['f-ship'] = 'Phí ship là số đồng nguyên ≥ 0, hoặc để trống.'
     if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.orderedAt)) e['f-date'] = 'Chọn ngày đặt.'
     if (draft.note.length > 2000) e['f-note'] = 'Ghi chú tối đa 2.000 ký tự.'
@@ -354,6 +361,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
         listing_title: draft.title.trim() || null,
         ordered_at: draft.orderedAt,
         exchange_rate: round2(rate!),
+        buying_fee_pct: round2(feeVal ?? 0),
         ship_fee_vnd: shipVal,
         status: lot?.status ?? 'ordered',
         note: draft.note.trim() || null,
@@ -506,7 +514,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
             </label>
             {codes.length > 0 && (
               <p className="hint">Sẽ tạo <span className="lot-codes">{rangeText(codes)}</span>{codes.length > 3 ? ` (${codes.length} chiếc)` : ''}
-                {c != null && c > 0 && rateOk ? <> · giá nhập ₫ ≈ {costText(c)} / chiếc</> : null}</p>
+                {c != null && c > 0 && calcOk ? <> · giá nhập ₫ ≈ {costText(c)} / chiếc</> : null}</p>
             )}
           </div>
         )
@@ -566,12 +574,17 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
             <span className="hint">{d.suggestions.last_exchange_rate != null ? 'Gợi ý: tỷ giá lô gần nhất' : 'Chưa có lô trước để gợi ý'}</span>
             {err('f-rate')}
           </label>
-          <label className="f">Phí ship về VN (cả lô)
-            <input className="input money" id="f-ship" inputMode="numeric" value={draft.shipFee} placeholder="để trống" onChange={(e) => set('shipFee', e.target.value)} />
-            <span className="hint">Thường biết khi hàng về{shipPer != null ? ` · lô trước ~${tr(shipPer)}/chiếc` : ''}</span>
-            {err('f-ship')}
+          <label className="f">Phí mua hộ %
+            <input className="input money" id="f-fee" inputMode="decimal" value={draft.feePct} placeholder="0" onChange={(e) => set('feePct', e.target.value)} />
+            <span className="hint">{editing ? 'Khoá khi lô đã nhận' : `Mặc định trong Cài đặt: ${pct(Number(d.settings?.default_buying_fee_pct ?? 0))}`} · tính trên tiền hàng</span>
+            {err('f-fee')}
           </label>
         </div>
+        <label className="f">Phí ship về VN (cả lô)
+          <input className="input money" id="f-ship" inputMode="numeric" value={draft.shipFee} placeholder="để trống" onChange={(e) => set('shipFee', e.target.value)} />
+          <span className="hint">Thường biết khi hàng về{shipPer != null ? ` · lô trước ~${tr(shipPer)}/chiếc` : ''}</span>
+          {err('f-ship')}
+        </label>
         <label className="f">Ngày đặt
           <input className="input" id="f-date" type="date" value={draft.orderedAt} onChange={(e) => set('orderedAt', e.target.value)} />
           {err('f-date')}
@@ -584,6 +597,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
         <div className="calc full">
           <div className="ln"><span>Số chiếc</span><span>{N || '—'}</span></div>
           <div className="ln"><span>Tiền hàng</span><span>{previewOk && N ? vnd(lotGoodsVnd(pLot, pUnits)) : '—'}</span></div>
+          <div className="ln"><span>Phí mua hộ ({feeVal != null ? pct(feeVal) : '—'})</span><span>{previewOk && N ? vnd(lotBuyingFeeVnd(pLot, pUnits)) : '—'}</span></div>
           <div className="ln"><span>Phí ship về VN</span><span>{shipVal != null ? vnd(shipVal) : 'chưa nhập'}</span></div>
           <div className="ln"><span>Ship / chiếc</span><span>{shipVal != null && N ? vnd(Math.round(shipVal / N)) : '—'}</span></div>
           {draft.groups.map((g, i) => (
@@ -593,7 +607,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
             </div>
           ))}
           <div className="ln total"><span>Phải trả trung gian</span><span>{previewOk && N ? vnd(lotPayable(pLot, pUnits)) : '—'}</span></div>
-          <div className="formula">Giá nhập ₫ = giá ¥ × tỷ giá + ship ÷ {N || 'số'} chiếc · mã chiếc do app cấp khi lưu</div>
+          <div className="formula">Giá nhập ₫ = giá ¥ × tỷ giá × (1 + phí {feeVal != null ? pct(feeVal) : '%'}) + ship ÷ {N || 'số'} chiếc · mã chiếc do app cấp khi lưu</div>
         </div>
       </div>
     </Shell>

@@ -5,7 +5,8 @@ import { supabase } from '../lib/supabase.ts'
 import { Shell } from '../ui/Shell.tsx'
 import { useToast } from '../ui/feedback.tsx'
 import { Icon } from '../ui/icons.tsx'
-import { todayVn } from '../ui/format.ts'
+import { parseNum, pct, todayVn } from '../ui/format.ts'
+import { isBuyingFeePct } from '../domain/index.ts'
 import { CONFLICT_MSG, useDesk, writeError } from './overview/common.tsx'
 import { readTheme, setTheme, type ThemeChoice } from './overview/theme.ts'
 import { exportExcel } from './overview/exportData.ts'
@@ -13,9 +14,12 @@ import { exportExcel } from './overview/exportData.ts'
 /** main.tsx gọi trước khi render để áp giao diện Sáng / Tối đã chọn. */
 export { applyStoredTheme } from './overview/theme.ts'
 
-type SettingsPatch = Partial<Pick<SettingsRow, 'ai_scan_enabled' | 'ai_scan_monthly_cap' | 'ai_confidence_threshold' | 'default_ship_fee_payer'>>
+type SettingsPatch = Partial<Pick<SettingsRow, 'ai_scan_enabled' | 'ai_scan_monthly_cap' | 'ai_confidence_threshold' | 'default_ship_fee_payer' | 'default_buying_fee_pct'>>
 
-// SC_15 Cài đặt: giao diện, AI quét tin, mặc định ship, xuất Excel, tài khoản.
+/** Số % → chữ trong ô nhập kiểu VN: 2.5 → "2,5". */
+const pctStr = (n: number | null | undefined) => String(Number(n ?? 0)).replace('.', ',')
+
+// SC_15 Cài đặt: giao diện, AI quét tin, phí mua hộ mặc định (CR-003), mặc định ship, xuất Excel, tài khoản.
 export default function Settings() {
   const d = useData()
   const desk = useDesk()
@@ -25,7 +29,8 @@ export default function Settings() {
   const [theme, setThemeState] = useState<ThemeChoice>(readTheme)
   const [cap, setCap] = useState(String(st?.ai_scan_monthly_cap ?? 100))
   const [conf, setConf] = useState(String(Math.round((st?.ai_confidence_threshold ?? 0.7) * 100)))
-  const [errs, setErrs] = useState<{ cap?: string; conf?: string; form?: string }>({})
+  const [fee, setFee] = useState(pctStr(st?.default_buying_fee_pct))
+  const [errs, setErrs] = useState<{ cap?: string; conf?: string; fee?: string; form?: string }>({})
   const [busy, setBusy] = useState(false)
   const [scans, setScans] = useState<number | null>(null)
   const [exporting, setExporting] = useState(false)
@@ -35,6 +40,7 @@ export default function Settings() {
     setCap(String(st?.ai_scan_monthly_cap ?? 100))
     setConf(String(Math.round((st?.ai_confidence_threshold ?? 0.7) * 100)))
   }, [st?.ai_scan_monthly_cap, st?.ai_confidence_threshold])
+  useEffect(() => { setFee(pctStr(st?.default_buying_fee_pct)) }, [st?.default_buying_fee_pct])
 
   // Lượt quét tháng này (cùng cách đếm với ai_scan_reserve: lỗi trước khi gọi AI không tính)
   useEffect(() => {
@@ -77,6 +83,16 @@ export default function Settings() {
     save({ ai_scan_monthly_cap: c, ai_confidence_threshold: Math.round(p) / 100 }, 'Đã lưu cài đặt AI')
   }
 
+  /** CR-003: phí mua hộ mặc định cho lô mới — 0..100 %, cho phép thập phân (2,5). Lô cũ không đổi. */
+  function saveFee() {
+    const v = fee.trim() ? parseNum(fee) : 0
+    if (v == null || !isBuyingFeePct(v)) {
+      setErrs({ fee: 'Nhập số % từ 0 đến 100 (vd. 3 hoặc 2,5), tối đa 2 chữ số thập phân.' })
+      return
+    }
+    save({ default_buying_fee_pct: Math.round(v * 100) / 100 }, `Phí mua hộ mặc định: ${pct(v)}`)
+  }
+
   function pickTheme(t: ThemeChoice) { setTheme(t); setThemeState(t) }
 
   function doExport() {
@@ -86,6 +102,7 @@ export default function Settings() {
 
   const payer: ShipPayerDb = st?.default_ship_fee_payer ?? 'customer'
   const dirtyAi = cap !== String(st?.ai_scan_monthly_cap ?? 100) || conf !== String(Math.round((st?.ai_confidence_threshold ?? 0.7) * 100))
+  const dirtyFee = fee.trim() !== pctStr(st?.default_buying_fee_pct)
 
   return (
     <Shell section="caidat" title="Cài đặt" back={desk ? undefined : '/them'}>
@@ -121,6 +138,15 @@ export default function Settings() {
         </div>
         <p className="hint">Trường AI đọc có độ tin cậy dưới ngưỡng sẽ để trống và đánh dấu “kiểm tra” (BR-13).</p>
         <button className="btn btn-ghost" id="ai-save" style={{ alignSelf: 'flex-start' }} disabled={busy || !dirtyAi} onClick={saveAi}>Lưu cài đặt AI</button>
+
+        <p className="section-title">Lô nhập</p>
+        <label className="f" style={{ maxWidth: 300 }}>Phí mua hộ mặc định %
+          <input className={`input money ${errs.fee ? 'invalid' : ''}`} id="fee-default" inputMode="decimal" value={fee} placeholder="0"
+            onChange={(e) => setFee(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && dirtyFee) saveFee() }} />
+          {errs.fee && <span className="field-err">{errs.fee}</span>}
+        </label>
+        <p className="hint">% trên tiền hàng (giá ¥ × tỷ giá), điền sẵn khi tạo lô mới và sửa được trên từng lô; cộng vào giá nhập ₫ từng chiếc và phải trả trung gian. Đổi ở đây không làm đổi lô đã có.</p>
+        <button className="btn btn-ghost" id="fee-save" style={{ alignSelf: 'flex-start' }} disabled={busy || !dirtyFee} onClick={saveFee}>Lưu phí mua hộ mặc định</button>
 
         <p className="section-title">Đơn bán</p>
         <div className="li list" style={{ cursor: 'default', flexWrap: 'wrap' }}>

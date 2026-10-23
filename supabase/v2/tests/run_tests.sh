@@ -2,7 +2,11 @@
 # Chạy toàn bộ test v2 trên 1 cụm PostgreSQL 16 tạm (xoá khi xong). KHÔNG đụng Supabase thật.
 #   bash supabase/v2/tests/run_tests.sh
 # Luồng: initdb → stub Supabase → cài v1 (migrations/001 + 002) + dữ liệu v1 → setup-v2.sql (2 lần, idempotent)
-#        → kiểm tra reset → test nghiệp vụ → test 2 phiên tranh 1 chiếc → dừng server, xoá cụm.
+#        → kiểm tra reset → test nghiệp vụ → test 2 phiên tranh 1 chiếc
+#        → CR-003: 002_buying_fee.sql 2 lần trên DB cài mới + test phí mua hộ
+#        → CR-003 nâng cấp: DB thứ 2 = v1 → 000 + fixtures/001_schema_v2_pre003.sql (bản v2 trước CR-003) + dữ liệu (test 03)
+#          → chụp số liệu → 002 (2 lần) → dữ liệu cũ không đổi + test phí mua hộ → so schema: cài mới = v2 cũ + 002
+#        → dừng server, xoá cụm.
 set -euo pipefail
 export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 PGBIN=${PGBIN:-/opt/homebrew/bin}
@@ -62,6 +66,36 @@ if [ $((T1 - T0)) -ge 1 ]; then
   echo "PASS: race: phiên B phải chờ khoá của A ($((T1 - T0))s)" >> "$LOG"
 else
   echo "FAIL: race: phiên B không chờ khoá ($((T1 - T0))s)" >> "$LOG"; exit 1
+fi
+
+# ---------- CR-003 phí mua hộ ----------
+step "002_buying_fee.sql (lần 1 + 2) trên DB cài mới (001 đã gồm CR-003)"
+"${P[@]}" -f "$V2/002_buying_fee.sql" >>"$LOG" 2>&1; "${P[@]}" -f "$V2/002_buying_fee.sql" >>"$LOG" 2>&1
+step "test CR-003 trên DB cài mới"; "${P[@]}" -f "$HERE/05_buying_fee_tests.sql" >>"$LOG" 2>&1
+
+step "nâng cấp: DB v1 → v2 TRƯỚC CR-003 (fixtures/001_schema_v2_pre003.sql) + dữ liệu"
+"${PSQL[@]}" -d postgres -c "create database grinder_up" >/dev/null
+U=("${PSQL[@]}" -d grinder_up)
+sed '/^create role /d' "$HERE/00_supabase_stub.sql" | "${U[@]}" -f - >>"$LOG" 2>&1   # role dùng chung cả cụm, đã tạo
+"${U[@]}" -f "$V1/001_init.sql" >>"$LOG" 2>&1; "${U[@]}" -f "$V1/002_realtime.sql" >>"$LOG" 2>&1
+"${U[@]}" -f "$HERE/01_v1_seed.sql" >>"$LOG" 2>&1
+"${U[@]}" -f "$V2/000_reset_v1.sql" >>"$LOG" 2>&1; "${U[@]}" -f "$HERE/fixtures/001_schema_v2_pre003.sql" >>"$LOG" 2>&1
+"${U[@]}" -f "$HERE/02_verify_reset.sql" >>"$LOG" 2>&1
+"${U[@]}" -f "$HERE/03_v2_tests.sql" >>"$LOG" 2>&1
+step "nâng cấp: chụp số liệu trước 002"; "${U[@]}" -f "$HERE/06_upgrade_snapshot.sql" >>"$LOG" 2>&1
+step "nâng cấp: 002_buying_fee.sql lần 1 (DB v2 cũ có dữ liệu)"; "${U[@]}" -f "$V2/002_buying_fee.sql" >>"$LOG" 2>&1
+step "nâng cấp: 002_buying_fee.sql lần 2 (idempotent)";          "${U[@]}" -f "$V2/002_buying_fee.sql" >>"$LOG" 2>&1
+step "nâng cấp: dữ liệu cũ giữ nguyên";  "${U[@]}" -f "$HERE/07_upgrade_verify.sql" >>"$LOG" 2>&1
+step "nâng cấp: test CR-003 trên DB đã nâng cấp"; "${U[@]}" -f "$HERE/05_buying_fee_tests.sql" >>"$LOG" 2>&1
+
+step "so schema public + private: cài mới (setup-v2 + 002) = v2 cũ + 002"
+dump() { "$PGBIN/pg_dump" -h "$BASE" -p "$PORT" -U postgres -d "$1" --schema-only --no-owner -n public -n private \
+           | grep -vE '^(--|\\restrict|\\unrestrict)' | sed '/^$/d'; }
+dump grinder > "$BASE/schema_fresh.sql"; dump grinder_up > "$BASE/schema_up.sql"
+if [ -s "$BASE/schema_fresh.sql" ] && diff -u "$BASE/schema_fresh.sql" "$BASE/schema_up.sql" >> "$LOG" 2>&1; then
+  echo "PASS: schema giống hệt: cài mới (001 có CR-003) = v2 cũ + 002_buying_fee.sql ($(wc -l < "$BASE/schema_fresh.sql" | tr -d ' ') dòng pg_dump)" | tee -a "$LOG"
+else
+  echo "FAIL: schema cài mới khác v2 cũ + 002 (xem diff trong log)" | tee -a "$LOG"; exit 1
 fi
 
 if grep -q 'FAIL' "$LOG"; then

@@ -4,7 +4,7 @@ import { useEffect, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import type { DbData, LotRow, LotStatusDb, LotSummaryRow, UnitViewRow } from '../../data/types.ts'
 import { LOT_FLOW, LOT_LABEL, LotChip } from '../../ui/status.tsx'
-import { cny, dmy, tr, vnd } from '../../ui/format.ts'
+import { cny, dmy, pct, tr, vnd } from '../../ui/format.ts'
 
 /** Màn hình máy tính (≥ 960px) — đổi theo kích thước cửa sổ. */
 export function useIsDesk(): boolean {
@@ -23,6 +23,8 @@ export function useIsDesk(): boolean {
 export const unitsOfLot = (d: DbData, lotId: string): UnitViewRow[] =>
   d.unitView.filter((u) => u.lot_id === lotId).sort((a, b) => a.code.localeCompare(b.code, 'en', { numeric: true }))
 export const summaryOf = (d: DbData, lotId: string): LotSummaryRow | undefined => d.lotSummary.find((x) => x.lot_id === lotId)
+/** Phí mua hộ % của lô (CR-003). DB chưa chạy 002_buying_fee.sql ⇒ cột chưa có ⇒ 0. */
+export const lotFeePct = (l: Pick<LotRow, 'buying_fee_pct'> | undefined): number => Number(l?.buying_fee_pct ?? 0)
 
 /** Tiền tố mã của model (KU) — không có thì dùng tên model. */
 export const prefixOf = (d: DbData, modelId: string, fallback = '?') => d.models.find((m) => m.id === modelId)?.code_prefix ?? fallback
@@ -110,7 +112,7 @@ export function LotRowItem({ d, l }: { d: DbData; l: LotRow }) {
       <span className="b">{modelsText(d, sum)}</span>
       <span className="r"><LotChip s={l.status} /><span className="num small">{tr(sum?.payable_vnd ?? 0)}</span></span>
       <span className="f">
-        {cny(Number(sum?.total_cny ?? 0))} × {Number(l.exchange_rate).toLocaleString('vi-VN')} · ship {l.ship_fee_vnd == null ? <span className="req">chưa nhập</span> : tr(l.ship_fee_vnd)}
+        {cny(Number(sum?.total_cny ?? 0))} × {Number(l.exchange_rate).toLocaleString('vi-VN')}{lotFeePct(l) > 0 && <> · phí {pct(lotFeePct(l))}</>} · ship {l.ship_fee_vnd == null ? <span className="req">chưa nhập</span> : tr(l.ship_fee_vnd)}
       </span>
       {unitCounts(sum).length > 0 && <span className="f"><UnitCounts sum={sum} /></span>}
     </Link>
