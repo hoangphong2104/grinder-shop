@@ -1,5 +1,7 @@
 // CR-002 — Ghi chú khi bán hàng: ghim lên đầu, tìm kiếm (không phân biệt dấu). Lưu trên cloud, đồng bộ realtime.
-import { useCallback, useMemo, useState } from 'react'
+// CR-004: thẻ xem trước tối đa 3 dòng (NOTE-M1), ghim = nút biểu tượng 44px, Xoá chuyển vào sheet sửa (NOTE-M2), nhóm Đã ghim / Khác (NOTE-S1).
+import '../styles/overview.css'
+import { Fragment, useCallback, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase.ts'
 import { useData, useStore } from '../data/store.tsx'
 import { errorMessage } from '../data/errors.ts'
@@ -22,7 +24,6 @@ export default function Notes() {
   const toast = useToast()
   const [q, setQ] = useState('')
   const [edit, setEdit] = useState<NoteRow | 'new' | null>(null)
-  const [del, setDel] = useState<NoteRow | null>(null)
 
   const notes = useMemo(() => {
     const f = fold(q.trim())
@@ -30,6 +31,7 @@ export default function Notes() {
       .filter((n) => !f || fold(n.body).includes(f))
       .sort((a, b) => Number(b.is_pinned) - Number(a.is_pinned) || b.updated_at.localeCompare(a.updated_at))
   }, [d.notes, q])
+  const pinnedN = notes.filter((n) => n.is_pinned).length
 
   async function togglePin(n: NoteRow) {
     const { data, error } = await supabase.from('notes').update({ is_pinned: !n.is_pinned }).eq('id', n.id).eq('version', n.version).select('id')
@@ -39,7 +41,6 @@ export default function Notes() {
   }
 
   const close = useCallback(() => setEdit(null), [])
-  const closeDel = useCallback(() => setDel(null), [])
 
   return (
     <Shell section="ghichu" title="Ghi chú" actions={<button className="btn btn-primary btn-sm" onClick={() => setEdit('new')}><Icon name="plus" />Thêm</button>}>
@@ -53,35 +54,38 @@ export default function Notes() {
         </div>
       ) : (
         <div className="notes-grid">
-          {notes.map((n) => (
-            <article key={n.id} className={`card note${n.is_pinned ? ' pinned' : ''}`}>
-              <button className="note-body" onClick={() => setEdit(n)} aria-label="Sửa ghi chú">{n.body}</button>
-              <div className="note-foot">
-                <span className="muted small">{when(n.updated_at)}</span>
-                <span className="row">
-                  <button className={`btn btn-sm ${n.is_pinned ? 'btn-primary' : 'btn-ghost'}`} onClick={() => togglePin(n)} aria-pressed={n.is_pinned}>{n.is_pinned ? 'Đã ghim' : 'Ghim'}</button>
-                  <button className="btn btn-sm btn-ghost" onClick={() => setDel(n)}>Xoá</button>
-                </span>
-              </div>
-            </article>
-          ))}
+          {notes.map((n, i) => {
+            // NOTE-S1: nhóm "Đã ghim" / "Khác" (chỉ hiện tiêu đề khi có ghim)
+            const head = pinnedN > 0 && (i === 0 || notes[i - 1].is_pinned !== n.is_pinned)
+            const [first, ...rest] = n.body.split('\n')
+            return (
+              <Fragment key={n.id}>
+                {head && <p className="section-title">{n.is_pinned ? 'Đã ghim' : 'Khác'} <span className="muted">{n.is_pinned ? pinnedN : notes.length - pinnedN}</span></p>}
+                <article className={`card ov-note${n.is_pinned ? ' pinned' : ''}`}>
+                  <button className="open" onClick={() => setEdit(n)} aria-label="Mở / sửa ghi chú">
+                    <span className="l1"><b className={rest.join('\n').trim() ? '' : 'wrap'}>{first || '(trống)'}</b><span className="when">{when(n.updated_at)}</span></span>
+                    {rest.join('\n').trim() && <span className="rest">{rest.join('\n').trim()}</span>}
+                  </button>
+                  <button className="pin" onClick={() => togglePin(n)} aria-pressed={n.is_pinned} aria-label={n.is_pinned ? 'Bỏ ghim' : 'Ghim lên đầu'} title={n.is_pinned ? 'Bỏ ghim' : 'Ghim'}>
+                    <PinIcon on={n.is_pinned} />
+                  </button>
+                </article>
+              </Fragment>
+            )
+          })}
         </div>
       )}
       {edit && <NoteEditor note={edit === 'new' ? null : edit} onClose={close} />}
-      {del && (
-        <Sheet title="Xoá ghi chú?" onClose={closeDel} footer={
-          <button className="btn btn-danger btn-block" onClick={async () => {
-            const { error } = await supabase.from('notes').delete().eq('id', del.id)
-            if (error) return toast(errorMessage(error))
-            setDel(null); await reload(); toast('Đã xoá ghi chú')
-          }}>Xoá</button>
-        }>
-          <p className="muted" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{del.body.slice(0, 200)}{del.body.length > 200 ? '…' : ''}</p>
-        </Sheet>
-      )}
     </Shell>
   )
 }
+
+/** Biểu tượng ghim (nét như icons.tsx). */
+const PinIcon = ({ on }: { on: boolean }) => (
+  <svg viewBox="0 0 24 24" fill={on ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M9 4h6l-1 6 3 3H7l3-3z" /><path d="M12 13v7" />
+  </svg>
+)
 
 function NoteEditor({ note, onClose }: { note: NoteRow | null; onClose: () => void }) {
   const { reload } = useStore()
@@ -90,6 +94,16 @@ function NoteEditor({ note, onClose }: { note: NoteRow | null; onClose: () => vo
   const [pinned, setPinned] = useState(note?.is_pinned ?? false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [confirmDel, setConfirmDel] = useState(false)
+
+  async function remove() {
+    if (!note) return
+    setBusy(true); setErr(null)
+    const { error } = await supabase.from('notes').delete().eq('id', note.id)
+    setBusy(false)
+    if (error) return setErr(errorMessage(error))
+    await reload(); toast('Đã xoá ghi chú'); onClose()
+  }
 
   async function save() {
     const text = body.trim()
@@ -116,6 +130,12 @@ function NoteEditor({ note, onClose }: { note: NoteRow | null; onClose: () => vo
         <span>Ghim lên đầu</span>
       </label>
       {err && <div className="err-text" role="alert">{err}</div>}
+      {note && (confirmDel
+        ? <>
+          <p className="warn-box">Xoá vĩnh viễn ghi chú này? Không hoàn tác được.</p>
+          <button className="btn btn-danger btn-block" id="note-del-confirm" onClick={remove} disabled={busy}>{busy ? 'Đang xoá…' : 'Xoá vĩnh viễn'}</button>
+        </>
+        : <button className="btn btn-danger btn-block" id="note-del" onClick={() => setConfirmDel(true)} disabled={busy}>Xoá ghi chú</button>)}
     </Sheet>
   )
 }

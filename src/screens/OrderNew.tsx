@@ -5,10 +5,10 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useData, useStore } from '../data/store.tsx'
 import { errorMessage } from '../data/errors.ts'
-import type { DbData, OrderStatusDb, ShipPayerDb, UnitViewRow } from '../data/types.ts'
+import type { DbData, OrderStatusDb, PaymentMethodDb, ShipPayerDb, UnitViewRow } from '../data/types.ts'
 import { Sheet, useToast } from '../ui/feedback.tsx'
 import { Shell } from '../ui/Shell.tsx'
-import { ORDER_LABEL } from '../ui/status.tsx'
+import { ORDER_LABEL, PAY_METHOD_LABEL } from '../ui/status.tsx'
 import { parseNum, todayVn, vnd } from '../ui/format.ts'
 import { fold, makeLookup, unitAvailability } from './orders/common.ts'
 import '../styles/orders.css'
@@ -17,8 +17,16 @@ interface LineDraft { unitId: string; price: string }
 interface Draft {
   custId: string; newName: string; newFb: string; newPhone: string; newAddr: string
   lines: LineDraft[]; shipFee: string; shipPayer: ShipPayerDb; deposit: string; date: string; note: string
+  /** CR-004: hình thức khoản cọc (save_order p_order.deposit_method) */
+  depMethod: Exclude<PaymentMethodDb, 'cod'>
 }
 type Errs = Partial<Record<string, string>>
+const LOCKED_MSG: Partial<Record<OrderStatusDb, string>> = {
+  shipped: 'Đơn đã gửi — không sửa được chiếc / giá (khách bom ⇒ dùng “Hoàn hàng”).',
+  completed: 'Đơn đã hoàn tất — không sửa được chiếc / giá.',
+  cancelled: 'Đơn đã huỷ — không sửa được. Tạo đơn mới nếu khách mua lại.',
+  returned: 'Đơn đã hoàn hàng — chiếc đã về Trong kho, đơn không sửa được. Bán lại chiếc bằng đơn mới.',
+}
 const MAX_LINES = 50 // save_order: TOO_MANY_LINES khi > 50
 const fmt = (n: number | null | undefined) => (n != null ? n.toLocaleString('vi-VN') : '')
 
@@ -28,7 +36,7 @@ function initDraft(d: DbData, orderId: string | null, presetCust: string | null,
     return {
       custId: o.customer_id, newName: '', newFb: '', newPhone: '', newAddr: '',
       lines: d.orderLines.filter((x) => x.order_id === o.id && !x.cancelled).map((x) => ({ unitId: x.unit_id, price: fmt(x.unit_price_vnd) })),
-      shipFee: o.ship_fee_vnd ? fmt(o.ship_fee_vnd) : '', shipPayer: o.ship_fee_payer, deposit: '', date: o.order_date, note: o.note ?? '',
+      shipFee: o.ship_fee_vnd ? fmt(o.ship_fee_vnd) : '', shipPayer: o.ship_fee_payer, deposit: '', date: o.order_date, note: o.note ?? '', depMethod: 'transfer',
     }
   }
   const cust = presetCust && d.customers.some((c) => c.id === presetCust && !c.is_hidden) ? presetCust : ''
@@ -36,7 +44,7 @@ function initDraft(d: DbData, orderId: string | null, presetCust: string | null,
   const u = presetUnit ? d.unitView.find((x) => x.unit_id === presetUnit && (x.status === 'in_stock' || x.status === 'incoming')) : undefined
   return {
     custId: cust, newName: '', newFb: '', newPhone: '', newAddr: '',
-    lines: u ? [{ unitId: u.unit_id, price: u.list_price_vnd != null ? fmt(u.list_price_vnd) : '' }] : [], shipFee: '', shipPayer: d.settings?.default_ship_fee_payer ?? 'customer', deposit: '', date: todayVn(), note: '',
+    lines: u ? [{ unitId: u.unit_id, price: u.list_price_vnd != null ? fmt(u.list_price_vnd) : '' }] : [], shipFee: '', shipPayer: d.settings?.default_ship_fee_payer ?? 'customer', deposit: '', date: todayVn(), note: '', depMethod: 'transfer',
   }
 }
 
@@ -57,6 +65,7 @@ function OrderForm({ editId }: { editId: string | null }) {
   const [errs, setErrs] = useState<Errs>({})
   const [busy, setBusy] = useState(false)
   const [picking, setPicking] = useState(false)
+  const [custQ, setCustQ] = useState('')
 
   const order = editId ? lk.order(editId) : undefined
   const back = editId ? `/don/${editId}` : '/don'
@@ -65,7 +74,7 @@ function OrderForm({ editId }: { editId: string | null }) {
   }
   if (order && order.status !== 'preorder' && order.status !== 'confirmed') {
     return <Shell section="don" title={`Sửa ${d.orderCode[order.id]}`} back={back}>
-      <div className="warn-box"><span>Đơn đã {order.status === 'cancelled' ? 'huỷ' : 'gửi'} — không sửa được chiếc / giá. Mã vận đơn và ghi chú sửa ở chi tiết đơn.</span></div>
+      <div className="warn-box"><span>{LOCKED_MSG[order.status] ?? 'Đơn đã gửi — không sửa được chiếc / giá.'} Mã vận đơn và ghi chú sửa ở chi tiết đơn (menu “⋯”).</span></div>
       <Link className="btn btn-ghost btn-block" to={back}>Về chi tiết đơn</Link>
     </Shell>
   }
@@ -77,8 +86,11 @@ function OrderForm({ editId }: { editId: string | null }) {
     ? { ...p, lines: p.lines.filter((l) => l.unitId !== u.unit_id) }
     : p.lines.length >= MAX_LINES ? p : { ...p, lines: [...p.lines, { unitId: u.unit_id, price: fmt(u.list_price_vnd) }] }))
 
+  const cqq = fold(custQ.trim())
   const custOpts = d.customers
     .filter((c) => !c.is_hidden || c.id === f.custId)
+    // DON-S5: lọc theo tên FB / SĐT; khách đang chọn luôn còn trong danh sách
+    .filter((c) => !cqq || c.id === f.custId || fold(c.fb_name).includes(cqq) || fold(c.phone ?? '').replace(/\s/g, '').includes(cqq.replace(/\s/g, '')))
     .sort((a, b) => a.fb_name.localeCompare(b.fb_name, 'vi'))
   const selCust = f.custId ? lk.cust(f.custId) : undefined
 
@@ -156,7 +168,7 @@ function OrderForm({ editId }: { editId: string | null }) {
           ...cust, order_date: f.date, ship_fee_vnd: ship, ship_fee_payer: f.shipPayer,
           tracking_no: order?.tracking_no ?? null, note: f.note.trim() || null,
           // Cọc chỉ khi tạo (sửa đơn mà gửi cọc ⇒ DEPOSIT_ONLY_ON_CREATE).
-          ...(editId ? {} : { deposit_vnd: dep, deposit_paid_at: f.date }),
+          ...(editId ? {} : { deposit_vnd: dep, deposit_paid_at: f.date, deposit_method: f.depMethod }),
         },
         p_lines: rows.map((r) => ({ unit_id: r.l.unitId, unit_price_vnd: r.price })),
         p_expected_version: order?.version ?? null,
@@ -178,7 +190,12 @@ function OrderForm({ editId }: { editId: string | null }) {
     <Shell section="don" title={title} back={back}
       savebar={<button className="btn btn-primary btn-block" disabled={busy || preview?.st === 'block'} onClick={save}>{busy ? 'Đang lưu…' : 'Lưu đơn'}</button>}>
       <div className="form-grid">
-        <label className="f" htmlFor="o-cust">Khách
+        {d.customers.length > 8 && (
+          <label className="f" htmlFor="o-cust-q">Tìm khách
+            <input className="input" id="o-cust-q" type="search" value={custQ} onChange={(e) => setCustQ(e.target.value)} placeholder="Tên Facebook hoặc SĐT" />
+          </label>
+        )}
+        <label className="f" htmlFor="o-cust">Khách{cqq ? ` · ${custOpts.length} khớp` : ''}
           <select className="input" id="o-cust" value={f.custId} onChange={(e) => set('custId', e.target.value)}>
             <option value="">+ Khách mới</option>
             {custOpts.map((c) => <option key={c.id} value={c.id}>{c.fb_name}{c.phone ? ` · ${c.phone}` : ''}{c.is_hidden ? ' (đã ẩn)' : ''}</option>)}
@@ -247,7 +264,22 @@ function OrderForm({ editId }: { editId: string | null }) {
           : <label className="f" htmlFor="o-dep">Tiền cọc
             <input className="input money" id="o-dep" inputMode="numeric" value={f.deposit} onChange={(e) => set('deposit', e.target.value)} placeholder="0" aria-invalid={!!errs['o-dep']} />
             <Err k="o-dep" />
+            {total != null && total > 0 && (
+              <span className="o-dep-quick" role="group" aria-label="Cọc nhanh">
+                {([['30%', 0.3], ['50%', 0.5], ['Đủ', 1]] as const).map(([t, r]) => (
+                  <button key={t} type="button" className="chip" onClick={() => set('deposit', fmt(r === 1 ? total : Math.round((total * r) / 1000) * 1000))}>{t}</button>
+                ))}
+              </span>
+            )}
           </label>}
+        {!editId && dep > 0 && (
+          <div className="f">
+            <span className="small muted" id="o-dep-m-l">Hình thức cọc</span>
+            <div className="seg" id="o-dep-method" role="group" aria-labelledby="o-dep-m-l" style={{ justifyContent: 'flex-start' }}>
+              {(['transfer', 'cash'] as const).map((m) => <button key={m} type="button" aria-pressed={f.depMethod === m} onClick={() => set('depMethod', m)}>{PAY_METHOD_LABEL[m]}</button>)}
+            </div>
+          </div>
+        )}
         <label className="f" htmlFor="o-date">Ngày
           <input className="input" id="o-date" type="date" value={f.date} onChange={(e) => set('date', e.target.value)} aria-invalid={!!errs['o-date']} />
           <Err k="o-date" />

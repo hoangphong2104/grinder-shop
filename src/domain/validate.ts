@@ -1,7 +1,7 @@
 /**
  * Input validation shared by the guards and the forms. Returns typed rule errors, never throws.
  */
-import type { Cny, Lot, Model, Order, Payment, Result, RuleError, Transfer, Unit, Vnd } from './types.ts';
+import type { Cny, Lot, Model, Order, Payment, PaymentMethod, Result, RuleError, Transfer, Unit, UnitCondition, Vnd } from './types.ts';
 import { fail, ok } from './types.ts';
 
 const invalid = (rule: string, message: string, field: string, extra: Partial<RuleError> = {}): RuleError => ({
@@ -78,7 +78,11 @@ export function validateLotGroup(g: { modelId: string; qty: number; priceCny: Cn
   return ok(true);
 }
 
-/** Unit fields (D1–D3). */
+/** CR-004 — DB enums. */
+export const UNIT_CONDITIONS: readonly UnitCondition[] = ['new', 'like_new', 'used', 'defect'];
+export const PAYMENT_METHODS: readonly PaymentMethod[] = ['transfer', 'cash', 'cod'];
+
+/** Unit fields (D1–D3, CR-004 condition). */
 export function validateUnit(u: Unit): Result<Unit> {
   const at = { unitId: u.id, lotId: u.lotId };
   if (!isNonEmptyString(u.code)) return fail(invalid('D1', 'Chiếc chưa có mã.', 'code', at));
@@ -88,6 +92,9 @@ export function validateUnit(u: Unit): Result<Unit> {
     return fail(invalid('D2', `Chiếc ${u.code}: giá nhập ₫ sửa tay phải là số đồng nguyên ≥ 0 (để trống = tự tính).`, 'costOverride', at));
   }
   if (!isOptionalVnd(u.listPrice)) return fail(invalid('D3', `Chiếc ${u.code}: giá bán dự kiến phải là số đồng nguyên ≥ 0.`, 'listPrice', at));
+  if (u.condition != null && !UNIT_CONDITIONS.includes(u.condition)) {
+    return fail(invalid('KHO-S3', `Chiếc ${u.code}: tình trạng không hợp lệ.`, 'condition', at));
+  }
   return ok(u);
 }
 
@@ -97,6 +104,12 @@ export function validatePayment(p: Payment, i = 0): Result<Payment> {
   }
   if (p.kind !== 'deposit' && p.kind !== 'payment' && p.kind !== 'refund') {
     return fail(invalid('BR-10', `Khoản thu ${i + 1}: loại không hợp lệ.`, `payments[${i}].kind`));
+  }
+  if (p.method != null && !PAYMENT_METHODS.includes(p.method)) {
+    return fail(invalid('DON-S1', `Khoản thu ${i + 1}: hình thức thu không hợp lệ.`, `payments[${i}].method`));
+  }
+  if (p.method === 'cod' && p.kind !== 'payment') {
+    return fail(invalid('DON-S1', `Khoản thu ${i + 1}: COD chỉ dùng cho khoản thanh toán (tiền hãng ship chuyển về).`, `payments[${i}].method`));
   }
   return ok(p);
 }
@@ -119,6 +132,12 @@ export function validateOrder(order: Order): Result<Order> {
   if (!isNonNegativeInt(order.shipFee)) return fail(invalid('BR-10', 'Phí ship VN phải là số đồng nguyên ≥ 0.', 'shipFee', at));
   if (order.shipPayer !== 'customer' && order.shipPayer !== 'shop') {
     return fail(invalid('BR-10', 'Chưa chọn ai trả phí ship.', 'shipPayer', at));
+  }
+  if (order.codAmount != null && !isNonNegativeInt(order.codAmount)) {
+    return fail(invalid('DON-S1', 'Tiền COD phải là số đồng nguyên ≥ 0.', 'codAmount', at));
+  }
+  if (order.returnShipFee != null && !isNonNegativeInt(order.returnShipFee)) {
+    return fail(invalid('DON-S3', 'Phí ship chiều về phải là số đồng nguyên ≥ 0.', 'returnShipFee', at));
   }
   for (const [i, p] of order.payments.entries()) {
     const r = validatePayment(p, i);

@@ -1,19 +1,20 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useData, useStore } from '../data/store.tsx'
-import type { UnitViewRow } from '../data/types.ts'
+import type { UnitConditionDb, UnitViewRow } from '../data/types.ts'
 import { Shell } from '../ui/Shell.tsx'
 import { useToast } from '../ui/feedback.tsx'
 import { Gpic } from '../ui/icons.tsx'
-import { LotChip, ORDER_LABEL, UnitChip } from '../ui/status.tsx'
+import { CONDITION_LABEL, CONDITION_ORDER, ConditionChip, LotChip, ORDER_LABEL, UnitChip } from '../ui/status.tsx'
 import { cny, dmy, parseNum, pct, vnd } from '../ui/format.ts'
-import { CostCell, LotShot, OrderShot, holderCode, unitProfit } from './overview/common.tsx'
+import { CostCell, HowTo, LotRow, OrderRow, agingCls, daysSince, holderCode, thresholds, unitProfit } from './overview/common.tsx'
 
 const fullDate = (iso: string | null | undefined) => (iso ? `${dmy(iso)}/${iso.slice(0, 4)}` : '—')
 const numStr = (n: number | null | undefined) => (n == null ? '' : String(n))
 
 // SC_03 Chi tiết 1 chiếc cối (CR-001): mã, model, seri, lô, người bán, trạng thái + đơn giữ / bán;
 // giá ¥, tỷ giá, ship/chiếc, giá nhập tự tính / sửa tay, giá bán dự kiến, lãi. Sửa qua RPC update_unit.
+// CR-004: tình trạng (KHO-S3, patch `condition`), tuổi tồn có màu (KHO-S1), thanh dính đáy "Bán chiếc này" (UI-S1).
 export default function UnitDetail() {
   const { id = '' } = useParams()
   const d = useData()
@@ -30,18 +31,20 @@ function UnitView({ u }: { u: UnitViewRow }) {
   const ls = d.lotSummary.find((x) => x.lot_id === u.lot_id)
   const seller = d.sellers.find((s) => s.id === u.seller_id)
   const order = u.holding_order_id ? d.orders.find((o) => o.id === u.holding_order_id) : undefined
+  const os = order ? d.orderSummary.find((x) => x.order_id === order.id) : undefined
   const holder = holderCode(d, u)
   const p = unitProfit(u)
 
   return (
-    <Shell section="kho" title={u.code} back="/kho" actions={(u.status === 'in_stock' || u.status === 'incoming') ? <Link className="btn btn-primary btn-sm" to={`/don/new?chiec=${u.unit_id}`}>Bán chiếc này</Link> : undefined}>
+    <Shell section="kho" title={u.code} back="/kho"
+      savebar={(u.status === 'in_stock' || u.status === 'incoming') ? <Link className="btn btn-primary btn-block" id="u-sell" to={`/don/new?chiec=${u.unit_id}`}>Bán chiếc này</Link> : undefined}>
       <div className="cols">
         <div>
           <div className="hero-g"><Gpic modelName={u.model_name} /></div>
           <div style={{ textAlign: 'center' }}>
             <div className="num" style={{ fontSize: 22, fontWeight: 600 }}>{u.code}</div>
             <div className="muted small">{u.model_name}{u.serial_no ? ` · seri ${u.serial_no}` : ''}</div>
-            <div style={{ marginTop: 6 }}><UnitChip s={u.status} holder={holder} /></div>
+            <div className="row" style={{ marginTop: 6, justifyContent: 'center' }}><UnitChip s={u.status} holder={holder} /><ConditionChip c={u.condition ?? 'new'} /></div>
             {order && (
               <div className="small" style={{ marginTop: 4 }}>
                 <Link className="link-btn small" to={`/don/${order.id}`}>{holder} · {u.holding_customer_name ?? ''} · {ORDER_LABEL[order.status]}</Link>
@@ -56,7 +59,8 @@ function UnitView({ u }: { u: UnitViewRow }) {
             <dt>Người bán</dt><dd>{seller ? <Link className="link-btn" style={{ padding: 0 }} to={`/nguoiban/${seller.id}`}>{seller.nickname}</Link> : '—'}</dd>
             <dt>Ngày đặt</dt><dd>{fullDate(u.ordered_at)}</dd>
             <dt>Ngày nhận</dt><dd>{u.received_at ? fullDate(u.received_at) : u.status === 'cancelled' ? '— (lô huỷ)' : '— (đang về)'}</dd>
-            <dt>{u.status === 'sold' ? 'Số ngày tồn (tới lúc gửi)' : 'Số ngày tồn'}</dt><dd className="num">{u.days_in_stock ?? '—'}</dd>
+            <dt>Tình trạng</dt><dd>{CONDITION_LABEL[u.condition ?? 'new']}</dd>
+            <dt>{u.status === 'sold' ? 'Số ngày tồn (tới lúc gửi)' : 'Số ngày tồn'}</dt><dd className="num"><Aging u={u} /></dd>
             {u.status === 'sold' && <><dt>Ngày gửi</dt><dd>{fullDate(u.sold_at)}</dd></>}
           </dl>
 
@@ -73,22 +77,34 @@ function UnitView({ u }: { u: UnitViewRow }) {
             {u.order_unit_price_vnd != null && <><dt>{u.status === 'sold' ? 'Giá chốt (đã bán)' : 'Giá chốt trên đơn'}</dt><dd className="num">{vnd(u.order_unit_price_vnd)}</dd></>}
             <dt>{p.actual ? 'Lãi thực tế' : 'Lãi dự kiến'}</dt><dd className={`num ${p.value != null && p.value < 0 ? 'req' : ''}`}>{vnd(p.value)}</dd>
           </dl>
-          <p className="hint">Giá nhập tự tính = giá web × tỷ giá × (1 + phí mua hộ {pct(Number(lot?.buying_fee_pct ?? 0))}) + phí ship lô ÷ {ls?.total_qty ?? 'số'} chiếc; tự cập nhật khi đổi tỷ giá / phí mua hộ / phí ship (kể cả chiếc đã bán). Đã sửa tay thì giữ số sửa tay.</p>
+          <HowTo>Giá nhập tự tính = giá web × tỷ giá × (1 + phí mua hộ {pct(Number(lot?.buying_fee_pct ?? 0))}) + phí ship lô ÷ {ls?.total_qty ?? 'số'} chiếc; tự cập nhật khi đổi tỷ giá / phí mua hộ / phí ship (kể cả chiếc đã bán). Đã sửa tay thì giữ số sửa tay.</HowTo>
         </div>
         <div>
           <UnitEditor u={u} />
           <p className="section-title">Lô nhập</p>
-          <div className="stack">{lot ? <LotShot d={d} l={lot} /> : <p className="muted small">Không tìm thấy lô</p>}</div>
+          {lot ? <div className="ov-list"><LotRow d={d} l={lot} /></div> : <p className="muted small">Không tìm thấy lô</p>}
           {order && (
             <>
               <p className="section-title">{u.status === 'sold' ? 'Đơn đã bán' : 'Đơn đang giữ'}</p>
-              <div className="stack"><OrderShot d={d} o={order} /></div>
+              {os ? <div className="ov-list"><OrderRow d={d} o={os} /></div> : null}
             </>
           )}
         </div>
       </div>
     </Shell>
   )
+}
+
+/** Tuổi tồn có màu (KHO-S1) + giải thích ngưỡng; chiếc đang về: số ngày từ lúc đặt. */
+function Aging({ u }: { u: UnitViewRow }) {
+  const d = useData()
+  const th = thresholds(d)
+  if (u.days_in_stock == null) {
+    const n = u.status === 'incoming' ? daysSince(u.ordered_at) : null
+    return <>{n != null ? <span className="muted">— (đã đặt {n} ngày)</span> : '—'}</>
+  }
+  const note = u.aging_level === 'alert' ? ` · tồn lâu, quá ${th.alert} ngày` : u.aging_level === 'warn' ? ` · quá ${th.warn} ngày` : ''
+  return <span className={agingCls(u.aging_level)}>{u.days_in_stock} ngày{note}</span>
 }
 
 /** Sửa giá nhập sửa tay / giá bán dự kiến / seri / ghi chú (A10: sửa được mọi lúc). */
@@ -100,13 +116,14 @@ function UnitEditor({ u }: { u: UnitViewRow }) {
   const [price, setPrice] = useState(numStr(u.list_price_vnd))
   const [serial, setSerial] = useState(u.serial_no ?? '')
   const [note, setNote] = useState(u.note ?? '')
+  const [cond, setCond] = useState<UnitConditionDb>(u.condition ?? 'new')
   const [errs, setErrs] = useState<{ cost?: string; price?: string; form?: string }>({})
   const [busy, setBusy] = useState(false)
 
   // Dữ liệu đổi (vừa lưu / máy khác sửa) → nạp lại ô
   useEffect(() => {
-    setCost(numStr(u.cost_vnd_override)); setPrice(numStr(u.list_price_vnd)); setSerial(u.serial_no ?? ''); setNote(u.note ?? '')
-  }, [u.version, u.cost_vnd_override, u.list_price_vnd, u.serial_no, u.note])
+    setCost(numStr(u.cost_vnd_override)); setPrice(numStr(u.list_price_vnd)); setSerial(u.serial_no ?? ''); setNote(u.note ?? ''); setCond(u.condition ?? 'new')
+  }, [u.version, u.cost_vnd_override, u.list_price_vnd, u.serial_no, u.note, u.condition])
 
   async function send(patch: Record<string, unknown>, okMsg: string) {
     setBusy(true); setErrs({})
@@ -133,17 +150,27 @@ function UnitEditor({ u }: { u: UnitViewRow }) {
     if (pr !== u.list_price_vnd) patch.list_price_vnd = pr
     if ((serial.trim() || null) !== (u.serial_no ?? null)) patch.serial_no = serial.trim() || null
     if ((note.trim() || null) !== (u.note ?? null)) patch.note = note.trim() || null
+    if (cond !== (u.condition ?? 'new')) patch.condition = cond
     if (Object.keys(patch).length === 0) return
     void send(patch, `Đã lưu ${u.code}`)
   }
 
   const dirty = cost !== numStr(u.cost_vnd_override) || price !== numStr(u.list_price_vnd) || serial !== (u.serial_no ?? '') || note !== (u.note ?? '')
+    || cond !== (u.condition ?? 'new')
 
   return (
     <div className="stack">
       <p className="section-title">Sửa chiếc này</p>
-      <div className="two">
-        <label className="f">Giá nhập sửa tay (₫)
+      <div className="f" role="group" aria-labelledby="u-cond-l">
+        <span id="u-cond-l" className="muted small" style={{ fontWeight: 500 }}>Tình trạng</span>
+        <div className="ov-seg4" style={{ marginTop: 5 }}>
+          {CONDITION_ORDER.map((c) => (
+            <button key={c} type="button" className="chip" id={`u-cond-${c}`} aria-pressed={cond === c} disabled={busy} onClick={() => setCond(c)}>{CONDITION_LABEL[c]}</button>
+          ))}
+        </div>
+      </div>
+      <div className="two ov-two">
+        <label className="f">Giá nhập (sửa tay, ₫)
           <input className={`input money ${errs.cost ? 'invalid' : ''}`} id="u-cost" inputMode="numeric" placeholder={`tự tính ${vnd(u.cost_vnd_auto)}`}
             value={cost} onChange={(e) => setCost(e.target.value)} />
           {errs.cost && <span className="field-err">{errs.cost}</span>}

@@ -3,14 +3,114 @@ a.li, a.cell-link { text-decoration: none; color: inherit; }
 a.link-btn, a.btn { text-decoration: none; }
 .tbl a.cell-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .li.dim .main b, .li.dim .main .s { opacity: .6; }
-.mhead.dim { opacity: .6; }
 .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.field-err { color: var(--bad); font-size: 12.5px; font-weight: 400; }
+.field-err { color: var(--bad); font-size: 13px; font-weight: 400; }
 .input.invalid { border-color: var(--bad); }
-.ledger-bal { font-family: var(--mono); font-size: 11.5px; color: var(--faint); }
 .bars .b i.neg { background: var(--bad); }
 .confirm-text { text-align: center; margin: 0; }
-/* Dòng màu trong thẻ model là Link (prototype dùng button) — cùng kiểu */
-.mcard .vrow a { box-sizing: border-box; color: inherit; text-decoration: none; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 2px; border-bottom: 1px solid var(--line-2); font-size: 13.5px; }
-.mcard .vrow a:last-child { border-bottom: 0; }
-.mcard .vrow a:focus-visible { outline: 2px solid var(--accent); }
+
+/* ---------- CR-004 UI-M1: dòng danh sách 2 dòng (research §1.3) ---------- */
+.ov-list { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; overflow: clip; }
+.ov-row { box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "a b" "c d"; gap: 2px 12px; align-items: center;
+  width: 100%; min-height: 60px; padding: 10px 14px; margin: 0; border: 0; border-bottom: 1px solid var(--line-2); background: transparent;
+  color: var(--fg); text-decoration: none; text-align: left; font: inherit; cursor: pointer; }
+.ov-row:last-child { border-bottom: 0; }
+.ov-row:hover:not(.static), .ov-row:active:not(.static) { background: var(--surface-2); }
+.ov-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ov-row.static { cursor: default; }
+.ov-row > span { min-width: 0; white-space: nowrap; }
+.ov-row .a { grid-area: a; display: flex; gap: 8px; align-items: baseline; overflow: hidden; font-size: 15px; line-height: 20px; }
+.ov-row .a .id { flex: none; font-family: var(--mono); font-weight: 600; font-variant-numeric: tabular-nums; }
+.ov-row .a b { font-weight: 600; }
+.ov-row.dim .a, .ov-row.dim .c { opacity: .6; }
+.ov-row .tx { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ov-row .b { grid-area: b; text-align: right; font: 500 15px/20px var(--mono); font-variant-numeric: tabular-nums; }
+.ov-row .c { grid-area: c; display: flex; gap: 6px; align-items: center; overflow: hidden; font-size: 13px; line-height: 18px; color: var(--muted); }
+.ov-row .c .pill { flex: none; }
+.ov-row .d { grid-area: d; text-align: right; font: 13px/18px var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); }
+.ov-row .pill { font-size: 12px; line-height: 18px; }
+.ov-row .b:empty, .ov-row .d:empty { display: none; }
+.neg { color: var(--bad); }
+.pos { color: var(--ok); }
+/* KHO-S1 tuổi tồn: ≤ ngưỡng 1 thường · cam · đỏ */
+.age-warn { color: var(--way); font-weight: 500; }
+.age-alert { color: var(--bad); font-weight: 600; }
+/* Tiêu đề nhóm dính (KHO-S5, TIEN-S1) */
+.ov-gh { position: sticky; top: calc(56px + env(safe-area-inset-top, 0px)); z-index: 5; display: flex; justify-content: space-between; gap: 8px; padding: 5px 14px;
+  background: var(--surface-2); border-bottom: 1px solid var(--line-2); font-size: 13px; font-weight: 600; color: var(--fg); white-space: nowrap; }
+.ov-gh > span { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ov-gh .muted { font-weight: 400; flex: none; font-family: var(--mono); }
+
+/* ---------- Thanh lọc chuẩn (KHO-M2): tìm 1 dòng + 1 hàng chip + nút Lọc ---------- */
+.ov-filter { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ov-filter .line { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.ov-filter .chips { flex: 1; min-width: 0; }
+.ov-filter .fbtn { flex: none; }
+.ov-filter .fbtn .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); display: inline-block; }
+.chip.x { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.ov-strip { margin: 0; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ov-strip b { color: var(--fg); font-weight: 600; }
+.ov-banner { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 12px; border-radius: var(--r-md); background: var(--way-bg); color: var(--way);
+  font-size: 13.5px; text-decoration: none; white-space: nowrap; overflow: hidden; }
+.ov-banner > span { overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+/* Lựa chọn trong sheet Lọc */
+.ov-opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.ov-opts .chip .c { margin-left: 2px; }
+.ov-sheet-t { margin: 4px 0 -4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+
+/* Bảng máy tính: tiêu đề cột sắp xếp được */
+.tbl th button.sort { all: unset; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; }
+.tbl th button.sort:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tbl th[aria-sort="descending"] button.sort, .tbl th[aria-sort="ascending"] button.sort { color: var(--fg); font-weight: 600; }
+
+/* ---------- Tổng quan: Cần làm gom theo loại (HOME-M1) ---------- */
+.ov-todo { display: flex; flex-direction: column; gap: 6px; }
+.ov-todo-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 4px 0 0; font-size: 14px; font-weight: 600; min-height: 32px; }
+.ov-todo-h > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ov-todo-h .n { font-family: var(--mono); font-weight: 500; color: var(--muted); }
+.ov-todo-h .link-btn { flex: none; font-size: 13px; }
+.ov-todo-h.bad { color: var(--bad); }
+.ov-todo-h.way { color: var(--way); }
+
+/* ---------- Báo cáo ---------- */
+.bars button.b { border: 0; background: transparent; padding: 0; cursor: pointer; font: 12px var(--mono); color: var(--muted); }
+.bars button.b:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bars .b.sel i { box-shadow: 0 0 0 2px var(--accent); }
+.bars .b.sel { color: var(--fg); font-weight: 600; }
+.bars .b span { white-space: nowrap; }
+.bars-x span.sel { color: var(--fg); font-weight: 600; }
+.ov-buckets { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ov-buckets .kpi .v { font-size: 18px; }
+.ov-buckets .kpi.warn { border-color: var(--way); }
+.ov-buckets .kpi.alert { border-color: var(--bad); }
+@media (min-width: 960px) { .ov-buckets { grid-template-columns: repeat(4, 1fr); } .ov-gh { top: 64px; } }
+
+/* UI-S3: giải thích dài gập lại */
+.ov-how { font-size: 13px; color: var(--muted); }
+.ov-how summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; list-style: none; color: var(--accent); font-weight: 500; }
+.ov-how summary::-webkit-details-marker { display: none; }
+.ov-how .hint { margin: 0 0 6px; }
+
+/* UI-M6: 2 ô cạnh nhau → 1 cột dưới 420px */
+@media (max-width: 419px) { .two.ov-two { grid-template-columns: 1fr; } }
+/* Lựa chọn tình trạng (chiếc) */
+.ov-seg4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.ov-seg4 .chip { justify-content: center; min-height: 44px; padding: 4px 6px; }
+.ov-seg4 .chip[aria-pressed="true"] { background: var(--fill); border-color: var(--fill); color: var(--on-fill); }
+
+/* ---------- Ghi chú (NOTE-M1/M2/S1) ---------- */
+.ov-note { display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 0 4px; padding: 6px 4px 6px 14px; min-width: 0; }
+.ov-note.pinned { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.ov-note .open { all: unset; cursor: pointer; display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 6px 0; }
+.ov-note .open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ov-note .l1 { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
+.ov-note .l1 b { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ov-note .l1 .when { flex: none; font: 12px var(--mono); color: var(--muted); }
+.ov-note .rest { color: var(--muted); font-size: 14px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ov-note .pin { width: 44px; height: 44px; border: 0; background: transparent; border-radius: var(--r-md); display: grid; place-items: center; cursor: pointer; color: var(--faint); }
+.ov-note .pin[aria-pressed="true"] { color: var(--accent); }
+.ov-note .pin:hover { background: var(--surface-2); }
+.ov-note .pin svg { width: 20px; height: 20px; }
+.notes-grid .section-title { grid-column: 1 / -1; }
+.ov-note .l1 b.wrap { white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; }

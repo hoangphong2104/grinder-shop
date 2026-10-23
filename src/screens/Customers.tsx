@@ -1,4 +1,5 @@
-// SC_13 Khách — danh sách (tên, SĐT, địa chỉ, FB, số đơn, còn nợ); bấm → sheet sửa thông tin, Ẩn / Hiện lại (BR-14), xem đơn.
+// SC_13 Khách — CR-004 TIEN-S4: dòng 2 dòng (tên | còn nợ; SĐT · địa chỉ | số đơn), ô tìm + chip lọc Còn nợ / Đã ẩn.
+// Danh sách (tên, SĐT, địa chỉ, FB, số đơn, còn nợ); bấm → sheet sửa thông tin, Ẩn / Hiện lại (BR-14), xem đơn.
 // Bảng customers ghi trực tiếp được (grant); sửa kèm điều kiện version để bắt sửa đồng thời 2 máy.
 import { useCallback, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -9,54 +10,69 @@ import { supabase } from '../lib/supabase.ts'
 import { Sheet, useToast } from '../ui/feedback.tsx'
 import { Shell } from '../ui/Shell.tsx'
 import { tr } from '../ui/format.ts'
-import { useIsDesk, VERSION_CONFLICT_MSG } from './orders/common.ts'
+import { fold, useIsDesk, VERSION_CONFLICT_MSG } from './orders/common.ts'
+import '../styles/orders.css'
 
 export default function Customers() {
   const d = useData()
   const desk = useIsDesk()
-  const [showHidden, setShowHidden] = useState(false)
+  const [tab, setTab] = useState<'all' | 'due' | 'hidden'>('all')
+  const [q, setQ] = useState('')
   const [editing, setEditing] = useState<CustomerRow | null>(null)
   const close = useCallback(() => setEditing(null), [])
 
   // Số đơn + còn nợ theo khách (đơn Huỷ không tính nợ — Q-009).
   const stats = useMemo(() => {
-    const m = new Map<string, { n: number; due: number }>()
+    const m = new Map<string, { n: number; due: number; refund: number }>()
     for (const s of d.orderSummary) {
-      const x = m.get(s.customer_id) ?? { n: 0, due: 0 }
+      const x = m.get(s.customer_id) ?? { n: 0, due: 0, refund: 0 }
       x.n += 1
       x.due += Math.max(0, s.receivable_vnd)
+      x.refund += s.refund_due_vnd
       m.set(s.customer_id, x)
     }
     return m
   }, [d.orderSummary])
 
-  const hiddenCount = d.customers.filter((c) => c.is_hidden).length
-  const list = d.customers
-    .filter((c) => c.is_hidden === showHidden)
-    .sort((a, b) => a.fb_name.localeCompare(b.fb_name, 'vi'))
+  const qq = fold(q.trim())
+  const found = d.customers.filter((c) => !qq || fold(c.fb_name).includes(qq) || fold(c.phone ?? '').replace(/\s/g, '').includes(qq.replace(/\s/g, '')))
+  const visible = found.filter((c) => !c.is_hidden)
+  const hasDue = (id: string) => (stats.get(id)?.due ?? 0) > 0
+  const cnt = { all: visible.length, due: visible.filter((c) => hasDue(c.id)).length, hidden: found.filter((c) => c.is_hidden).length }
+  const list = (tab === 'hidden' ? found.filter((c) => c.is_hidden) : tab === 'due' ? visible.filter((c) => hasDue(c.id)) : visible)
+    // Còn nợ: nợ nhiều trước; khác: theo tên
+    .sort((a, b) => tab === 'due' ? (stats.get(b.id)?.due ?? 0) - (stats.get(a.id)?.due ?? 0) : a.fb_name.localeCompare(b.fb_name, 'vi'))
+  const totalDue = list.reduce((a, c) => a + (stats.get(c.id)?.due ?? 0), 0)
   // Sheet đang mở dùng bản mới nhất của dòng (realtime / sau khi lưu).
   const cur = editing ? d.customers.find((c) => c.id === editing.id) ?? null : null
 
   return (
     <Shell section="khach" title="Khách" back={desk ? undefined : '/them'}>
-      {(hiddenCount > 0 || showHidden) && (
-        <div className="seg" style={{ alignSelf: 'flex-start' }}>
-          <button aria-pressed={!showHidden} onClick={() => setShowHidden(false)}>Đang dùng</button>
-          <button aria-pressed={showHidden} onClick={() => setShowHidden(true)}>Đã ẩn ({hiddenCount})</button>
+      {d.customers.length > 0 && (
+        <div className="o-filter">
+          <div className="o-top"><input className="input" id="c-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm tên Facebook hoặc SĐT" aria-label="Tìm khách" /></div>
+          <div className="chips" role="group" aria-label="Lọc khách">
+            <button type="button" className="chip" aria-pressed={tab === 'all'} onClick={() => setTab('all')}>Đang dùng<span className="c">{cnt.all}</span></button>
+            <button type="button" className="chip" aria-pressed={tab === 'due'} onClick={() => setTab('due')}>Còn nợ<span className="c">{cnt.due}</span></button>
+            {(cnt.hidden > 0 || tab === 'hidden') && <button type="button" className="chip" aria-pressed={tab === 'hidden'} onClick={() => setTab('hidden')}>Đã ẩn<span className="c">{cnt.hidden}</span></button>}
+          </div>
         </div>
       )}
+      {tab === 'due' && list.length > 0 && <div className="o-sum"><span>{list.length} khách còn nợ</span><b className="tone-bad">{tr(totalDue)}</b></div>}
       {list.length === 0
-        ? <div className="empty">{showHidden ? 'Không có khách nào bị ẩn.' : <><b>Chưa có khách nào</b><br />Khách được tạo khi lưu <Link to="/don/new">đơn bán mới</Link>.</>}</div>
+        ? <div className="empty">{d.customers.length === 0
+          ? <><b>Chưa có khách nào</b><br />Khách được tạo khi lưu đơn bán mới.<br /><br /><Link className="btn btn-primary" to="/don/new">Tạo đơn bán</Link></>
+          : q ? `Không có khách khớp “${q}”.` : tab === 'due' ? 'Không khách nào còn nợ.' : tab === 'hidden' ? 'Không có khách nào bị ẩn.' : 'Không có khách.'}</div>
         : (
-          <div className="stack">
+          <div className="olist">
             {list.map((c) => {
-              const st = stats.get(c.id) ?? { n: 0, due: 0 }
+              const st = stats.get(c.id) ?? { n: 0, due: 0, refund: 0 }
               return (
-                <button key={c.id} className="shot item" onClick={() => setEditing(c)}>
-                  <span className="t">{[c.phone, c.address].filter(Boolean).join(' · ') || 'Chưa có SĐT / địa chỉ'}</span>
-                  <span className="b">{c.fb_name}</span>
-                  <span className="r num">{st.n} đơn</span>
-                  <span className="f">{c.fb_url || '—'}{st.due > 0 && <> · <span className="req">còn nợ {tr(st.due)}</span></>}</span>
+                <button key={c.id} type="button" className="orow" onClick={() => setEditing(c)}>
+                  <span className="l1"><span className="nm" style={{ fontWeight: 500 }}>{c.fb_name}</span></span>
+                  <span className={`r1 ${st.due > 0 || st.refund > 0 ? 'tone-bad' : ''}`} style={{ fontSize: 14 }}>{st.due > 0 ? `còn nợ ${tr(st.due)}` : st.refund > 0 ? `cần hoàn ${tr(st.refund)}` : ''}</span>
+                  <span className="l2"><span className="meta">{[c.phone, c.address].filter(Boolean).join(' · ') || 'Chưa có SĐT / địa chỉ'}</span></span>
+                  <span className="r2 tone-neu">{st.n} đơn</span>
                 </button>
               )
             })}

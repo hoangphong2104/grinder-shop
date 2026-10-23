@@ -3,8 +3,8 @@
  * derived status (A5), days in stock, per-model stock counts (A9) and lot guards
  * (BR-02 / Q-011 receive, A10 / Q-014 edit lock, cancel). Pure: inputs are never mutated.
  */
-import type { Cny, IsoDate, Lot, Model, Order, Result, RuleError, Unit, UnitStatus, Vnd } from './types.ts';
-import { LOT_STATUS_LABEL, UNIT_STATUS_LABEL, fail, ok } from './types.ts';
+import type { AgingLevel, AgingThresholds, Cny, IsoDate, Lot, Model, Order, Result, RuleError, Unit, UnitStatus, Vnd } from './types.ts';
+import { DEFAULT_AGING, DEFAULT_LOT_LATE_DAYS, LOT_STATUS_LABEL, UNIT_STATUS_LABEL, fail, ok } from './types.ts';
 import { unitCosts, type UnitCost } from './cost.ts';
 import { validateLotGroup } from './validate.ts';
 
@@ -72,20 +72,26 @@ export function expandLotGroups(groups: readonly LotGroupInput[], models: readon
 /** Order that has shipped (Đã gửi / Hoàn tất): its units are sold. */
 export const isSoldOrder = (o: Pick<Order, 'status'>): boolean => o.status === 'shipped' || o.status === 'completed';
 
-/** The non-cancelled order holding a unit (each unit belongs to at most one such order — CR §3), or null. */
+/**
+ * Order that has let go of its units: cancelled (§2) or returned (CR-004 "Hoàn hàng" — the DB flags its lines
+ * `cancelled`). Its units are free again (in stock / incoming) and can be sold to another order.
+ */
+export const isReleasedOrder = (o: Pick<Order, 'status'>): boolean => o.status === 'cancelled' || o.status === 'returned';
+
+/** The order holding a unit (not cancelled / returned; each unit belongs to at most one such order — CR §3), or null. */
 export function holdingOrder(unitId: string, orders: readonly Order[], exceptOrderId?: string): Order | null {
   for (const o of orders) {
-    if (o.status === 'cancelled' || o.id === exceptOrderId) continue;
+    if (isReleasedOrder(o) || o.id === exceptOrderId) continue;
     if (o.lines.some((l) => l.unitId === unitId)) return o;
   }
   return null;
 }
 
-/** unit id → holding (non-cancelled) order. */
+/** unit id → holding order (cancelled / returned orders hold nothing). */
 export function holderIndex(orders: readonly Order[]): Map<string, Order> {
   const m = new Map<string, Order>();
   for (const o of orders) {
-    if (o.status === 'cancelled') continue;
+    if (isReleasedOrder(o)) continue;
     for (const l of o.lines) if (!m.has(l.unitId)) m.set(l.unitId, o);
   }
   return m;
@@ -100,7 +106,7 @@ function statusOf(lot: Pick<Lot, 'status'>, holder: Order | null | undefined): U
 /**
  * A5 — Trạng thái chiếc: `cancelled` (lô huỷ) · `sold` (đơn Đã gửi / Hoàn tất) · `reserved` (đơn Đặt trước /
  * Đã chốt) · `in_stock` (lô đã nhận, chưa ai giữ) · `incoming` (lô chưa nhận, chưa ai giữ).
- * A cancelled order releases its units (they fall back to in_stock / incoming).
+ * A cancelled or returned order releases its units (they fall back to in_stock / incoming).
  */
 export const unitStatus = (unit: Pick<Unit, 'id'>, lot: Pick<Lot, 'status'>, orders: readonly Order[]): UnitStatus =>
   statusOf(lot, holdingOrder(unit.id, orders));
@@ -136,6 +142,45 @@ export function unitDaysInStock(lot: Pick<Lot, 'status' | 'receivedAt'>, holder:
   return daysBetween(lot.receivedAt, until);
 }
 
+/* ---------- Aging (CR-004 KHO-S1, LOT-S2, HOME-S1) ---------- */
+
+/**
+ * KHO-S1 — mức tuổi tồn từ số ngày tồn: > alertDays ⇒ `alert` (đỏ), > warnDays ⇒ `warn` (cam), else `ok`.
+ * Defaults 30 / 60 (Cài đặt). Null days ⇒ null.
+ */
+export function agingLevel(days: number | null, t: AgingThresholds = DEFAULT_AGING): AgingLevel | null {
+  if (days == null) return null;
+  if (days > t.alertDays) return 'alert';
+  if (days > t.warnDays) return 'warn';
+  return 'ok';
+}
+
+/**
+ * Same as DB `v_units.aging_level`: only units already in stock and not sold (status `in_stock` or a `reserved`
+ * unit whose lot is received) have an aging level; incoming / sold / cancelled ⇒ null.
+ */
+export function unitAgingLevel(
+  status: UnitStatus,
+  lot: Pick<Lot, 'status' | 'receivedAt'>,
+  today: IsoDate,
+  t: AgingThresholds = DEFAULT_AGING,
+): AgingLevel | null {
+  if (lot.status !== 'received' || (status !== 'in_stock' && status !== 'reserved')) return null;
+  return agingLevel(daysBetween(lot.receivedAt, today), t);
+}
+
+/** Số ngày từ ngày đặt của lô còn mở ("đặt 12 ngày"); null when the lot is received / cancelled or has no order date. */
+export function lotDaysOpen(lot: Pick<Lot, 'status' | 'orderedAt'>, today: IsoDate): number | null {
+  if (lot.status === 'received' || lot.status === 'cancelled' || !lot.orderedAt) return null;
+  return daysBetween(lot.orderedAt, today);
+}
+
+/** LOT-S2 — "Lô về trễ": open lot ordered more than `lateDays` (default 21) days ago. Same as DB `v_lot_summary.is_lot_late`. */
+export function isLotLate(lot: Pick<Lot, 'status' | 'orderedAt'>, today: IsoDate, lateDays: number = DEFAULT_LOT_LATE_DAYS): boolean {
+  const d = lotDaysOpen(lot, today);
+  return d != null && d > lateDays;
+}
+
 /* ---------- Unit list rows (mirror of the DB view v_units) ---------- */
 
 export interface UnitView {
@@ -152,13 +197,21 @@ export interface UnitView {
   /** Lãi thực tế = giá chốt − giá nhập ₫ hiệu lực, only when sold. */
   profit: Vnd | null;
   daysInStock: number | null;
+  /** CR-004 — mức tuổi tồn (≈ `v_units.aging_level`). */
+  agingLevel: AgingLevel | null;
 }
 
 /**
- * One row per unit with status, holder, costs, profit and days in stock. `units` must contain ALL units
- * of the lots involved (ship fee split), `lots` every unit's lot (missing lot throws — data error).
+ * One row per unit with status, holder, costs, profit, days in stock and aging level. `units` must contain ALL
+ * units of the lots involved (ship fee split), `lots` every unit's lot (missing lot throws — data error).
  */
-export function buildUnitViews(units: readonly Unit[], lots: readonly Lot[], orders: readonly Order[], today: IsoDate): UnitView[] {
+export function buildUnitViews(
+  units: readonly Unit[],
+  lots: readonly Lot[],
+  orders: readonly Order[],
+  today: IsoDate,
+  aging: AgingThresholds = DEFAULT_AGING,
+): UnitView[] {
   const lotById = new Map(lots.map((l) => [l.id, l]));
   const costs = unitCosts(units, lots);
   const holders = holderIndex(orders);
@@ -179,6 +232,7 @@ export function buildUnitViews(units: readonly Unit[], lots: readonly Lot[], ord
       expectedProfit: refPrice == null ? null : refPrice - cost.effective,
       profit: status === 'sold' && salePrice != null ? salePrice - cost.effective : null,
       daysInStock: unitDaysInStock(lot, holder, today),
+      agingLevel: unitAgingLevel(status, lot, today, aging),
     };
   });
 }

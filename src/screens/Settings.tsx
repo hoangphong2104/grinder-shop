@@ -14,12 +14,13 @@ import { exportExcel } from './overview/exportData.ts'
 /** main.tsx gọi trước khi render để áp giao diện Sáng / Tối đã chọn. */
 export { applyStoredTheme } from './overview/theme.ts'
 
-type SettingsPatch = Partial<Pick<SettingsRow, 'ai_scan_enabled' | 'ai_scan_monthly_cap' | 'ai_confidence_threshold' | 'default_ship_fee_payer' | 'default_buying_fee_pct'>>
+type SettingsPatch = Partial<Pick<SettingsRow, 'ai_scan_enabled' | 'ai_scan_monthly_cap' | 'ai_confidence_threshold' | 'default_ship_fee_payer' | 'default_buying_fee_pct' | 'aging_warn_days' | 'aging_alert_days' | 'lot_late_days' | 'bank_info'>>
 
 /** Số % → chữ trong ô nhập kiểu VN: 2.5 → "2,5". */
 const pctStr = (n: number | null | undefined) => String(Number(n ?? 0)).replace('.', ',')
 
 // SC_15 Cài đặt: giao diện, AI quét tin, phí mua hộ mặc định (CR-003), mặc định ship, xuất Excel, tài khoản.
+// CR-004: ngưỡng tuổi tồn (cam / đỏ) + lô về trễ (HOME-S1, KHO-S1, LOT-S2); STK in trong tin xác nhận đơn (DON-S2).
 export default function Settings() {
   const d = useData()
   const desk = useDesk()
@@ -30,7 +31,11 @@ export default function Settings() {
   const [cap, setCap] = useState(String(st?.ai_scan_monthly_cap ?? 100))
   const [conf, setConf] = useState(String(Math.round((st?.ai_confidence_threshold ?? 0.7) * 100)))
   const [fee, setFee] = useState(pctStr(st?.default_buying_fee_pct))
-  const [errs, setErrs] = useState<{ cap?: string; conf?: string; fee?: string; form?: string }>({})
+  const [warn, setWarn] = useState(String(st?.aging_warn_days ?? 30))
+  const [alert, setAlert] = useState(String(st?.aging_alert_days ?? 60))
+  const [late, setLate] = useState(String(st?.lot_late_days ?? 21))
+  const [bank, setBank] = useState(st?.bank_info ?? '')
+  const [errs, setErrs] = useState<{ cap?: string; conf?: string; fee?: string; warn?: string; alert?: string; late?: string; bank?: string; form?: string }>({})
   const [busy, setBusy] = useState(false)
   const [scans, setScans] = useState<number | null>(null)
   const [exporting, setExporting] = useState(false)
@@ -41,6 +46,10 @@ export default function Settings() {
     setConf(String(Math.round((st?.ai_confidence_threshold ?? 0.7) * 100)))
   }, [st?.ai_scan_monthly_cap, st?.ai_confidence_threshold])
   useEffect(() => { setFee(pctStr(st?.default_buying_fee_pct)) }, [st?.default_buying_fee_pct])
+  useEffect(() => {
+    setWarn(String(st?.aging_warn_days ?? 30)); setAlert(String(st?.aging_alert_days ?? 60)); setLate(String(st?.lot_late_days ?? 21))
+  }, [st?.aging_warn_days, st?.aging_alert_days, st?.lot_late_days])
+  useEffect(() => { setBank(st?.bank_info ?? '') }, [st?.bank_info])
 
   // Lượt quét tháng này (cùng cách đếm với ai_scan_reserve: lỗi trước khi gọi AI không tính)
   useEffect(() => {
@@ -93,6 +102,27 @@ export default function Settings() {
     save({ default_buying_fee_pct: Math.round(v * 100) / 100 }, `Phí mua hộ mặc định: ${pct(v)}`)
   }
 
+  /** Ngưỡng ngày: số nguyên 1..3650, cam < đỏ (ràng buộc DB settings_aging_days_order). */
+  function saveDays() {
+    const int = (v: string) => (/^\d+$/.test(v.trim()) ? Number(v.trim()) : NaN)
+    const w = int(warn), a = int(alert), l = int(late)
+    const e: typeof errs = {}
+    const bad = (n: number) => !Number.isInteger(n) || n < 1 || n > 3650
+    if (bad(w)) e.warn = 'Nhập số ngày nguyên từ 1 đến 3650.'
+    if (bad(a)) e.alert = 'Nhập số ngày nguyên từ 1 đến 3650.'
+    else if (!e.warn && a <= w) e.alert = `Ngưỡng đỏ phải lớn hơn ngưỡng cam (${w} ngày).`
+    if (bad(l)) e.late = 'Nhập số ngày nguyên từ 1 đến 3650.'
+    setErrs(e)
+    if (e.warn || e.alert || e.late) return
+    save({ aging_warn_days: w, aging_alert_days: a, lot_late_days: l }, 'Đã lưu ngưỡng ngày')
+  }
+
+  function saveBank() {
+    const v = bank.trim()
+    if (v.length > 500) { setErrs({ bank: 'Tối đa 500 ký tự.' }); return }
+    save({ bank_info: v || null }, v ? 'Đã lưu số tài khoản' : 'Đã xoá số tài khoản')
+  }
+
   function pickTheme(t: ThemeChoice) { setTheme(t); setThemeState(t) }
 
   function doExport() {
@@ -103,6 +133,8 @@ export default function Settings() {
   const payer: ShipPayerDb = st?.default_ship_fee_payer ?? 'customer'
   const dirtyAi = cap !== String(st?.ai_scan_monthly_cap ?? 100) || conf !== String(Math.round((st?.ai_confidence_threshold ?? 0.7) * 100))
   const dirtyFee = fee.trim() !== pctStr(st?.default_buying_fee_pct)
+  const dirtyDays = warn !== String(st?.aging_warn_days ?? 30) || alert !== String(st?.aging_alert_days ?? 60) || late !== String(st?.lot_late_days ?? 21)
+  const dirtyBank = bank.trim() !== (st?.bank_info ?? '').trim()
 
   return (
     <Shell section="caidat" title="Cài đặt" back={desk ? undefined : '/them'}>
@@ -148,7 +180,31 @@ export default function Settings() {
         <p className="hint">% trên tiền hàng (giá ¥ × tỷ giá), điền sẵn khi tạo lô mới và sửa được trên từng lô; cộng vào giá nhập ₫ từng chiếc và phải trả trung gian. Đổi ở đây không làm đổi lô đã có.</p>
         <button className="btn btn-ghost" id="fee-save" style={{ alignSelf: 'flex-start' }} disabled={busy || !dirtyFee} onClick={saveFee}>Lưu phí mua hộ mặc định</button>
 
+        <p className="section-title">Ngưỡng ngày (tồn lâu, lô về trễ)</p>
+        <div className="two ov-two">
+          <label className="f">Tồn lâu — cam sau (ngày)
+            <input className={`input money ${errs.warn ? 'invalid' : ''}`} id="age-warn" inputMode="numeric" value={warn} onChange={(e) => setWarn(e.target.value)} />
+            {errs.warn && <span className="field-err">{errs.warn}</span>}
+          </label>
+          <label className="f">Tồn lâu — đỏ sau (ngày)
+            <input className={`input money ${errs.alert ? 'invalid' : ''}`} id="age-alert" inputMode="numeric" value={alert} onChange={(e) => setAlert(e.target.value)} />
+            {errs.alert && <span className="field-err">{errs.alert}</span>}
+          </label>
+        </div>
+        <label className="f" style={{ maxWidth: 300 }}>Lô về trễ khi đặt quá (ngày)
+          <input className={`input money ${errs.late ? 'invalid' : ''}`} id="lot-late" inputMode="numeric" value={late} onChange={(e) => setLate(e.target.value)} />
+          {errs.late && <span className="field-err">{errs.late}</span>}
+        </label>
+        <p className="hint">Số ngày tồn trong Kho đổi màu cam / đỏ theo ngưỡng; Tổng quan nhắc chiếc tồn quá ngưỡng đỏ và lô đặt quá số ngày trên mà chưa nhận.</p>
+        <button className="btn btn-ghost" id="days-save" style={{ alignSelf: 'flex-start' }} disabled={busy || !dirtyDays} onClick={saveDays}>Lưu ngưỡng ngày</button>
+
         <p className="section-title">Đơn bán</p>
+        <label className="f">Số tài khoản (in trong tin xác nhận đơn)
+          <textarea className={`input ${errs.bank ? 'invalid' : ''}`} id="bank-info" rows={3} maxLength={500} value={bank}
+            placeholder="VD: STK 0123456789 · Vietcombank · NGUYEN VAN A" onChange={(e) => setBank(e.target.value)} />
+          {errs.bank && <span className="field-err">{errs.bank}</span>}
+        </label>
+        <button className="btn btn-ghost" id="bank-save" style={{ alignSelf: 'flex-start' }} disabled={busy || !dirtyBank} onClick={saveBank}>Lưu số tài khoản</button>
         <div className="li list" style={{ cursor: 'default', flexWrap: 'wrap' }}>
           <div className="main"><b>Phí ship giao khách mặc định</b><div className="s">Áp khi tạo đơn mới; sửa được trên từng đơn</div></div>
           <div className="seg" role="group" aria-label="Phí ship mặc định">

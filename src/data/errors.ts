@@ -12,10 +12,11 @@ const MSG: Record<string, string> = {
   LOT_LOCKED: 'Lô đã nhận: không thêm / bớt chiếc, không đổi giá ¥ / tỷ giá. Sửa phí ship ở trang lô; giá nhập ₫ sửa tay, giá bán, seri sửa ở từng chiếc.',
   ORDER_NOT_FOUND: 'Không tìm thấy đơn.',
   ORDER_HAS_NO_LINES: 'Đơn cần ít nhất một chiếc cối.',
-  ORDER_LOCKED: 'Đơn đã gửi — không sửa được hàng / giá.',
+  ORDER_LOCKED: 'Đơn đã gửi / hoàn tất / huỷ / hoàn hàng — không sửa được nữa.',
+  ORDER_NOT_RETURNABLE: 'Chỉ hoàn hàng được đơn đang "Đã gửi" (chưa hoàn tất).',
   ORDER_NOT_CONFIRMED: 'Chỉ đơn Đã chốt mới gửi hàng được (Q-007).',
   ORDER_NOT_PREORDER: 'Đơn không ở trạng thái Đặt trước.',
-  ORDER_NOT_SHIPPED: 'Đơn chưa gửi hàng.',
+  ORDER_NOT_SHIPPED: 'Đơn chưa gửi hàng (tiền COD đặt lúc gửi hàng).',
   RECEIVABLE_NOT_ZERO: 'Khách còn nợ / trả dư — xác nhận để hoàn tất (BR-10).',
   INVALID_AMOUNT: 'Số tiền không hợp lệ.',
   INVALID_INPUT: 'Dữ liệu nhập chưa hợp lệ.',
@@ -48,7 +49,7 @@ const MSG: Record<string, string> = {
 export function errorMessage(e: unknown): string {
   const raw = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e)
   const code = Object.keys(MSG).find((k) => raw.includes(k))
-  if (code) return MSG[code] + detailSuffix(e)
+  if (code) return (code === 'INVALID_INPUT' || code === 'INVALID_AMOUNT' ? fieldMessage(e) : null) ?? MSG[code] + detailSuffix(e)
   if (raw.includes('23503') || /foreign key/i.test(raw)) return 'Mục này đã có chiếc cối, lô hoặc đơn dùng tới — hãy Ẩn thay vì xoá (BR-14).'
   if (raw.includes('models_user_prefix_uq')) return 'Tiền tố mã này đã dùng cho model khác — chọn tiền tố khác.'
   if (raw.includes('23505') || /duplicate key/i.test(raw)) return 'Tên này đã có — đặt tên khác.'
@@ -65,4 +66,20 @@ function detailSuffix(e: unknown): string {
     const codes = j.unit_codes?.length ? j.unit_codes : j.code ? [j.code] : []
     return codes.length ? ` (${codes.join(', ')})` : ''
   } catch { return '' }
+}
+
+// CR-004: INVALID_INPUT / INVALID_AMOUNT gửi tên trường trong `details` (chữ thường) → câu cụ thể hơn.
+const FIELD_MSG: Record<string, string> = {
+  condition: 'Tình trạng chiếc không hợp lệ (Mới / Như mới / Đã dùng / Có lỗi).',
+  p_units: 'Danh sách chiếc khi nhận hàng không hợp lệ.',
+  p_keep_deposit: 'Chọn giữ cọc hay hoàn cọc cho khách.',
+  returned_at: 'Ngày hoàn hàng không được trước ngày gửi.',
+  note: 'Ghi chú quá dài.',
+  deposit_method: 'Tiền cọc chỉ nhận chuyển khoản hoặc tiền mặt.',
+  cod_amount_vnd: 'Tiền COD phải là số ≥ 0.',
+  return_ship_fee_vnd: 'Phí ship chiều về phải là số ≥ 0.',
+}
+function fieldMessage(e: unknown): string | null {
+  const d = e && typeof e === 'object' && 'details' in e ? (e as { details: unknown }).details : null
+  return typeof d === 'string' && d in FIELD_MSG ? FIELD_MSG[d]! : null
 }

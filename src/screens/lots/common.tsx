@@ -1,10 +1,11 @@
 // Dùng chung cho nhóm màn Lô nhập (v0.2, CR-001 quản lý từng chiếc): tra cứu, cảnh báo, thẻ lô (bảng cột),
-// dòng lô (điện thoại), tóm tắt model + đếm trạng thái chiếc của lô (v_lot_summary), ô giá nhập ₫ của 1 chiếc.
+// dòng lô 2 dòng + dòng chiếc (điện thoại, CR-004), tóm tắt model + đếm trạng thái chiếc của lô (v_lot_summary), ô giá nhập ₫ của 1 chiếc.
 import { useEffect, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import type { DbData, LotRow, LotStatusDb, LotSummaryRow, UnitViewRow } from '../../data/types.ts'
-import { LOT_FLOW, LOT_LABEL, LotChip } from '../../ui/status.tsx'
-import { cny, dmy, pct, tr, vnd } from '../../ui/format.ts'
+import { ConditionChip, LOT_FLOW, LOT_LABEL, UnitChip } from '../../ui/status.tsx'
+import { cny, dmy, todayVn, tr, vnd } from '../../ui/format.ts'
+import { lotDaysOpen } from '../../domain/index.ts'
 
 /** Màn hình máy tính (≥ 960px) — đổi theo kích thước cửa sổ. */
 export function useIsDesk(): boolean {
@@ -54,6 +55,17 @@ export function nextStatus(s: LotStatusDb): LotStatusDb | null {
   const i = LOT_FLOW.indexOf(s)
   return i >= 0 && i < LOT_FLOW.length - 1 ? LOT_FLOW[i + 1] : null
 }
+/** CR-004 U9: nhãn bước ngắn cho chip / nút trên điện thoại. */
+export const LOT_SHORT: Record<LotStatusDb, string> = {
+  ordered: 'Đã đặt', cn_shipping: 'Ship TQ', at_forwarder: 'Tới TG', vn_shipping: 'Về VN', received: 'Đã nhận', cancelled: 'Huỷ',
+}
+const LOT_TONE: Record<LotStatusDb, string> = { ordered: 'neu', cn_shipping: 'way', at_forwarder: 'way', vn_shipping: 'way', received: 'ok', cancelled: 'neu' }
+/** Chip bước nhãn ngắn (cùng màu LotChip). */
+export const LotStepPill = ({ s }: { s: LotStatusDb }) => <span className={`pill ${LOT_TONE[s]}`}>{LOT_SHORT[s]}</span>
+/** CR-004 LOT-S2: lô về trễ (v_lot_summary.is_lot_late — DB tính theo Cài đặt lot_late_days). */
+export const isLate = (d: DbData, l: LotRow): boolean => Boolean(summaryOf(d, l.id)?.is_lot_late)
+/** Số ngày từ ngày đặt (lô còn mở) — null khi đã nhận / huỷ. */
+export const daysOpen = (l: LotRow): number | null => lotDaysOpen({ status: l.status, orderedAt: l.ordered_at }, todayVn())
 export const sellerOf = (d: DbData, l: LotRow) => (l.seller_id ? d.sellers.find((s) => s.id === l.seller_id) : undefined)
 /** Mới nhất trước: ngày đặt, rồi thời điểm tạo. */
 export const byNewest = (a: LotRow, b: LotRow) => b.ordered_at.localeCompare(a.ordered_at) || b.created_at.localeCompare(a.created_at)
@@ -66,6 +78,7 @@ export const preordersOfLot = (d: DbData, lotId: string): string[] =>
 export function lotWarnings(d: DbData, l: LotRow): [string, string][] {
   const w: [string, string][] = []
   const idx = LOT_FLOW.indexOf(l.status)
+  if (isLate(d, l)) w.push(['Về trễ', 'bad'])
   if (l.ship_fee_vnd == null && idx >= 2 && isOpen(l.status)) w.push(['Thiếu phí ship', 'bad'])
   if (sellerOf(d, l)?.is_avoided) w.push(['Người bán bị đánh dấu tránh', 'bad'])
   if (isOpen(l.status) && preordersOfLot(d, l.id).length) w.push(['Có đơn đặt trước đang chờ', 'hold'])
@@ -74,9 +87,9 @@ export function lotWarnings(d: DbData, l: LotRow): [string, string][] {
 
 const stop = (fn: () => void) => (e: MouseEvent) => { e.stopPropagation(); fn() }
 
-/** Thẻ lô trong bảng cột / danh sách theo bước (prototype lotCard). */
-export function LotCard({ d, l, withActs, busy, onShipFee, onNext }: {
-  d: DbData; l: LotRow; withActs: boolean; busy: boolean; onShipFee: (l: LotRow) => void; onNext: (l: LotRow) => void
+/** Thẻ lô trong bảng cột (máy tính, prototype lotCard). CR-004 LOT-M3: 1 nút bước kế; phí ship nhập ở chi tiết lô. */
+export function LotCard({ d, l, withActs, busy, onNext }: {
+  d: DbData; l: LotRow; withActs: boolean; busy: boolean; onNext: (l: LotRow) => void
 }) {
   const nav = useNavigate()
   const s = sellerOf(d, l), sum = summaryOf(d, l.id), next = nextStatus(l.status)
@@ -86,7 +99,7 @@ export function LotCard({ d, l, withActs, busy, onShipFee, onNext }: {
   return (
     <div className="kcard" role="button" tabIndex={0} onClick={go} onKeyDown={key}>
       <span className="t">{d.lotCode[l.id]} · {modelsText(d, sum)}</span>
-      <span className="s">{s?.nickname ?? 'Chưa rõ người bán'} · {l.status === 'received' ? `nhận ${dmy(l.received_at)}` : `đặt ${dmy(l.ordered_at)}`}</span>
+      <span className="s">{s?.nickname ?? 'Chưa rõ người bán'} · {l.status === 'received' ? `nhận ${dmy(l.received_at)}` : `đặt ${dmy(l.ordered_at)} · ${daysOpen(l) ?? 0} ngày`}</span>
       <span className="m">
         <span>{l.status === 'received' && sum?.ship_per_unit_vnd != null ? `ship ${tr(sum.ship_per_unit_vnd)}/chiếc` : cny(Number(sum?.total_cny ?? 0))}</span>
         <span>{tr(sum?.payable_vnd ?? 0)}</span>
@@ -95,26 +108,69 @@ export function LotCard({ d, l, withActs, busy, onShipFee, onNext }: {
       {warns.length > 0 && <span className="row-wrap">{warns.map(([t, c]) => <span key={t} className={`pill ${c}`}>{t}</span>)}</span>}
       {withActs && next && (
         <div className="acts">
-          {l.ship_fee_vnd == null && <button className="btn btn-ghost btn-sm" disabled={busy} onClick={stop(() => onShipFee(l))}>Phí ship</button>}
-          <button className="btn btn-primary btn-sm" disabled={busy} onClick={stop(() => onNext(l))}>{LOT_LABEL[next]} →</button>
+          <button className="btn btn-primary btn-sm" disabled={busy} onClick={stop(() => onNext(l))}>{next === 'received' ? 'Nhận hàng' : `${LOT_LABEL[next]} →`}</button>
         </div>
       )}
     </div>
   )
 }
 
-/** Dòng lô (danh sách trên điện thoại, prototype lotRow). */
-export function LotRowItem({ d, l }: { d: DbData; l: LotRow }) {
-  const s = sellerOf(d, l), sum = summaryOf(d, l.id)
+/** CR-004 LOT-M1 + LOT-M3: dòng lô 2 dòng (điện thoại, research §3.4).
+ *  Dòng 1: mã lô + tóm tắt model … Phải trả TG. Dòng 2: chip bước · "đặt N ngày" / "nhận dd/mm" (+ chip "Về trễ")
+ *  · 1 cảnh báo ngắn … nút bước kế (lô mở) / "N chiếc" (lô đã nhận). Cả dòng mở chi tiết (link phủ dòng). */
+export function LotRow2({ d, l, busy, onNext }: { d: DbData; l: LotRow; busy: boolean; onNext: (l: LotRow) => void }) {
+  const sum = summaryOf(d, l.id), next = nextStatus(l.status)
+  const days = daysOpen(l)
+  const late = isLate(d, l)
+  const warn = shortWarning(d, l)
+  const code = d.lotCode[l.id] ?? 'Lô'
   return (
-    <Link className="shot" to={`/lo/${l.id}`}>
-      <span className="t">{d.lotCode[l.id]} · đặt {dmy(l.ordered_at)} · {s?.nickname ?? 'Chưa rõ người bán'}</span>
-      <span className="b">{modelsText(d, sum)}</span>
-      <span className="r"><LotChip s={l.status} /><span className="num small">{tr(sum?.payable_vnd ?? 0)}</span></span>
-      <span className="f">
-        {cny(Number(sum?.total_cny ?? 0))} × {Number(l.exchange_rate).toLocaleString('vi-VN')}{lotFeePct(l) > 0 && <> · phí {pct(lotFeePct(l))}</>} · ship {l.ship_fee_vnd == null ? <span className="req">chưa nhập</span> : tr(l.ship_fee_vnd)}
+    <div className="lotrow">
+      <span className="l1">
+        <Link className="code num" to={`/lo/${l.id}`} aria-label={`Mở ${code}`}>{code}</Link>
+        <span className="nm">{modelsText(d, sum)}</span>
       </span>
-      {unitCounts(sum).length > 0 && <span className="f"><UnitCounts sum={sum} /></span>}
+      <span className="r1 num">{tr(sum?.payable_vnd ?? 0)}</span>
+      <span className="l2">
+        <LotStepPill s={l.status} />
+        {late && <span className="pill bad">Về trễ</span>}
+        <span className="meta">
+          {days != null ? `đặt ${days} ngày` : l.status === 'received' ? `nhận ${dmy(l.received_at)}` : `đặt ${dmy(l.ordered_at)}`}
+          {warn && <> · <span className={warn[1] === 'bad' ? 'req' : ''}>{warn[0]}</span></>}
+        </span>
+      </span>
+      <span className="r2">
+        {isOpen(l.status) && next
+          ? <button type="button" className="btn btn-ghost nx" disabled={busy} onClick={() => onNext(l)}>{next === 'received' ? 'Nhận hàng' : `→ ${LOT_SHORT[next]}`}</button>
+          : <span className="muted small num">{sum?.total_qty ?? 0} chiếc</span>}
+      </span>
+    </div>
+  )
+}
+
+/** Cảnh báo ngắn nhất cho dòng lô (tối đa 1): thiếu ship → người bán tránh → có đặt trước. */
+export function shortWarning(d: DbData, l: LotRow): [string, string] | null {
+  if (l.ship_fee_vnd == null && LOT_FLOW.indexOf(l.status) >= 2 && isOpen(l.status)) return ['thiếu ship', 'bad']
+  if (sellerOf(d, l)?.is_avoided) return ['người bán tránh', 'bad']
+  if (isOpen(l.status) && preordersOfLot(d, l.id).length) return ['có đặt trước', 'hold']
+  return null
+}
+
+/** Dòng chiếc trong chi tiết lô (điện thoại, dòng Kho §2.4 + tình trạng — CR-004 KHO-S3).
+ *  Dòng 1: mã + model … giá bán dự kiến / giá chốt. Dòng 2: chip trạng thái + chip tình trạng · seri … nhập. */
+export function UnitRow2({ d, u }: { d: DbData; u: UnitViewRow }) {
+  const holder = u.holding_order_id ? d.orderCode[u.holding_order_id] : undefined
+  const price = u.status === 'sold' ? u.sold_price_vnd : u.list_price_vnd
+  return (
+    <Link className="lotrow unit" to={`/kho/${u.unit_id}`}>
+      <span className="l1"><b className="code num">{u.code}</b><span className="nm">{u.model_name}</span></span>
+      <span className="r1 num">{price != null ? tr(price) : '—'}</span>
+      <span className="l2">
+        <UnitChip s={u.status} holder={holder} />
+        <ConditionChip c={u.condition ?? 'new'} />
+        {u.serial_no && <span className="meta">{u.serial_no}</span>}
+      </span>
+      <span className="r2 muted small num">nhập {tr(u.cost_vnd)}{u.cost_is_overridden ? '*' : u.cost_is_provisional ? '~' : ''}</span>
     </Link>
   )
 }

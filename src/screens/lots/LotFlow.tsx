@@ -1,13 +1,13 @@
 // Thao tác trên lô dùng chung cho danh sách + chi tiết (v0.2, CR-001): chuyển bước, nhận vào kho (BR-02, Q-011,
-// A7 tự chốt đơn Đặt trước), phí ship (trước nhận: save_lot; sau nhận: update_lot_ship_fee — A3, A10), huỷ lô
+// A7 tự chốt đơn Đặt trước; CR-004 LOT-S1 tình trạng + seri từng chiếc), phí ship (trước nhận: save_lot; sau nhận: update_lot_ship_fee — A3, A10), huỷ lô
 // (LOT_HAS_RESERVED_UNITS ⇒ liệt kê đơn đang giữ chiếc).
 import { useCallback, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useData, useStore } from '../../data/store.tsx'
-import type { DbData, LotRow, UnitViewRow } from '../../data/types.ts'
+import type { DbData, LotRow, UnitConditionDb, UnitViewRow } from '../../data/types.ts'
 import { Sheet, useToast } from '../../ui/feedback.tsx'
 import { Icon } from '../../ui/icons.tsx'
-import { LOT_LABEL } from '../../ui/status.tsx'
+import { CONDITION_LABEL, CONDITION_ORDER, LOT_LABEL } from '../../ui/status.tsx'
 import { cny, dmy, parseNum, pct, todayVn, vnd } from '../../ui/format.ts'
 import { autoUnitCost, roundVnd } from '../../domain/index.ts'
 import { codesText, lotFeePct, nextStatus, unitsOfLot } from './common.tsx'
@@ -57,7 +57,7 @@ function CostPreview({ units, rate, feePct, fee }: { units: UnitViewRow[]; rate:
   }
   const over = units.filter((u) => u.cost_is_overridden)
   return (
-    <div className="calc">
+    <div className="calc lot-calc">
       {[...groups.values()].map((g) => (
         <div className="ln" key={g.label}><span>{codesText(g.codes, 3)} · {g.label}</span><span>{vnd(g.cost)}</span></div>
       ))}
@@ -72,7 +72,7 @@ type Open =
   | { kind: 'confirmed'; ids: string[] }
   | null
 
-interface ReceiveResult { units?: { unit_id: string; code: string; cost_vnd: number }[]; auto_confirmed_order_ids?: string[] }
+interface ReceiveResult { units?: { unit_id: string; code: string; cost_vnd: number; condition?: UnitConditionDb; serial_no?: string | null }[]; auto_confirmed_order_ids?: string[] }
 
 export function useLotFlow(): {
   next: (l: LotRow) => void; receive: (l: LotRow) => void; shipFee: (l: LotRow) => void; cancel: (l: LotRow) => void
@@ -110,31 +110,47 @@ export function useLotFlow(): {
   }
 }
 
-/** Nhận vào kho (từ bất kỳ bước mở nào — Q-011). Thiếu phí ship ⇒ hỏi phí (BR-02). Xong ⇒ báo đơn tự chốt (A7). */
+interface RcUnit { condition: UnitConditionDb; serial: string }
+
+/** Nhận vào kho (từ bất kỳ bước mở nào — Q-011). CR-004 LOT-S1: liệt kê từng chiếc của lô với tình trạng
+ *  (mặc định Mới) + seri (tuỳ chọn) → receive_lot p_units. Phí ship bắt buộc nếu lô chưa có (BR-02), sửa được nếu đã có.
+ *  Xong ⇒ báo đơn Đặt trước tự chốt (A7). */
 function ReceiveSheet({ lotId, onClose, onDone }: { lotId: string; onClose: () => void; onDone: (confirmedIds: string[]) => void }) {
   const d = useData()
   const { rpc } = useStore()
   const toast = useToast()
   const l = d.lots.find((x) => x.id === lotId)
-  const [fee, setFee] = useState('')
+  const [fee, setFee] = useState(l?.ship_fee_vnd != null ? String(l.ship_fee_vnd) : '')
   const [date, setDate] = useState(todayVn())
+  const [rc, setRc] = useState<Record<string, RcUnit>>(() =>
+    Object.fromEntries(unitsOfLot(d, lotId).map((u) => [u.unit_id, { condition: u.condition ?? 'new', serial: u.serial_no ?? '' }])))
   const [err, setErr] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   if (!l) return null
   const units = unitsOfLot(d, l.id), qty = units.length
-  const needFee = l.ship_fee_vnd == null
   const sug = suggestedShip(d, qty)
-  const feeVal = needFee ? readFee(fee) : l.ship_fee_vnd
+  const feeVal = readFee(fee)
   const held = units.filter((u) => u.holding_order_status === 'preorder').length
+  const cur = (u: UnitViewRow): RcUnit => rc[u.unit_id] ?? { condition: u.condition ?? 'new', serial: u.serial_no ?? '' }
+  const setU = (id: string, patch: Partial<RcUnit>) => setRc((m) => {
+    const u = units.find((x) => x.unit_id === id)
+    const base = m[id] ?? { condition: u?.condition ?? 'new', serial: u?.serial_no ?? '' }
+    return { ...m, [id]: { ...base, ...patch } }
+  })
+  const setAll = (c: UnitConditionDb) => setRc((m) => Object.fromEntries(units.map((u) => [u.unit_id, { ...(m[u.unit_id] ?? cur(u)), condition: c }])))
+  const allSame = units.length > 0 && units.every((u) => cur(u).condition === cur(units[0]).condition) ? cur(units[0]).condition : ''
 
   const submit = async () => {
-    if (needFee && feeVal == null) return setErr('Nhập phí ship về VN của cả lô (BR-02) — có thể dùng gợi ý.')
-    if (feeVal != null && Number.isNaN(feeVal)) return setErr('Phí ship phải là số đồng nguyên ≥ 0.')
+    if (feeVal == null) return setErr('Nhập phí ship về VN của cả lô (BR-02) — có thể dùng gợi ý.')
+    if (Number.isNaN(feeVal)) return setErr('Phí ship phải là số đồng nguyên ≥ 0.')
     if (!date) return setErr('Chọn ngày nhận.')
+    const long = units.find((u) => cur(u).serial.trim().length > 100)
+    if (long) return setErr(`Seri của ${long.code} tối đa 100 ký tự.`)
     setErr(null); setSending(true)
     try {
       const r = await rpc<ReceiveResult>('receive_lot', {
-        p_lot_id: l.id, p_ship_fee_vnd: needFee ? feeVal : null, p_received_at: date, p_expected_version: l.version,
+        p_lot_id: l.id, p_ship_fee_vnd: feeVal, p_received_at: date, p_expected_version: l.version,
+        p_units: units.map((u) => ({ unit_id: u.unit_id, condition: cur(u).condition, serial_no: cur(u).serial.trim() })),
       })
       const ids = r.auto_confirmed_order_ids ?? []
       toast(`Đã nhập kho ${r.units?.length ?? qty} chiếc${ids.length ? ` · tự chốt ${ids.length} đơn đặt trước` : ''}`)
@@ -143,25 +159,58 @@ function ReceiveSheet({ lotId, onClose, onDone }: { lotId: string; onClose: () =
   }
 
   return (
-    <Sheet title="Nhận hàng vào kho" onClose={onClose}
-      footer={<button className="btn btn-primary btn-block" disabled={sending} onClick={submit}>{sending ? <><span className="spin" /> Đang nhận…</> : 'Nhận vào kho'}</button>}>
-      {needFee ? (
-        <>
-          <p className="muted small" style={{ textAlign: 'center', margin: 0 }}>Cần phí ship về VN để tính giá nhập ₫ từng chiếc (BR-02).</p>
-          <label className="f">Phí ship về VN cả lô (₫)
-            <input className="input money" id="rc-fee" inputMode="numeric" value={fee} placeholder={sug != null ? String(sug) : ''}
-              onChange={(e) => setFee(e.target.value)} />
-          </label>
-          <p className="hint">
-            Gợi ý theo lô trước: {sug != null ? <>{vnd(sug)} <button type="button" className="link-btn small" onClick={() => setFee(String(sug))}>Dùng gợi ý</button></> : '—'}
-          </p>
-        </>
-      ) : (
-        <p className="muted" style={{ textAlign: 'center', margin: 0 }}>{qty} chiếc vào kho · phí ship {vnd(l.ship_fee_vnd)}.</p>
+    <Sheet title={`Nhận ${d.lotCode[l.id] ?? 'lô'} vào kho`} onClose={onClose}
+      footer={<button className="btn btn-primary btn-block" id="rc-submit" disabled={sending} onClick={submit}>{sending ? <><span className="spin" /> Đang nhận…</> : `Nhận vào kho (${qty} chiếc)`}</button>}>
+      <div className="two">
+        <label className="f"><span className="flab">Phí ship cả lô ₫{l.ship_fee_vnd == null && <span className="req"> *</span>}</span>
+          <input className="input money" id="rc-fee" inputMode="numeric" value={fee} placeholder={sug != null ? String(sug) : ''}
+            onChange={(e) => setFee(e.target.value)} />
+        </label>
+        <label className="f"><span className="flab">Ngày nhận</span>
+          <input className="input" id="rc-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </label>
+      </div>
+      {l.ship_fee_vnd == null && (
+        <p className="hint two-hint">
+          Cần để tính giá nhập ₫ (BR-02). Gợi ý theo lô trước: {sug != null ? <>{vnd(sug)} <button type="button" className="link-btn small" onClick={() => setFee(String(sug))}>Dùng gợi ý</button></> : '—'}
+        </p>
       )}
       {feeVal != null && !Number.isNaN(feeVal) && <CostPreview units={units} rate={Number(l.exchange_rate)} feePct={lotFeePct(l)} fee={feeVal} />}
+
+      {qty > 0 && (
+        <>
+          <div className="rc-all">
+            <span>Tình trạng · seri (tuỳ chọn)</span>
+            {qty > 1 && (
+              <select className="input" id="rc-all" aria-label="Đặt tình trạng cho mọi chiếc" value={allSame}
+                onChange={(e) => { if (e.target.value) setAll(e.target.value as UnitConditionDb) }}>
+                <option value="">Tất cả là…</option>
+                {CONDITION_ORDER.map((c) => <option key={c} value={c}>Tất cả: {CONDITION_LABEL[c]}</option>)}
+              </select>
+            )}
+          </div>
+          <div className="rc-units">
+            {units.map((u) => {
+              const v = cur(u)
+              return (
+                <div className="rc-unit" key={u.unit_id}>
+                  <span className="uh">
+                    <b className="num">{u.code}</b><span className="nm">{u.model_name}</span>
+                    {u.holding_order_id && <span className="pill hold">Giữ {d.orderCode[u.holding_order_id] ?? 'đơn'}</span>}
+                  </span>
+                  <select className="input" id={`rc-cond-${u.code}`} aria-label={`Tình trạng ${u.code}`} value={v.condition}
+                    onChange={(e) => setU(u.unit_id, { condition: e.target.value as UnitConditionDb })}>
+                    {CONDITION_ORDER.map((c) => <option key={c} value={c}>{CONDITION_LABEL[c]}</option>)}
+                  </select>
+                  <input className="input" id={`rc-serial-${u.code}`} aria-label={`Seri ${u.code}`} value={v.serial} maxLength={100}
+                    placeholder="Seri (tuỳ chọn)" autoComplete="off" onChange={(e) => setU(u.unit_id, { serial: e.target.value })} />
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
       {held > 0 && <p className="hint">{held} chiếc đang giữ cho đơn Đặt trước — đơn nào đủ mọi chiếc trong kho sẽ tự chuyển Đã chốt (A7).</p>}
-      <label className="f">Ngày nhận<input className="input" id="rc-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
       {err && <p className="err-text" role="alert">{err}</p>}
     </Sheet>
   )

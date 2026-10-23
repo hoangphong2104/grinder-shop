@@ -8,7 +8,8 @@
 -- XOÁ: thành viên publication supabase_realtime của các bảng app; view; bảng public (v1 + v2) và
 --      private.unit_code_retired (v2); hàm app trong public + private (mọi chữ ký, theo tên);
 --      4 policy private_images_* trên storage.objects (001 tạo lại).
--- GIỮ:  auth.users (tài khoản đăng nhập), schema private (rỗng — 001 dùng lại), bucket 'private-images'
+-- GIỮ:  auth.users (tài khoản đăng nhập), schema private (001 dùng lại; GIỮ private.schema_migrations — nhật ký
+--       migration của CI scripts/apply-migrations.sh — vì chỉ xoá đúng tên bảng / hàm của app), bucket 'private-images'
 --       và các file ảnh trong đó (Supabase chặn xoá storage.objects bằng SQL; ảnh cũ không còn được
 --       tham chiếu — muốn dọn thì "Empty bucket" trong Dashboard → Storage).
 -- KHÔNG đụng: schema auth / storage / realtime của Supabase, bảng hay hàm khác không thuộc app.
@@ -68,7 +69,7 @@ begin
             where (n.nspname = 'public' and p.proname in (
                      'bootstrap_user','save_lot','set_lot_status','receive_lot','update_lot_ship_fee','cancel_lot',
                      'update_unit','save_order','confirm_preorder','ship_order','cancel_order','complete_order',
-                     'ai_scan_reserve','ai_scan_finish'))
+                     'ai_scan_reserve','ai_scan_finish','set_order_cod','return_order'))
                or (n.nspname = 'private' and p.proname in (
                      'today_vn','require_uid','check_version','touch_row','touch_model',
                      'recalc_lot','replay_variant_avg','lock_variants','variant_incoming','variant_reserved',

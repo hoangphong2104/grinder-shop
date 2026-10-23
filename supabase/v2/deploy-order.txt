@@ -2,3 +2,4 @@
 # Chỉ thêm dòng mới ở CUỐI. Mỗi file phải tự gói trong 1 transaction và chạy lại được (idempotent).
 # Mốc ban đầu (đã chạy tay trên Supabase trước khi có CI): setup-v2 (bản pre-003) + 002 — xem deploy-baseline.txt.
 002_buying_fee.sql
+003_cod_return_condition.sql

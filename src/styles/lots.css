@@ -15,3 +15,62 @@ a.lot-shot { padding: 0; }
 .lot-unit .uhead { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 .lot-unit.removed .uhead b { text-decoration: line-through; opacity: .6; }
 .lot-codes { font-family: var(--mono); font-size: 12.5px; }
+
+/* ---------- CR-004: dòng lô / dòng chiếc 2 dòng (research §1.3, §3.4) ---------- */
+.lotrow { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "l1 r1" "l2 r2"; gap: 2px 10px; align-items: center; padding: 10px 14px; min-height: 60px; border-bottom: 1px solid var(--line-2); color: var(--fg); text-decoration: none; }
+.lotrow:last-child { border-bottom: 0; }
+.lotrow:active, a.lotrow:hover { background: var(--surface-2); }
+.lotrow .l1 { grid-area: l1; display: flex; gap: 8px; align-items: baseline; min-width: 0; font-size: 15px; line-height: 20px; }
+.lotrow .code { flex: none; font-weight: 600; color: var(--fg); text-decoration: none; }
+/* Link mã lô phủ cả dòng (bấm đâu cũng mở chi tiết); nút bước kế nằm trên lớp phủ */
+.lotrow a.code::after { content: ""; position: absolute; inset: 0; }
+.lotrow a.code:focus-visible { outline: none; }
+.lotrow a.code:focus-visible::after { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r-md); }
+.lotrow .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.lotrow .r1 { grid-area: r1; text-align: right; font-weight: 500; font-size: 15px; white-space: nowrap; }
+.lotrow .l2 { grid-area: l2; display: flex; gap: 6px; align-items: center; min-width: 0; font-size: 13px; line-height: 18px; }
+.lotrow .l2 .pill { flex: none; font-size: 12px; }
+.lotrow .l2 .meta { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.lotrow .r2 { grid-area: r2; justify-self: end; white-space: nowrap; }
+.lotrow .nx { position: relative; z-index: 1; min-height: 36px; padding: 4px 12px; font-size: 13px; }
+/* vùng bấm ≥ 44px (UI-M2) mà dòng vẫn gọn */
+.lotrow .nx::before { content: ""; position: absolute; inset: -4px 0; }
+.lotrow.unit .l1 b { font-size: 15px; }
+@media (max-width: 959px) { .lotrow .nx.btn { min-height: 36px; } }
+
+/* Chi tiết lô: tóm tắt dưới tiêu đề + khối tiền canh trái chữ dài (audit U7) */
+.lot-sum { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; font-size: 13px; color: var(--muted); }
+.lot-sum b { color: var(--fg); font-weight: 600; }
+.lot-detail .calc .formula { text-align: left; }
+.lot-detail .calc .ln span:first-child { min-width: 0; }
+.lot-detail .calc .ln span:last-child { flex: none; white-space: nowrap; }
+.lot-units-head .pill { font-size: 12px; }
+.menu-danger { color: var(--bad) !important; }
+
+/* Sheet nhận hàng: mỗi chiếc 1 khối — mã + model, rồi tình trạng | seri thẳng hàng (LOT-S1) */
+.rc-units { flex: none; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; background: var(--surface); }
+.rc-unit { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 6px 8px; padding: 10px 12px; border-bottom: 1px solid var(--line-2); }
+.rc-unit:last-child { border-bottom: 0; }
+.rc-unit .uh { grid-column: 1 / -1; display: flex; gap: 8px; align-items: baseline; min-width: 0; font-size: 14px; }
+.rc-unit .uh b { flex: none; }
+.rc-unit .uh .nm { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.rc-unit .uh .pill { flex: none; margin-left: auto; font-size: 12px; }
+.rc-all { display: flex; gap: 8px; align-items: center; justify-content: space-between; font-size: 13px; color: var(--muted); }
+.rc-all select { width: auto; min-width: 140px; }
+
+/* Form lô: nhãn 1 dòng, 2 ô cạnh nhau thẳng hàng, gợi ý xuống dưới cả hàng (UI-M6, audit U6) */
+.flab { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lot-unit { align-items: start; }
+.two-hint { margin-top: -6px; }
+.lot-line .two-hint { margin-top: -4px; }
+.lot-calc .formula { text-align: left; }
+.lot-calc .ln span:first-child { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lot-calc .ln span:last-child { flex: none; white-space: nowrap; }
+.lot-detail { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+@media (min-width: 960px) { .lot-detail { gap: 18px; } }
+.more-btn { font-size: 22px; line-height: 1; font-weight: 600; letter-spacing: 1px; }
+.lot-calc .cb { display: flex; flex-direction: column; gap: 1px; }
+.lot-calc .cb + .cb { padding-top: 6px; border-top: 1px dashed var(--line-2); }
+.lot-calc .cb-f { padding-top: 6px; border-top: 1px dashed var(--line); }
+.lot-detail .kv dd .link-btn { overflow-wrap: normal; max-width: 100%; }
+.lot-detail .kv dd .lot-ext { white-space: nowrap; }

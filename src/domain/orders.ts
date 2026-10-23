@@ -4,12 +4,15 @@
  *    automatic confirmation of pre-orders when a lot is received (A7), cancel / complete guards.
  *  - Money: total / paid / receivable / refund due (BR-10, Q-009, Q-010, Q-015),
  *    profit from each unit's CURRENT effective cost (BR-11 + A8, no snapshot) and monthly profit.
+ *  - CR-004: COD (DON-S1 — COD received / pending) and returns "Hoàn hàng" (DON-S3 — guard, money rules, profit);
+ *    same numbers as the DB view v_order_summary (supabase/v2/003_cod_return_condition.sql).
  * Pure: guards return Results, inputs are never mutated.
  */
 import type { IsoDate, Lot, Order, Payment, Result, Unit, Vnd } from './types.ts';
 import { LOT_STATUS_LABEL, ORDER_STATUS_LABEL, fail, ok } from './types.ts';
 import { formatVnd } from './money.ts';
 import { holdingOrder, isSoldOrder } from './units.ts';
+import { isNonNegativeInt, isIsoDate } from './validate.ts';
 
 const orderRef = (o: Pick<Order, 'id' | 'code'>): string => o.code ?? o.id;
 
@@ -141,6 +144,44 @@ export function checkCancelOrder(order: Order): Result<true> {
   return ok(true);
 }
 
+/** CR-004 DON-S3 — "Hoàn hàng / khách không nhận" only for a shipped order (not completed / cancelled / returned). */
+export function checkReturnOrder(order: Order): Result<true> {
+  if (order.status !== 'shipped') {
+    return fail({
+      code: 'INVALID_TRANSITION',
+      rule: 'DON-S3',
+      message: `Chỉ hoàn hàng được đơn đang "Đã gửi" (đơn đang "${ORDER_STATUS_LABEL[order.status]}").`,
+      orderId: order.id,
+    });
+  }
+  return ok(true);
+}
+
+export interface ReturnInput {
+  /** true = shop keeps the deposits (Σ `deposit`); false = all money paid is to be refunded. */
+  keepDeposit: boolean;
+  /** Phí ship chiều về ₫ (whole đồng ≥ 0); add the outbound fee here when the customer was to pay it but refused. */
+  returnShipFee: Vnd;
+  /** Ngày hoàn hàng; must not be before the ship date. */
+  returnedAt: IsoDate;
+}
+
+/**
+ * CR-004 DON-S3 — preview of `return_order`: the order becomes `returned`, its units are released (back in stock,
+ * sellable again — see `holdingOrder`), money follows `orderRefundDue` / `orderKept` / `orderProfit`.
+ */
+export function returnOrder(order: Order, input: ReturnInput): Result<Order> {
+  const g = checkReturnOrder(order);
+  if (!g.ok) return fail(g.error);
+  if (!isNonNegativeInt(input.returnShipFee)) {
+    return fail({ code: 'INVALID_INPUT', rule: 'DON-S3', message: 'Phí ship chiều về phải là số đồng nguyên ≥ 0.', field: 'returnShipFee', orderId: order.id });
+  }
+  if (!isIsoDate(input.returnedAt) || (order.shippedAt && input.returnedAt.slice(0, 10) < order.shippedAt.slice(0, 10))) {
+    return fail({ code: 'INVALID_INPUT', rule: 'DON-S3', message: 'Ngày hoàn hàng không được trước ngày gửi.', field: 'returnedAt', orderId: order.id });
+  }
+  return ok({ ...order, status: 'returned', keepDeposit: input.keepDeposit, returnShipFee: input.returnShipFee, returnedAt: input.returnedAt });
+}
+
 /**
  * BR-10 + Q-010 — move a shipped order to `completed`. Needs receivable = 0 (neither under- nor overpaid)
  * unless the user explicitly confirms (`acceptOutstanding`).
@@ -179,19 +220,34 @@ export const paymentSigned = (p: Pick<Payment, 'kind' | 'amount'>): Vnd => (p.ki
 /** Σ tiền đã thu, net of refunds. */
 export const orderPaid = (o: Pick<Order, 'payments'>): Vnd => o.payments.reduce((a, p) => a + paymentSigned(p), 0);
 
+/** Σ tiền cọc (kind `deposit`, before refunds). */
+export const orderDeposits = (o: Pick<Order, 'payments'>): Vnd => o.payments.reduce((a, p) => a + (p.kind === 'deposit' ? p.amount : 0), 0);
+
 /**
  * BR-10 — Còn phải thu = tổng − đã thu. Negative = customer overpaid (Q-010).
- * A cancelled order owes nothing: 0 (Q-009 — its money shows in `orderRefundDue` instead).
+ * A cancelled or returned order owes nothing: 0 (Q-009 / CR-004 — its money shows in `orderRefundDue` instead).
  */
-export const orderReceivable = (o: Order): Vnd => (o.status === 'cancelled' ? 0 : orderTotal(o) - orderPaid(o));
+export const orderReceivable = (o: Order): Vnd => (o.status === 'cancelled' || o.status === 'returned' ? 0 : orderTotal(o) - orderPaid(o));
 
-/** Q-009 — "Cần hoàn X" of a cancelled order = net paid (≥ 0) until refunds are recorded; 0 otherwise. */
-export const orderRefundDue = (o: Order): Vnd => (o.status === 'cancelled' ? Math.max(0, orderPaid(o)) : 0);
+/**
+ * "Cần hoàn X" until refunds are recorded; 0 for live orders.
+ *  - cancelled (Q-009): max(0, đã thu ròng)
+ *  - returned (CR-004): max(0, đã thu ròng − (keepDeposit ? Σ cọc : 0)) — "giữ cọc" keeps the deposits only;
+ *    money paid beyond the deposit is still refunded.
+ */
+export function orderRefundDue(o: Order): Vnd {
+  if (o.status === 'cancelled') return Math.max(0, orderPaid(o));
+  if (o.status === 'returned') return Math.max(0, orderPaid(o) - (o.keepDeposit ? orderDeposits(o) : 0));
+  return 0;
+}
+
+/** CR-004 — tiền shop giữ lại của đơn hoàn hàng = đã thu ròng − cần hoàn (null for other statuses). */
+export const orderKept = (o: Order): Vnd | null => (o.status === 'returned' ? orderPaid(o) - orderRefundDue(o) : null);
 
 /** Khách còn nợ (dashboard): Σ positive receivables only — overpaid orders do not offset others. */
 export const customersTotalDue = (orders: readonly Order[]): Vnd => orders.reduce((a, o) => a + Math.max(0, orderReceivable(o)), 0);
 
-/** Σ refund due over cancelled orders. */
+/** Σ refund due over cancelled and returned orders. */
 export const totalRefundDue = (orders: readonly Order[]): Vnd => orders.reduce((a, o) => a + orderRefundDue(o), 0);
 
 /** Ship fee borne by the shop (reduces profit, BR-11); a customer-paid fee is pass-through (Q-015). */
@@ -213,36 +269,86 @@ export function orderMargin(o: Order, costs: ReadonlyMap<string, Vnd>): Vnd {
 }
 
 /**
- * BR-11 + A8 — Lãi đơn = Σ(giá chốt − giá nhập ₫ hiện tại của chiếc) − phí ship shop chịu.
- * Only for shipped / completed orders (null otherwise). Not frozen: it follows later cost corrections (A3).
+ * CR-004 — lãi đơn hoàn hàng = tiền shop giữ − phí ship đi (nếu shop chịu) − phí ship chiều về.
+ * Unit costs are not involved (the units are back in stock). Computed on the money KEPT, so recording the
+ * refund later does not change it.
  */
-export const orderProfit = (o: Order, costs: ReadonlyMap<string, Vnd>): Vnd | null => (isSoldOrder(o) ? orderMargin(o, costs) : null);
+export const returnedOrderProfit = (o: Order): Vnd => (orderKept(o) ?? 0) - orderShipCost(o) - (o.returnShipFee ?? 0);
+
+/**
+ * BR-11 + A8 — Lãi đơn = Σ(giá chốt − giá nhập ₫ hiện tại của chiếc) − phí ship shop chịu.
+ * Only for shipped / completed orders; returned orders use `returnedOrderProfit` (CR-004); null otherwise.
+ * Not frozen: it follows later cost corrections (A3).
+ */
+export function orderProfit(o: Order, costs: ReadonlyMap<string, Vnd>): Vnd | null {
+  if (isSoldOrder(o)) return orderMargin(o, costs);
+  if (o.status === 'returned') return returnedOrderProfit(o);
+  return null;
+}
+
+/** Ngày tính lãi (≈ `v_order_summary.profit_date`): ship date of a sold order, return date of a returned one. */
+export function orderProfitDate(o: Order): IsoDate | null {
+  if (isSoldOrder(o)) return o.shippedAt ?? null;
+  if (o.status === 'returned') return o.returnedAt ?? null;
+  return null;
+}
+
+/* ---------- COD (CR-004 DON-S1) ---------- */
+
+/** Σ khoản thu hình thức COD (tiền hãng ship đã chuyển về). */
+export const orderCodReceived = (o: Pick<Order, 'payments'>): Vnd =>
+  o.payments.reduce((a, p) => a + (p.method === 'cod' ? p.amount : 0), 0);
+
+/**
+ * "COD chờ về" = max(min(COD − Σ COD đã về, còn phải thu), 0) for shipped / completed / returned orders, else 0.
+ * Bounded by the receivable: paid the rest by transfer / fully paid / returned (receivable 0) ⇒ nothing pending.
+ */
+export function orderCodPending(o: Order): Vnd {
+  if (!isSoldOrder(o) && o.status !== 'returned') return 0;
+  return Math.max(0, Math.min((o.codAmount ?? 0) - orderCodReceived(o), orderReceivable(o)));
+}
+
+/** Σ COD chờ về (dashboard "COD chờ về"). */
+export const totalCodPending = (orders: readonly Order[]): Vnd => orders.reduce((a, o) => a + orderCodPending(o), 0);
 
 export interface MonthProfit {
   /** `YYYY-MM`. */
   month: string;
   profit: Vnd;
-  /** Σ giá chốt (pass-through ship excluded). */
+  /** Σ giá chốt (pass-through ship excluded) of the sold orders. */
   revenue: Vnd;
+  /** Sold (shipped / completed) orders counted. */
   orders: number;
+  /** CR-004 — returned orders counted (their profit — usually a loss — is in `profit`, no revenue). */
+  returns: number;
 }
 
-/** Profit of the orders shipped in `month` (`YYYY-MM`, by `shippedAt`). */
+/**
+ * Profit of the month (`YYYY-MM`): orders shipped that month (by `shippedAt`) + orders RETURNED that month
+ * (by `returnedAt`, CR-004 — the sale's profit disappears, the return's own profit / loss appears).
+ */
 export function profitForMonth(orders: readonly Order[], costs: ReadonlyMap<string, Vnd>, month: string): MonthProfit {
-  const r: MonthProfit = { month, profit: 0, revenue: 0, orders: 0 };
+  const r: MonthProfit = { month, profit: 0, revenue: 0, orders: 0, returns: 0 };
   for (const o of orders) {
-    if (!isSoldOrder(o) || !o.shippedAt || !o.shippedAt.startsWith(month)) continue;
-    r.profit += orderMargin(o, costs);
-    r.revenue += orderGoodsTotal(o);
-    r.orders += 1;
+    if (isSoldOrder(o) && o.shippedAt?.startsWith(month)) {
+      r.profit += orderMargin(o, costs);
+      r.revenue += orderGoodsTotal(o);
+      r.orders += 1;
+    } else if (o.status === 'returned' && o.returnedAt?.startsWith(month)) {
+      r.profit += returnedOrderProfit(o);
+      r.returns += 1;
+    }
   }
   return r;
 }
 
-/** Profit per ship month, ascending. Shipped orders without `shippedAt` are skipped. */
+/** Profit per month (ship month / return month), ascending. Orders without the date are skipped. */
 export function profitByMonth(orders: readonly Order[], costs: ReadonlyMap<string, Vnd>): MonthProfit[] {
   const months = new Set<string>();
-  for (const o of orders) if (isSoldOrder(o) && o.shippedAt) months.add(o.shippedAt.slice(0, 7));
+  for (const o of orders) {
+    const d = orderProfitDate(o);
+    if (d) months.add(d.slice(0, 7));
+  }
   return [...months].sort().map((m) => profitForMonth(orders, costs, m));
 }
 

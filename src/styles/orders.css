@@ -15,3 +15,73 @@
 
 .calc .ln a { color: inherit; }
 .calc .ln .sub { display: block; font-size: 12px; color: var(--muted); }
+
+/* ---------- CR-004 ---------- */
+/* Màu chữ theo tông chip (thanh toán dạng chữ màu — §4.4) */
+.tone-ok { color: var(--ok); } .tone-way { color: var(--way); } .tone-hold { color: var(--hold); } .tone-bad { color: var(--bad); } .tone-neu { color: var(--muted); }
+
+/* UI-M1 / DON-M1: dòng đơn 2 dòng — mã + tên | tổng; chip trạng thái · ngày · mã chiếc | thanh toán */
+.olist { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
+.orow { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "l1 r1" "l2 r2"; gap: 2px 10px; align-items: center;
+  padding: 10px 14px; min-height: 60px; border: 0; border-bottom: 1px solid var(--line-2); background: transparent; width: 100%; text-align: left;
+  color: var(--fg); text-decoration: none; cursor: pointer; font: inherit; }
+.orow:last-child { border-bottom: 0; }
+.orow:hover, .orow:active { background: var(--surface-2); }
+.orow:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.orow .l1 { grid-area: l1; display: flex; gap: 8px; align-items: baseline; min-width: 0; font-size: 15px; line-height: 20px; }
+.orow .l1 .id { flex: none; font-family: var(--mono); font-weight: 600; }
+.orow .l1 .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.orow .r1 { grid-area: r1; text-align: right; font: 500 15px/20px var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.orow .l2 { grid-area: l2; display: flex; gap: 6px; align-items: center; min-width: 0; font-size: 13px; line-height: 18px; color: var(--muted); }
+.orow .l2 .pill { flex: none; font-size: 12px; line-height: 18px; }
+.orow .l2 .meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.orow .l2 .meta .num { font-size: 12.5px; }
+.orow .r2 { grid-area: r2; text-align: right; font: 500 13px/18px var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.orow.dim .r1 { color: var(--muted); text-decoration: line-through; }
+
+/* Thanh lọc chuẩn §1.3: ô tìm 1 dòng + 1 hàng chip cuộn ngang (không bao giờ xuống dòng) */
+.o-filter { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.o-filter .o-top { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.o-filter .o-top .input { flex: 1; min-width: 0; }
+.o-filter .chips { flex-wrap: nowrap; }
+.o-sum { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); padding: 0 2px; }
+.o-sum b { font-family: var(--mono); font-weight: 600; color: var(--fg); }
+
+/* Chi tiết đơn */
+/* Tên khách (cắt …) + chip trạng thái / thanh toán; tên dài ⇒ chip xuống dòng riêng, không bị ép */
+.o-sub { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 10px; min-width: 0; margin-top: -4px; }
+.o-sub .nm { flex: 1 1 auto; font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.o-sub .nm a { color: inherit; text-decoration: none; }
+.o-chips { flex: none; display: flex; gap: 6px; align-items: center; }
+.stepper .st.ret::before { background: var(--bad); }
+.stepper .st.ret .dot { border-color: var(--bad); background: var(--bad); box-shadow: 0 0 0 4px var(--bad-bg); }
+.stepper .st.ret .dot::after { content: "↩"; color: var(--surface); font-size: 11px; }
+.stepper .st.ret .lb { color: var(--bad); font-weight: 600; }
+.calc .ln .pm { color: var(--faint); font-size: 12.5px; }
+.calc .ln.cod span:first-child, .calc .ln.cod span:last-child { color: var(--way); }
+.calc .ln.sub-ln { font-size: 13px; }
+.calc .ln .link-btn { min-height: 0; padding: 0; text-align: left; }
+.o-profit { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); }
+.o-profit > summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 12px 16px; min-height: 48px; font-weight: 600; font-size: 14px; }
+.o-profit > summary::-webkit-details-marker { display: none; }
+.o-profit > summary .v { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.o-profit > summary .chev { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 6px; }
+.o-profit[open] > summary .chev { transform: rotate(180deg); display: inline-block; }
+.o-profit > .calc { border: 0; box-shadow: none; border-top: 1px solid var(--line-2); border-radius: 0 0 var(--r-lg) var(--r-lg); }
+.savebar .btn { flex: 1; min-width: 0; }
+
+/* Menu "⋯" (sheet danh sách thao tác) — dòng cao ≥ 52px; Huỷ cuối, đỏ */
+.o-menu .li { min-height: 52px; }
+.o-menu .li.danger b { color: var(--bad); }
+.o-menu .li:disabled { opacity: .5; cursor: not-allowed; }
+.o-copy { min-height: 220px; font-family: var(--mono); font-size: 13px; line-height: 1.45; white-space: pre-wrap; }
+.o-preview .ln.total span:last-child { font-weight: 600; }
+.o-choice { display: flex; flex-wrap: wrap; gap: 8px; }
+.o-choice .chip[aria-pressed="true"] { background: var(--fill); border-color: var(--fill); color: var(--on-fill); }
+.o-dep-quick { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+
+@media (min-width: 960px) {
+  .o-filter { flex-direction: row; align-items: center; }
+  .o-filter .o-top { flex: 0 0 340px; }
+  .o-filter .chips { flex: 1; min-width: 0; }
+}

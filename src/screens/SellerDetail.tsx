@@ -4,7 +4,7 @@ import { useData, useStore } from '../data/store.tsx'
 import { Shell } from '../ui/Shell.tsx'
 import { useToast } from '../ui/feedback.tsx'
 import { Icon } from '../ui/icons.tsx'
-import { LotShot, updateVersioned } from './overview/common.tsx'
+import { HowTo, LotRow, updateVersioned } from './overview/common.tsx'
 
 // SC_12b Chi tiết người bán: ghi chú uy tín, đánh dấu tránh, ẩn (BR-14), các lô đã mua.
 export default function SellerDetail() {
@@ -60,11 +60,11 @@ export default function SellerDetail() {
             {s.is_hidden ? 'Hiện lại người bán' : 'Ẩn người bán'}
           </button>
           {err && <p className="err-text">{err}</p>}
-          <p className="hint">Người bán đã có lô không xoá được, chỉ ẩn khỏi danh sách (BR-14). Lô cũ vẫn giữ tên người bán.</p>
+          <HowTo title="Vì sao không xoá được">Người bán đã có lô không xoá được, chỉ ẩn khỏi danh sách (BR-14). Lô cũ vẫn giữ tên người bán.</HowTo>
         </div>
         <div>
           <p className="section-title">Lô đã mua <span className="muted">{lots.length}</span></p>
-          <div className="stack">{lots.length ? lots.map((l) => <LotShot key={l.id} d={d} l={l} />) : <p className="muted small">Chưa có lô nào từ người bán này</p>}</div>
+          {lots.length ? <div className="ov-list">{lots.map((l) => <LotRow key={l.id} d={d} l={l} />)}</div> : <p className="muted small">Chưa có lô nào từ người bán này</p>}
         </div>
       </div>
     </Shell>

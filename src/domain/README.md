@@ -13,11 +13,11 @@ Status / kind codes are the **DB codes** (`ordered…cancelled`, `preorder…can
 
 | File | Contents |
 |---|---|
-| `types.ts` | `Model`, `Lot`, `Unit`, `Order` / `OrderLine` (1 line = 1 unit), `Payment`, `Transfer`, status types, `UnitStatus`, labels, `Result` / `RuleError` |
+| `types.ts` | `Model`, `Lot`, `Unit`, `Order` / `OrderLine` (1 line = 1 unit), `Payment`, `Transfer`, status types, `UnitStatus`, labels, `Result` / `RuleError`; CR-004: `UnitCondition`, `PaymentMethod`, `AgingLevel` / `AgingThresholds`, `DEFAULT_AGING` (30/60), `DEFAULT_LOT_LATE_DAYS` (21), order status `returned` ("Hoàn hàng") |
 | `money.ts` | `roundVnd` (Q-006), `formatVnd`, `formatTr`, `formatCny` |
 | `cost.ts` | `autoUnitCost` (D2 + CR-003), `effectiveCost`, `isCostProvisional`, `unitCosts` / `effectiveCosts` (by unit id), `unitCostBeforeShip`, `lotUnitCount`, `unitsOfLot`, `lotGoodsCny` / `lotGoodsVnd`, `lotBuyingFeeVnd` / `buyingFeePctOf` (CR-003), `lotPayable` (A4 + CR-003) |
-| `units.ts` | `formatUnitCode` (D1), `expandLotGroups` (A2), `unitStatus` / `holdingOrder` / `holderIndex` / `unitStatusLabel` (A5, D4), `daysBetween` / `unitDaysInStock`, `buildUnitViews` (≈ `v_units`), `modelStocks` / `modelStock` / `stockValue` (A9), `checkReceiveLot` (BR-02, Q-011), `checkCancelLot`, `checkLotEdit` (A10, Q-014) |
-| `orders.ts` | `checkUnitAvailable`, `checkOrderUnits`, `orderStatusFor` (A6), `canShip` (A8, Q-007), `preordersToAutoConfirm` (A7), `checkCancelOrder`, `completeOrder` (BR-10, Q-010), `orderTotal` / `orderPaid` / `orderReceivable` / `orderRefundDue` / `customersTotalDue` / `totalRefundDue` (BR-10, Q-009, Q-015), `orderMargin` / `orderProfit` / `profitForMonth` / `profitByMonth` (BR-11 + A8) |
+| `units.ts` | `formatUnitCode` (D1), `expandLotGroups` (A2), `unitStatus` / `holdingOrder` / `holderIndex` / `isReleasedOrder` / `unitStatusLabel` (A5, D4), `agingLevel` / `unitAgingLevel` / `lotDaysOpen` / `isLotLate` (CR-004), `daysBetween` / `unitDaysInStock`, `buildUnitViews` (≈ `v_units`), `modelStocks` / `modelStock` / `stockValue` (A9), `checkReceiveLot` (BR-02, Q-011), `checkCancelLot`, `checkLotEdit` (A10, Q-014) |
+| `orders.ts` | `checkUnitAvailable`, `checkOrderUnits`, `orderStatusFor` (A6), `canShip` (A8, Q-007), `preordersToAutoConfirm` (A7), `checkCancelOrder`, `completeOrder` (BR-10, Q-010), `orderTotal` / `orderPaid` / `orderReceivable` / `orderRefundDue` / `customersTotalDue` / `totalRefundDue` (BR-10, Q-009, Q-015), `orderMargin` / `orderProfit` / `profitForMonth` / `profitByMonth` (BR-11 + A8); CR-004: `checkReturnOrder` / `returnOrder`, `orderDeposits`, `orderKept`, `returnedOrderProfit`, `orderProfitDate`, `orderCodReceived` / `orderCodPending` / `totalCodPending` |
 | `debt.ts` | `intermediaryBalance` (≈ `v_intermediary_balance`), `intermediaryDebt`, `totalPayable`, `transferEffect` (BR-12) |
 | `validate.ts` | Field checks: `validateModel`, `validateLot`, `validateLotGroup`, `validateUnit`, `validateOrder`, `validatePayment`, `validateTransfer` |
 | `index.ts` | Public re-exports |
@@ -41,6 +41,13 @@ còn phải thu         = Σ giá chốt + ship khách trả − Σ đã thu; đ
 cần hoàn (đơn huỷ)   = max(0, đã thu ròng)                                                 Q-009
 lãi đơn              = Σ(giá chốt − giá nhập ₫ hiệu lực HIỆN TẠI) − ship shop chịu; chỉ Đã gửi/Hoàn tất   BR-11, A8, Q-015
 còn nợ trung gian    = Σ phải trả − Σ đã chuyển + Σ điều chỉnh (có dấu)                   BR-12
+--- CR-004 ---
+đơn Hoàn hàng        = chỉ từ Đã gửi; nhả chiếc (về Trong kho, bán lại được); còn phải thu 0
+cần hoàn (hoàn hàng) = max(0, đã thu ròng − (giữ cọc ? Σ cọc : 0)); tiền giữ = đã thu ròng − cần hoàn
+lãi đơn hoàn hàng    = tiền giữ − ship đi (shop chịu) − ship chiều về; tính vào tháng ngày hoàn
+COD chờ về           = max(min(COD − Σ thu method 'cod', còn phải thu), 0); chỉ Đã gửi / Hoàn tất / Hoàn hàng
+tuổi tồn             = chiếc đã về kho chưa bán: > 60 alert, > 30 warn, còn lại ok (ngưỡng trong Cài đặt)
+lô về trễ            = lô chưa nhận / chưa huỷ, hôm nay − ngày đặt > 21 (Cài đặt)
 ```
 
 The ship fee is divided by **all** units of the lot (every model, sold or not). Costs are never frozen:

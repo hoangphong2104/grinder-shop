@@ -201,6 +201,6 @@ test('profitForMonth groups by shippedAt month', () => {
     order({ id: '2', status: 'completed', shippedAt: '2026-09-30', lines: [{ unitId: 'r2', price: 5000000 }] }),
     order({ id: '3', status: 'confirmed', lines: [{ unitId: 'r2', price: 9000000 }] }),
   ];
-  assert.deepEqual(profitForMonth(os, costs, '2026-10'), { month: '2026-10', profit: 1800000, revenue: 5000000, orders: 1 });
-  assert.deepEqual(profitForMonth(os, costs, '2026-09'), { month: '2026-09', profit: 560000, revenue: 5000000, orders: 1 });
+  assert.deepEqual(profitForMonth(os, costs, '2026-10'), { month: '2026-10', profit: 1800000, revenue: 5000000, orders: 1, returns: 0 });
+  assert.deepEqual(profitForMonth(os, costs, '2026-09'), { month: '2026-09', profit: 560000, revenue: 5000000, orders: 1, returns: 0 });
 });

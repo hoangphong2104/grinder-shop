@@ -454,12 +454,12 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
             </div>
             {!u.removed && (
               <>
-                <label className="f">Giá ¥
+                <label className="f"><span className="flab">Giá ¥</span>
                   <input className="input money" id={`f-u-cny-${u.code}`} inputMode="decimal" value={u.cny} onChange={(e) => setUnit(u.unitId, { cny: e.target.value })} />
                   <span className="hint">{u.costOverride != null ? <>Giá nhập ₫ sửa tay {vnd(u.costOverride)}</> : <>Giá nhập ₫ ≈ {costText(parseNum(u.cny))}</>}</span>
                   {err(`f-u-cny-${u.code}`)}
                 </label>
-                <label className="f">Giá bán dự kiến (₫)
+                <label className="f"><span className="flab">Bán dự kiến ₫</span>
                   <input className="input money" id={`f-u-list-${u.code}`} inputMode="numeric" value={u.list} placeholder="để trống" onChange={(e) => setUnit(u.unitId, { list: e.target.value })} />
                   {err(`f-u-list-${u.code}`)}
                 </label>
@@ -500,13 +500,13 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
                 <input className={i === 0 ? cls('qty', 'money') : 'input money'} id={lineId('f-qty', i)} inputMode="numeric" value={g.qty} onChange={(e) => setGroup(i, { qty: e.target.value })} />
                 {err(lineId('f-qty', i))}
               </label>
-              <label className="f"><span className="lrow">Giá ¥ / chiếc <span className="req">*</span> {i === 0 && flag('cny')}</span>
+              <label className="f"><span className="lrow">Giá ¥/chiếc <span className="req">*</span> {i === 0 && flag('cny')}</span>
                 <input className={i === 0 ? cls('cny', 'money') : 'input money'} id={lineId('f-cny', i)} inputMode="decimal" value={g.cny}
                   onChange={(e) => setGroup(i, { cny: e.target.value })} />
                 {err(lineId('f-cny', i))}
               </label>
             </div>
-            <label className="f">Giá bán dự kiến / chiếc (₫)
+            <label className="f"><span className="flab">Giá bán dự kiến / chiếc (₫)</span>
               <input className="input money" id={lineId('f-list', i)} inputMode="numeric" value={g.list} placeholder="để trống"
                 onChange={(e) => setGroup(i, { list: e.target.value, listAuto: false })} />
               <span className="hint">{g.modelId && g.listAuto && g.list ? 'Giá mặc định của model — sửa được' : 'Sửa riêng từng chiếc được sau khi lưu'}</span>
@@ -532,7 +532,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
     <Shell section="lo" title={editing ? `Sửa ${code}` : 'Nhập lô Goofish'} back={editing ? `/lo/${lot!.id}` : '/lo'}
       savebar={<button className="btn btn-primary btn-block" disabled={saving || scanning} onClick={save}>{saving ? <><span className="spin" /> Đang lưu…</> : editing ? 'Lưu thay đổi' : 'Lưu lô'}</button>}>
       <div className="form-grid">
-        <label className="f full">Link tin Goofish
+        <label className="f full"><span className="flab">Link tin Goofish</span>
           <input className="input" id="f-url" value={draft.url} placeholder="https://www.goofish.com/item?id=…" inputMode="url" maxLength={500}
             onChange={(e) => set('url', e.target.value)} />
           {err('f-url')}
@@ -568,28 +568,33 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
         {unitsBlock}
         {groupsBlock}
 
-        <div className="two">
-          <label className="f">Tỷ giá ₫/¥ <span className="req">*</span>
-            <input className="input money" id="f-rate" inputMode="decimal" value={draft.rate} onChange={(e) => set('rate', e.target.value)} />
-            <span className="hint">{d.suggestions.last_exchange_rate != null ? 'Gợi ý: tỷ giá lô gần nhất' : 'Chưa có lô trước để gợi ý'}</span>
-            {err('f-rate')}
-          </label>
-          <label className="f">Phí mua hộ %
-            <input className="input money" id="f-fee" inputMode="decimal" value={draft.feePct} placeholder="0" onChange={(e) => set('feePct', e.target.value)} />
-            <span className="hint">{editing ? 'Khoá khi lô đã nhận' : `Mặc định trong Cài đặt: ${pct(Number(d.settings?.default_buying_fee_pct ?? 0))}`} · tính trên tiền hàng</span>
-            {err('f-fee')}
-          </label>
+        <div className="stack">
+          <div className="two">
+            <label className="f"><span className="flab">Tỷ giá ₫/¥ <span className="req">*</span></span>
+              <input className="input money" id="f-rate" inputMode="decimal" value={draft.rate} onChange={(e) => set('rate', e.target.value)} />
+              {err('f-rate')}
+            </label>
+            <label className="f"><span className="flab">Phí mua hộ %</span>
+              <input className="input money" id="f-fee" inputMode="decimal" value={draft.feePct} placeholder="0" onChange={(e) => set('feePct', e.target.value)} />
+              {err('f-fee')}
+            </label>
+          </div>
+          {/* Gợi ý dưới cả hàng để 2 ô thẳng hàng (audit U6) */}
+          <p className="hint two-hint">
+            {d.suggestions.last_exchange_rate != null ? 'Tỷ giá gợi ý theo lô gần nhất' : 'Chưa có lô trước để gợi ý tỷ giá'} · phí mua hộ tính trên tiền hàng
+            {editing ? ' (khoá khi lô đã nhận)' : ` (mặc định ${pct(Number(d.settings?.default_buying_fee_pct ?? 0))} trong Cài đặt)`}
+          </p>
         </div>
-        <label className="f">Phí ship về VN (cả lô)
+        <label className="f"><span className="flab">Phí ship về VN cả lô (₫)</span>
           <input className="input money" id="f-ship" inputMode="numeric" value={draft.shipFee} placeholder="để trống" onChange={(e) => set('shipFee', e.target.value)} />
           <span className="hint">Thường biết khi hàng về{shipPer != null ? ` · lô trước ~${tr(shipPer)}/chiếc` : ''}</span>
           {err('f-ship')}
         </label>
-        <label className="f">Ngày đặt
+        <label className="f"><span className="flab">Ngày đặt</span>
           <input className="input" id="f-date" type="date" value={draft.orderedAt} onChange={(e) => set('orderedAt', e.target.value)} />
           {err('f-date')}
         </label>
-        <label className="f">Ghi chú
+        <label className="f"><span className="flab">Ghi chú</span>
           <input className="input" id="f-note" value={draft.note} maxLength={2000} onChange={(e) => set('note', e.target.value)} />
           {err('f-note')}
         </label>

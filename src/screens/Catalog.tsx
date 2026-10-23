@@ -5,8 +5,8 @@ import { supabase } from '../lib/supabase.ts'
 import { Shell } from '../ui/Shell.tsx'
 import { Sheet, useToast } from '../ui/feedback.tsx'
 import { GrinderArt, shapeOf } from '../ui/icons.tsx'
-import { parseNum, vnd } from '../ui/format.ts'
-import { updateVersioned, useDesk, writeError } from './overview/common.tsx'
+import { parseNum, tr } from '../ui/format.ts'
+import { HowTo, Row2, Tx, updateVersioned, useDesk, writeError } from './overview/common.tsx'
 
 /** Mã chiếc kế tiếp dự kiến (DB bỏ qua mã đã có / đã bỏ nên có thể nhảy số). */
 const nextCode = (m: Pick<ModelRow, 'code_prefix' | 'next_seq'>) => `${m.code_prefix}-${m.next_seq < 1000 ? String(m.next_seq).padStart(3, '0') : m.next_seq}`
@@ -14,7 +14,7 @@ const normPrefix = (s: string) => s.toUpperCase().replace(/\s+/g, '')
 const PREFIX_RE = /^[A-Z0-9]{1,10}$/
 
 // SC_14 Model (CR-001 A1: không còn biến thể màu): tên, hãng, tiền tố mã, giá bán mặc định, ngưỡng sắp hết, tên gọi khác cho AI;
-// thêm / sửa / ẩn; xoá chỉ khi chưa có chiếc cối nào (BR-14).
+// thêm / sửa / ẩn; xoá chỉ khi chưa có chiếc cối nào (BR-14). CR-004: dòng 2 dòng (research §10).
 export default function Catalog() {
   const d = useData()
   const desk = useDesk()
@@ -28,25 +28,21 @@ export default function Catalog() {
       actions={<button className="btn btn-ghost btn-sm only-desk" onClick={() => setEdit({})}>+ Thêm model</button>}>
       {d.models.length === 0 && <div className="empty">Chưa có model nào — bấm “+ Thêm model”.</div>}
       {d.models.length > 0 && (
-        <div className="list">
+        <div className="ov-list">
           {d.models.map((m) => {
             const s = stock.get(m.id)
             return (
-              <button key={m.id} className={`li ${m.is_active ? '' : 'dim'}`} onClick={() => setEdit({ m })}>
-                <span className="gpic"><GrinderArt shape={shapeOf(m.name)} /></span>
-                <div className="main">
-                  <b>{m.name}</b> <span className="pill">{m.code_prefix}</span> {!m.is_active && <span className="pill">Đã ẩn</span>}
-                  <div className="s">{m.brand} · giá bán mặc định {vnd(m.default_list_price_vnd)} · “Sắp hết” khi còn ≤ {m.low_stock_threshold}</div>
-                  <div className="s">Chiếc tiếp theo: <span className="num">{nextCode(m)}</span> · AI nhận tên: {m.aliases.length ? m.aliases.join(', ') : '(chưa có)'}</div>
-                </div>
-                <span className="v">{s?.sellable_count ?? 0} bán được<br /><span className="small">{unitCount(m.id)} chiếc đã nhập</span></span>
-              </button>
+              <Row2 key={m.id} onClick={() => setEdit({ m })} className={m.is_active ? '' : 'dim'} label={`Sửa model ${m.name}`}
+                a={<><span className="gpic" style={{ width: 24, height: 24 }}><GrinderArt shape={shapeOf(m.name)} /></span><Tx><b>{m.name}</b></Tx></>}
+                b={m.default_list_price_vnd != null ? tr(m.default_list_price_vnd) : '—'}
+                c={<>{!m.is_active && <span className="pill">Đã ẩn</span>}<Tx><span className="num">{m.code_prefix}</span> · ngưỡng {m.low_stock_threshold} · tiếp {nextCode(m)}</Tx></>}
+                d={`${s?.sellable_count ?? 0} bán được · ${unitCount(m.id)} đã nhập`} />
             )
           })}
         </div>
       )}
       <button className="btn btn-ghost btn-block" onClick={() => setEdit({})}>+ Thêm model</button>
-      <p className="hint" style={{ textAlign: 'center' }}>Mỗi chiếc cối nhập về được cấp mã = tiền tố + số thứ tự (VD: KU-007). Model đã có chiếc chỉ ẩn được, không xoá (BR-14). Ẩn = không hiện ở ô chọn model khi nhập lô; chiếc cũ giữ nguyên.</p>
+      <HowTo title="Mã chiếc & ẩn model">Mỗi chiếc cối nhập về được cấp mã = tiền tố + số thứ tự (VD: KU-007). Model đã có chiếc chỉ ẩn được, không xoá (BR-14). Ẩn = không hiện ở ô chọn model khi nhập lô; chiếc cũ giữ nguyên. Tên gọi khác giúp AI nhận model khi đọc tin Goofish.</HowTo>
       {edit && <ModelSheet m={edit.m} onClose={close} />}
     </Shell>
   )

@@ -4,17 +4,19 @@
 //
 // Mọi dòng view (v_units, v_model_stock, v_lot_summary, v_order_summary, v_intermediary_balance, v_suggestions)
 // được TÍNH bằng hàm domain (cost / units / orders / debt) cho số liệu khớp nhau, theo đúng định nghĩa view SQL
-// (supabase/v2/001_schema_v2.sql + 002_buying_fee.sql). Ngày tháng tính lùi từ hôm nay (giờ VN) để luôn "mới".
+// (supabase/v2/001_schema_v2.sql + 002_buying_fee.sql + 003_cod_return_condition.sql). Ngày tháng tính lùi từ hôm nay
+// (giờ VN) để luôn "mới". CR-004: có tình trạng chiếc, khoản thu tiền mặt / COD, 1 đơn COD chờ về, 1 đơn Hoàn hàng.
 import type { Session } from '@supabase/supabase-js'
 import {
   buildUnitViews, lotBuyingFeeVnd, lotGoodsCny, lotGoodsVnd, lotPayable, modelStocks, orderGoodsTotal, orderPaid,
   orderProfit, orderReceivable, orderRefundDue, orderShipCharged, effectiveCosts, roundVnd, intermediaryBalance,
+  isLotLate, orderCodPending, orderCodReceived, orderDeposits, orderKept, orderProfitDate, DEFAULT_AGING, DEFAULT_LOT_LATE_DAYS,
   type Lot, type Model, type Order, type PaymentKind, type Transfer, type Unit,
 } from '../domain/index.ts'
 import type {
   BalanceRow, CustomerRow, DbData, LotRow, LotStatusDb, LotSummaryRow, ModelRow, ModelStockRow, NoteRow, OrderLineRow,
-  OrderRow, OrderStatusDb, OrderSummaryRow, PaymentRow, SellerRow, SettingsRow, ShipPayerDb, SuggestionsRow, TxnRow,
-  UnitRow, UnitViewRow,
+  OrderRow, OrderStatusDb, OrderSummaryRow, PaymentMethodDb, PaymentRow, SellerRow, SettingsRow, ShipPayerDb, SuggestionsRow, TxnRow,
+  UnitConditionDb, UnitRow, UnitViewRow,
 } from './types.ts'
 
 const UID = 'demo-user'
@@ -46,7 +48,7 @@ export function demoSession(): Session {
 
 /* ---------- Mô tả dữ liệu mẫu (gọn, rồi dựng thành dòng DB) ---------- */
 
-interface UnitSpec { model: string; cny: number; serial?: string; note?: string; override?: number; list?: number }
+interface UnitSpec { model: string; cny: number; serial?: string; note?: string; override?: number; list?: number; cond?: UnitConditionDb }
 interface LotSpec {
   id: string; ago: number; receivedAgo?: number; status: LotStatusDb; rate: number; ship: number | null; fee: number
   seller: string | null; title: string | null; itemId: string | null; note?: string; units: UnitSpec[]
@@ -54,7 +56,9 @@ interface LotSpec {
 interface OrderSpec {
   id: string; customer: string; ago: number; status: OrderStatusDb; shippedAgo?: number; completedAgo?: number; forced?: boolean
   cancelledAgo?: number; ship: number; payer: ShipPayerDb; tracking?: string; note?: string
-  lines: [code: string, price: number][]; pays: [kind: PaymentKind, amount: number, ago: number, note?: string][]
+  /** CR-004: COD hãng thu hộ; Hoàn hàng (returnedAgo + phí ship về + giữ cọc) */
+  cod?: number; returnedAgo?: number; returnShip?: number; keepDeposit?: boolean; returnNote?: string
+  lines: [code: string, price: number][]; pays: [kind: PaymentKind, amount: number, ago: number, note?: string, method?: PaymentMethodDb][]
 }
 
 const MODELS: { id: string; name: string; brand: string; prefix: string; price: number | null; low: number; aliases: string[] }[] = [
@@ -89,12 +93,12 @@ const CUSTOMERS: { id: string; name: string; url: string | null; phone: string |
 const LOTS: LotSpec[] = [
   { id: 'demo-l-1', ago: 60, receivedAgo: 48, status: 'received', rate: 3560, ship: 1000000, fee: 0, seller: 'demo-s-1',
     title: '1Zpresso ZP6 Special 手摇磨豆机 9成新 4台', itemId: '780011223301',
-    units: [{ model: 'demo-m-zp6', cny: 760 }, { model: 'demo-m-zp6', cny: 760 }, { model: 'demo-m-zp6', cny: 760, serial: 'ZP6S-2409-118' },
-      { model: 'demo-m-zp6', cny: 760, serial: 'ZP6S-2409-121-SN-BATCH-A-0000000045-RECHECK', note: 'Tay quay hơi lỏng, đã siết lại; kèm cọ vệ sinh và túi vải gốc. Khách hỏi nhiều nhưng chưa chốt, ưu tiên bán cho khách quen.' }] },
+    units: [{ model: 'demo-m-zp6', cny: 760, cond: 'like_new' }, { model: 'demo-m-zp6', cny: 760, cond: 'like_new' }, { model: 'demo-m-zp6', cny: 760, serial: 'ZP6S-2409-118', cond: 'used' },
+      { model: 'demo-m-zp6', cny: 760, cond: 'defect', serial: 'ZP6S-2409-121-SN-BATCH-A-0000000045-RECHECK', note: 'Tay quay hơi lỏng, đã siết lại; kèm cọ vệ sinh và túi vải gốc. Khách hỏi nhiều nhưng chưa chốt, ưu tiên bán cho khách quen.' }] },
   { id: 'demo-l-2', ago: 45, receivedAgo: 33, status: 'received', rate: 3580, ship: 840000, fee: 3, seller: 'demo-s-2',
     title: '【正品保障】1Zpresso K-Ultra 手摇磨豆机 意式手冲两用 外圆内锥 全新未拆封 原装配件齐全 支持验货 包邮 三台一起出 可单独拍 不议价', itemId: '780011223302',
     note: 'Người bán giao nhanh, có hoá đơn gốc.',
-    units: [{ model: 'demo-m-ku', cny: 1080 }, { model: 'demo-m-ku', cny: 1080, note: 'Hộp móp nhẹ' },
+    units: [{ model: 'demo-m-ku', cny: 1080 }, { model: 'demo-m-ku', cny: 1080, note: 'Hộp móp nhẹ', cond: 'like_new' },
       { model: 'demo-m-ku', cny: 1080, override: 4200000, note: 'Thêm phí sửa núm chỉnh + thay ron' }] },
   { id: 'demo-l-3', ago: 30, receivedAgo: 18, status: 'received', rate: 3600, ship: 1250000, fee: 2.5, seller: 'demo-s-4',
     title: '磨豆机 打包出 J-Ultra ×2 ZP6 ×2 泰摩 C3S Pro Max ×1', itemId: '780011223303',
@@ -124,17 +128,21 @@ const LOTS: LotSpec[] = [
 // Đơn xếp theo ngày tạo (mã D-001… theo thứ tự này)
 const ORDERS: OrderSpec[] = [
   { id: 'demo-o-1', customer: 'demo-c-1', ago: 50, status: 'completed', shippedAgo: 47, completedAgo: 43, ship: 35000, payer: 'shop', tracking: 'GHN 8823 4471 09',
-    lines: [['ZP6-001', 4600000]], pays: [['deposit', 1000000, 50], ['payment', 3600000, 44]] },
+    cod: 3600000, lines: [['ZP6-001', 4600000]], pays: [['deposit', 1000000, 50, undefined, 'cash'], ['payment', 3600000, 44, 'GHN chuyển COD', 'cod']] },
   { id: 'demo-o-2', customer: 'demo-c-2', ago: 42, status: 'completed', shippedAgo: 41, completedAgo: 37, ship: 40000, payer: 'customer', tracking: 'GHTK S19.A2.774512',
     note: 'Khách chuyển dư 10.000 ₫ — hẹn trừ vào đơn sau', lines: [['ZP6-002', 4650000]], pays: [['payment', 4700000, 41, 'CK Techcombank']] },
   { id: 'demo-o-3', customer: 'demo-c-3', ago: 26, status: 'shipped', shippedAgo: 25, ship: 45000, payer: 'shop', tracking: 'VNPost EB123456789VN',
-    lines: [['KU-001', 6900000]], pays: [['deposit', 2000000, 26]] },
+    cod: 4900000, lines: [['KU-001', 6900000]], pays: [['deposit', 2000000, 26]] },
   { id: 'demo-o-4', customer: 'demo-c-6', ago: 22, status: 'cancelled', cancelledAgo: 19, ship: 0, payer: 'shop',
     note: 'Khách đổi ý, đồng ý mất 500k cọc', lines: [['KU-003', 6800000]], pays: [['deposit', 1500000, 22], ['refund', 500000, 18, 'Hoàn 1 phần']] },
   { id: 'demo-o-5', customer: 'demo-c-4', ago: 15, status: 'shipped', shippedAgo: 14, ship: 60000, payer: 'customer', tracking: 'GHN 8823 5520 11',
     lines: [['JU-001', 7300000], ['ZP6-005', 4500000]], pays: [['payment', 11860000, 14]] },
   { id: 'demo-o-6', customer: 'demo-c-3', ago: 10, status: 'preorder', ship: 0, payer: 'shop',
     note: 'Giữ chiếc KU đang về, khách lấy ngay khi hàng tới', lines: [['KU-008', 7000000]], pays: [['deposit', 2000000, 10]] },
+  // CR-004: khách bom — hãng chuyển hoàn, shop giữ cọc 1tr, khoản trả thêm 300k phải hoàn
+  { id: 'demo-o-11', customer: 'demo-c-5', ago: 9, status: 'returned', shippedAgo: 8, returnedAgo: 4, ship: 35000, payer: 'shop', tracking: 'GHTK S19.A2.889911',
+    cod: 5500000, returnShip: 35000, keepDeposit: true, returnNote: 'Khách không nghe máy 3 lần, GHTK chuyển hoàn',
+    lines: [['KU-002', 6800000]], pays: [['deposit', 1000000, 9], ['payment', 300000, 9]] },
   { id: 'demo-o-7', customer: 'demo-c-1', ago: 7, status: 'completed', shippedAgo: 6, completedAgo: 3, forced: true, ship: 0, payer: 'shop',
     note: 'Khách xin bớt 200k, đã đồng ý — hoàn tất dù còn thiếu', lines: [['KU-004', 6700000]], pays: [['payment', 6500000, 6]] },
   { id: 'demo-o-8', customer: 'demo-c-7', ago: 6, status: 'preorder', ship: 50000, payer: 'customer',
@@ -215,6 +223,7 @@ export function buildDemoData(): DbData {
         ...base(`demo-u-${code.toLowerCase()}`, ordered, 10, i + 1), code, model_id: m.id, lot_id: s.id, price_cny: us.cny,
         cost_vnd_auto: 0, // tính bên dưới bằng domain
         cost_vnd_override: us.override ?? null, list_price_vnd: us.list ?? m.price, serial_no: us.serial ?? null, note: us.note ?? null,
+        condition: us.cond ?? 'new',
       }
       units.push(row)
       unitByCode.set(code, row)
@@ -237,31 +246,34 @@ export function buildDemoData(): DbData {
       ship_fee_vnd: o.ship, ship_fee_payer: o.payer, shipped_at: o.shippedAgo != null ? ago(o.shippedAgo) : null,
       completed_at: o.completedAgo != null ? stamp(ago(o.completedAgo), 18) : null, completion_forced: o.forced ?? false,
       cancelled_at: o.cancelledAgo != null ? stamp(ago(o.cancelledAgo), 16) : null, note: o.note ?? null,
+      cod_amount_vnd: o.cod ?? 0, returned_at: o.returnedAgo != null ? ago(o.returnedAgo) : null, return_ship_fee_vnd: o.returnShip ?? 0,
+      keep_deposit: o.keepDeposit ?? false, return_note: o.returnNote ?? null,
     })
     o.lines.forEach(([code, price], i) => {
       const u = unitByCode.get(code)
       if (!u) throw new Error(`demo: không có chiếc ${code}`)
-      orderLines.push({ ...base(`${o.id}-l${i + 1}`, date, 14, i + 1), order_id: o.id, line_no: i + 1, unit_id: u.id, unit_price_vnd: price, cancelled: o.status === 'cancelled' })
+      orderLines.push({ ...base(`${o.id}-l${i + 1}`, date, 14, i + 1), order_id: o.id, line_no: i + 1, unit_id: u.id, unit_price_vnd: price, cancelled: o.status === 'cancelled' || o.status === 'returned' })
     })
-    o.pays.forEach(([kind, amount, pAgo, note], i) => {
-      payments.push({ ...base(`${o.id}-p${i + 1}`, ago(pAgo), 15, i + 1), order_id: o.id, paid_at: ago(pAgo), kind, amount_vnd: amount, note: note ?? null })
+    o.pays.forEach(([kind, amount, pAgo, note, method], i) => {
+      payments.push({ ...base(`${o.id}-p${i + 1}`, ago(pAgo), 15, i + 1), order_id: o.id, paid_at: ago(pAgo), kind, amount_vnd: amount, note: note ?? null, method: method ?? 'transfer' })
     })
   }
 
   // Ánh xạ sang kiểu domain để tính
   const dModels: Model[] = models.map((m) => ({ id: m.id, name: m.name, codePrefix: m.code_prefix, defaultListPrice: m.default_list_price_vnd, lowStockThreshold: m.low_stock_threshold, nextSeq: m.next_seq }))
   const dLots: Lot[] = lots.map((l) => ({ id: l.id, orderedAt: l.ordered_at, rate: l.exchange_rate, shipFee: l.ship_fee_vnd, buyingFeePct: l.buying_fee_pct, status: l.status, receivedAt: l.received_at }))
-  const dUnits: Unit[] = units.map((u) => ({ id: u.id, code: u.code, modelId: u.model_id, lotId: u.lot_id, priceCny: u.price_cny, costOverride: u.cost_vnd_override, listPrice: u.list_price_vnd, serialNo: u.serial_no, note: u.note }))
+  const dUnits: Unit[] = units.map((u) => ({ id: u.id, code: u.code, modelId: u.model_id, lotId: u.lot_id, priceCny: u.price_cny, costOverride: u.cost_vnd_override, listPrice: u.list_price_vnd, serialNo: u.serial_no, note: u.note, condition: u.condition }))
   const orderCode = Object.fromEntries(orders.map((o, i) => [o.id, `D-${String(i + 1).padStart(3, '0')}`]))
   const lotCode = Object.fromEntries(lots.map((l, i) => [l.id, `L-${String(i + 1).padStart(3, '0')}`]))
   const dOrders: Order[] = orders.map((o) => ({
     id: o.id, code: orderCode[o.id], orderDate: o.order_date, status: o.status, shippedAt: o.shipped_at, shipFee: o.ship_fee_vnd, shipPayer: o.ship_fee_payer,
     lines: orderLines.filter((l) => l.order_id === o.id).map((l) => ({ unitId: l.unit_id, price: l.unit_price_vnd })),
-    payments: payments.filter((p) => p.order_id === o.id).map((p) => ({ kind: p.kind, amount: p.amount_vnd, date: p.paid_at })),
+    payments: payments.filter((p) => p.order_id === o.id).map((p) => ({ kind: p.kind, amount: p.amount_vnd, date: p.paid_at, method: p.method })),
+    codAmount: o.cod_amount_vnd, returnedAt: o.returned_at, returnShipFee: o.return_ship_fee_vnd, keepDeposit: o.keep_deposit,
   }))
 
   // v_units
-  const views = buildUnitViews(dUnits, dLots, dOrders, today)
+  const views = buildUnitViews(dUnits, dLots, dOrders, today, DEFAULT_AGING)
   for (const v of views) units.find((u) => u.id === v.unit.id)!.cost_vnd_auto = v.cost.auto
   const modelById = new Map(models.map((m) => [m.id, m]))
   const lotById = new Map(lots.map((l) => [l.id, l]))
@@ -286,6 +298,7 @@ export function buildDemoData(): DbData {
       // Như view SQL: lãi dự kiến = giá bán dự kiến − giá nhập hiệu lực
       expected_profit_vnd: u.list_price_vnd == null ? null : u.list_price_vnd - v.cost.effective,
       actual_profit_vnd: v.profit, days_in_stock: v.daysInStock, created_at: u.created_at, updated_at: u.updated_at, version: u.version,
+      condition: u.condition, aging_level: v.agingLevel,
     }
   })
 
@@ -331,6 +344,7 @@ export function buildDemoData(): DbData {
       incoming_count: count('incoming'), in_stock_count: count('in_stock'), reserved_count: count('reserved'), sold_count: count('sold'),
       models: [...byModel.values()].sort((a, b) => a.model_name.localeCompare(b.model_name)),
       buying_fee_pct: l.buying_fee_pct, buying_fee_vnd: lotBuyingFeeVnd(dl, dUnits),
+      is_lot_late: isLotLate(dl, today, DEFAULT_LOT_LATE_DAYS),
     }
   })
 
@@ -349,6 +363,9 @@ export function buildDemoData(): DbData {
       all_units_received: lineUnits.length > 0 && lineUnits.every((u) => lotById.get(u.lot_id)!.status === 'received'),
       goods_vnd: orderGoodsTotal(d), cost_vnd: lineUnits.reduce((a, u) => a + costs.get(u.id)!, 0), ship_charged_vnd: orderShipCharged(d),
       paid_vnd: orderPaid(d), receivable_vnd: orderReceivable(d), refund_due_vnd: orderRefundDue(d), profit_vnd: orderProfit(d, costs),
+      cod_amount_vnd: o.cod_amount_vnd, cod_received_vnd: orderCodReceived(d), cod_pending_vnd: orderCodPending(d), deposit_vnd: orderDeposits(d),
+      returned_at: o.returned_at, return_ship_fee_vnd: o.return_ship_fee_vnd, keep_deposit: o.keep_deposit, return_note: o.return_note,
+      kept_vnd: orderKept(d), profit_date: orderProfitDate(d),
     }
   })
 
@@ -376,7 +393,8 @@ export function buildDemoData(): DbData {
 
   const settings: SettingsRow = {
     user_id: UID, ai_scan_enabled: true, ai_scan_monthly_cap: 100, ai_confidence_threshold: 0.7, default_ship_fee_payer: 'customer',
-    default_buying_fee_pct: 3, updated_at: stamp(ago(30)), version: 1,
+    default_buying_fee_pct: 3, aging_warn_days: DEFAULT_AGING.warnDays, aging_alert_days: DEFAULT_AGING.alertDays,
+    lot_late_days: DEFAULT_LOT_LATE_DAYS, bank_info: 'Vietcombank 0123456789 · NGUYEN VAN A (mẫu)', updated_at: stamp(ago(30)), version: 1,
   }
 
   const notes: NoteRow[] = NOTES.map((n, i) => {

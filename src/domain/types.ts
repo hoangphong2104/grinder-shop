@@ -21,14 +21,35 @@ export type IsoDate = string;
 /** Lô nhập: ordered → cn_shipping → at_forwarder → vn_shipping → received; cancelled before received. */
 export type LotStatus = 'ordered' | 'cn_shipping' | 'at_forwarder' | 'vn_shipping' | 'received' | 'cancelled';
 
-/** Đơn bán: preorder / confirmed → shipped → completed; cancelled before shipped. */
-export type OrderStatus = 'preorder' | 'confirmed' | 'shipped' | 'completed' | 'cancelled';
+/**
+ * Đơn bán: preorder / confirmed → shipped → completed; cancelled before shipped;
+ * returned (CR-004 "Hoàn hàng": khách bom / chuyển hoàn) only from shipped — its units go back to stock.
+ */
+export type OrderStatus = 'preorder' | 'confirmed' | 'shipped' | 'completed' | 'cancelled' | 'returned';
 
 /** Trạng thái chiếc (A5) — derived, never entered. */
 export type UnitStatus = 'incoming' | 'in_stock' | 'reserved' | 'sold' | 'cancelled';
 
 /** Thu tiền khách: cọc / thanh toán / hoàn tiền (refund counts negative). `amount` is always positive. */
 export type PaymentKind = 'deposit' | 'payment' | 'refund';
+
+/** CR-004 DON-S1 — hình thức thu: chuyển khoản (mặc định) / tiền mặt / COD (hãng ship chuyển về; chỉ cho `payment`). */
+export type PaymentMethod = 'transfer' | 'cash' | 'cod';
+
+/** CR-004 KHO-S3 — tình trạng từng chiếc (mặc định `new`). */
+export type UnitCondition = 'new' | 'like_new' | 'used' | 'defect';
+
+/** CR-004 KHO-S1 — mức tuổi tồn của chiếc đã về kho chưa bán: ≤ warn ngày `ok`, > warn `warn` (cam), > alert `alert` (đỏ). */
+export type AgingLevel = 'ok' | 'warn' | 'alert';
+
+/** Ngưỡng tuổi tồn (Cài đặt, DB settings.aging_warn_days / aging_alert_days). */
+export interface AgingThresholds {
+  warnDays: number;
+  alertDays: number;
+}
+/** Mặc định của Chủ dự án (2026-10-23): tồn lâu 30 / 60 ngày, lô về trễ 21 ngày. */
+export const DEFAULT_AGING: Readonly<AgingThresholds> = { warnDays: 30, alertDays: 60 };
+export const DEFAULT_LOT_LATE_DAYS = 21;
 
 /** Hand-entered intermediary transactions. The per-lot "payable" is derived from the lot (BR-12 / A4). */
 export type TransferKind = 'transfer' | 'adjustment';
@@ -51,6 +72,7 @@ export const ORDER_STATUS_LABEL: Readonly<Record<OrderStatus, string>> = {
   shipped: 'Đã gửi',
   completed: 'Hoàn tất',
   cancelled: 'Huỷ',
+  returned: 'Hoàn hàng',
 };
 
 export const UNIT_STATUS_LABEL: Readonly<Record<UnitStatus, string>> = {
@@ -65,6 +87,19 @@ export const PAYMENT_KIND_LABEL: Readonly<Record<PaymentKind, string>> = {
   deposit: 'Cọc',
   payment: 'Thanh toán',
   refund: 'Hoàn tiền',
+};
+
+export const PAYMENT_METHOD_LABEL: Readonly<Record<PaymentMethod, string>> = {
+  transfer: 'Chuyển khoản',
+  cash: 'Tiền mặt',
+  cod: 'COD',
+};
+
+export const UNIT_CONDITION_LABEL: Readonly<Record<UnitCondition, string>> = {
+  new: 'Mới',
+  like_new: 'Như mới',
+  used: 'Đã dùng',
+  defect: 'Có lỗi',
 };
 
 export const TRANSFER_KIND_LABEL: Readonly<Record<TransferKind, string>> = {
@@ -128,6 +163,8 @@ export interface Unit {
   listPrice: Vnd | null;
   serialNo?: string | null;
   note?: string | null;
+  /** CR-004 tình trạng; missing = `new`. */
+  condition?: UnitCondition;
 }
 
 /** DO_009 Dòng đơn — exactly one unit per line (A6). */
@@ -142,6 +179,8 @@ export interface Payment {
   kind: PaymentKind;
   amount: Vnd;
   date?: IsoDate;
+  /** CR-004 hình thức thu; missing = `transfer`. */
+  method?: PaymentMethod;
 }
 
 /** DO_008 Đơn bán. */
@@ -158,6 +197,14 @@ export interface Order {
   shipPayer: ShipPayer;
   lines: OrderLine[];
   payments: Payment[];
+  /** CR-004 DON-S1 — tiền hãng ship thu hộ (COD), set when shipping. Missing = 0. */
+  codAmount?: Vnd;
+  /** CR-004 DON-S3 — ngày hoàn hàng (status `returned`); profit of a returned order is reported in this month. */
+  returnedAt?: IsoDate | null;
+  /** CR-004 — phí ship chiều về (₫), borne by the shop. Missing = 0. */
+  returnShipFee?: Vnd;
+  /** CR-004 — on return: true = shop keeps the deposits (Σ `deposit`), false = everything paid is refunded. */
+  keepDeposit?: boolean;
 }
 
 /**

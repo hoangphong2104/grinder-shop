@@ -1,6 +1,6 @@
 # test (domain) → build → [main] cập nhật database Supabase (migration chưa áp) → đưa Edge Function lên → publish GitHub Pages.
 # Khoá nằm trong GitHub Secrets (Chủ dự án tự dán, không qua chat): SUPABASE_DB_URL, SUPABASE_ACCESS_TOKEN.
-# Thiếu khoá → bước tương ứng tự bỏ qua (không lỗi). Migration lỗi → KHÔNG publish app.
+# Thiếu SUPABASE_DB_URL hoặc migration lỗi → KHÔNG publish app. Thiếu SUPABASE_ACCESS_TOKEN → chỉ bỏ qua Edge Function.
 name: ci
 on:
   push:
@@ -41,7 +41,7 @@ jobs:
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
-          if [ -z "$SUPABASE_DB_URL" ]; then echo "::notice::Chưa có secret SUPABASE_DB_URL — bỏ qua cập nhật database."; exit 0; fi
+          if [ -z "$SUPABASE_DB_URL" ]; then echo "::error::Chưa có secret SUPABASE_DB_URL — không cập nhật được database nên KHÔNG publish app (tránh app mới chạy trên database cũ)."; exit 1; fi
           sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client > /dev/null
           bash scripts/apply-migrations.sh
 
