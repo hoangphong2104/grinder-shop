@@ -159,8 +159,8 @@ function ReceiveSheet({ lotId, onClose, onDone }: { lotId: string; onClose: () =
   }
 
   return (
-    <Sheet title={`Nhận ${d.lotCode[l.id] ?? 'lô'} vào kho`} onClose={onClose}
-      footer={<button className="btn btn-primary btn-block" id="rc-submit" disabled={sending} onClick={submit}>{sending ? <><span className="spin" /> Đang nhận…</> : `Nhận vào kho (${qty} chiếc)`}</button>}>
+    <Sheet title={`Nhận ${d.lotCode[l.id] ?? 'lô'} vào Kho Lumi`} onClose={onClose}
+      footer={<button className="btn btn-primary btn-block" id="rc-submit" disabled={sending} onClick={submit}>{sending ? <><span className="spin" /> Đang nhận…</> : `Nhận vào Kho Lumi (${qty} chiếc)`}</button>}>
       <div className="two">
         <label className="f"><span className="flab">Phí ship cả lô ₫{l.ship_fee_vnd == null && <span className="req"> *</span>}</span>
           <input className="input money" id="rc-fee" inputMode="numeric" value={fee} placeholder={sug != null ? String(sug) : ''}
@@ -237,7 +237,7 @@ function ShipFeeSheet({ lotId, onClose }: { lotId: string; onClose: () => void }
   const submit = async () => {
     if (val != null && Number.isNaN(val)) return setErr('Phí ship phải là số đồng nguyên ≥ 0.')
     if (received && val == null) return setErr('Lô đã nhận phải có phí ship (BR-02).')
-    if (tooMany) return setErr(`Lô có ${qty} chiếc - quá ${MAX_GROUP_ITEMS} chiếc nên chưa sửa phí ship trước khi nhận được. Nhập phí ship lúc bấm "Nhận vào kho".`)
+    if (tooMany) return setErr(`Lô có ${qty} chiếc - quá ${MAX_GROUP_ITEMS} chiếc nên chưa sửa phí ship trước khi nhận được. Nhập phí ship lúc bấm "Nhận vào Kho Lumi".`)
     setErr(null); setSending(true)
     try {
       if (received) await rpc('update_lot_ship_fee', { p_lot_id: l.id, p_ship_fee_vnd: val, p_expected_version: l.version })
@@ -256,7 +256,7 @@ function ShipFeeSheet({ lotId, onClose }: { lotId: string; onClose: () => void }
       </label>
       <p className="hint">
         Chia đều {qty} chiếc; công nợ trung gian tự cập nhật.
-        {sug != null && <> Lô trước ~{vnd(sug)} cho {qty} chiếc.</>}
+        {sug != null && <> Lô trước khoảng {vnd(sug)} cho {qty} chiếc.</>}
       </p>
       {received && (
         <div className="note-box way">

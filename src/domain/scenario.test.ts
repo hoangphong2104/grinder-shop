@@ -86,12 +86,15 @@ test('scenario: model stock (A9) and stock value = 21.461.600', () => {
   const s = Object.fromEntries(modelStocks(models, units, lots, orders).map((x) => [x.modelId, x]));
   // ZP6: in stock 004 · incoming 006 · reserved 002, 003, 005 · sold 001 → sellable 1 + 1 = 2 > 1
   // value = 002 + 003 (2 × 2.955.600) + 004 (2.964.000) = 8.875.200
-  assert.deepEqual(s['m-zp6'], { modelId: 'm-zp6', inStock: 1, incoming: 1, reserved: 3, sold: 1, onHand: 3, sellable: 2, lowStock: false, stockValue: 8875200 });
+  assert.deepEqual(s['m-zp6'], { modelId: 'm-zp6', inStock: 1, incoming: 1, reserved: 3, sold: 1, onHand: 3, sellable: 2, lowStock: false, stockValue: 8875200,
+    incomingValue: 2 * 2698710, totalCapital: 8875200 + 2 * 2698710 }); // CR-005: L6 2 × ZP6 tạm tính 2.698.710 đang về
   // KU: in stock 002, 004 · incoming 006 · reserved 005 · sold 001, 003 → sellable 3
   // value = 4.146.400 + 4.000.000 = 8.146.400
-  assert.deepEqual(s['m-ku'], { modelId: 'm-ku', inStock: 2, incoming: 1, reserved: 1, sold: 2, onHand: 2, sellable: 3, lowStock: false, stockValue: 8146400 });
+  assert.deepEqual(s['m-ku'], { modelId: 'm-ku', inStock: 2, incoming: 1, reserved: 1, sold: 2, onHand: 2, sellable: 3, lowStock: false, stockValue: 8146400,
+    incomingValue: 2 * 3790500, totalCapital: 8146400 + 2 * 3790500 }); // CR-005: L5 2 × KU 3.790.500 (1 đang về + 1 đã giữ)
   // JU: in stock 002 · sold 001 · 003 cancelled (not counted) → sellable 1 ≤ threshold 1 → low
-  assert.deepEqual(s['m-ju'], { modelId: 'm-ju', inStock: 1, incoming: 0, reserved: 0, sold: 1, onHand: 1, sellable: 1, lowStock: true, stockValue: 4440000 });
+  assert.deepEqual(s['m-ju'], { modelId: 'm-ju', inStock: 1, incoming: 0, reserved: 0, sold: 1, onHand: 1, sellable: 1, lowStock: true, stockValue: 4440000,
+    incomingValue: 0, totalCapital: 4440000 }); // L7 huỷ không tính
   assert.equal(stockValue(units, lots, orders), 8875200 + 8146400 + 4440000);
 });
 

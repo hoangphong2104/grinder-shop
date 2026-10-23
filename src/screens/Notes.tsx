@@ -1,5 +1,5 @@
-// Ghi chú khi bán hàng (CR-002, làm lại theo kiểu Google Keep / Apple Notes - Chủ dự án 2026-10-23: "không bắt mắt, không hiện hết ghi chú").
-// - Thẻ màu, dòng đầu = tiêu đề, HIỆN ĐỦ nội dung (ghi chú rất dài: gập + "Xem thêm" mở ngay trên thẻ).
+// Ghi chú khi bán hàng (CR-002; CR-005 ý 14: danh sách kiểu Apple Notes).
+// - Dòng cao bằng nhau: tiêu đề đậm 1 dòng + ngày (ghim) bên phải, 2 dòng xem trước; màu ghi chú = vạch trái nhỏ.
 // - Bấm thẻ → màn sửa toàn màn hình, ô chữ tự giãn; Xong / quay lại = tự lưu. Ghim, đổi màu, xoá ngay trong màn sửa.
 // - Tìm không dấu; nhóm Đã ghim / Khác. Lưu trên cloud, đồng bộ realtime.
 import '../styles/notes.css'
@@ -13,7 +13,6 @@ import { useToast } from '../ui/feedback.tsx'
 import { Icon } from '../ui/icons.tsx'
 
 const COLORS: [NoteColor, string][] = [['default', 'Trắng'], ['yellow', 'Vàng'], ['green', 'Xanh lá'], ['blue', 'Xanh dương'], ['pink', 'Hồng'], ['purple', 'Tím']]
-const LONG = 600 // ký tự; dài hơn thì gập trên thẻ
 
 /** Bỏ dấu tiếng Việt + chữ thường để tìm "phi ship" khớp "phí ship". */
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase()
@@ -38,42 +37,35 @@ const PinIcon = ({ on }: { on: boolean }) => (
 export default function Notes() {
   const d = useData()
   const [q, setQ] = useState('')
-  const [onlyPinned, setOnlyPinned] = useState(false)
   const [open, setOpen] = useState<NoteRow | 'new' | null>(null)
 
   const notes = useMemo(() => {
     const f = fold(q.trim())
     return d.notes
-      .filter((n) => (!f || fold(n.body).includes(f)) && (!onlyPinned || n.is_pinned))
+      .filter((n) => !f || fold(n.body).includes(f))
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
-  }, [d.notes, q, onlyPinned])
+  }, [d.notes, q])
   const pinned = notes.filter((n) => n.is_pinned), others = notes.filter((n) => !n.is_pinned)
   const close = useCallback(() => setOpen(null), [])
 
-  const grid = (list: NoteRow[]) => (
-    <div className="nk-grid">{list.map((n) => <NoteCard key={n.id} n={n} q={q} onOpen={() => setOpen(n)} />)}</div>
+  const list = (items: NoteRow[]) => (
+    <div className="nl-list">{items.map((n) => <NoteLine key={n.id} n={n} q={q} onOpen={() => setOpen(n)} />)}</div>
   )
 
   return (
     <Shell section="ghichu" title="Ghi chú" actions={<button className="btn btn-primary btn-sm only-desk" onClick={() => setOpen('new')}><Icon name="plus" />Ghi chú mới</button>}>
-      <div className="nk-bar">
-        <input className="input nk-search" id="note-search" type="search" placeholder="Tìm trong ghi chú…" aria-label="Tìm trong ghi chú" value={q} onChange={(e) => setQ(e.target.value)} />
-        <div className="chips" role="group" aria-label="Lọc ghi chú">
-          <button className="chip" aria-pressed={!onlyPinned} onClick={() => setOnlyPinned(false)}>Tất cả <span className="c">{d.notes.length}</span></button>
-          <button className="chip" aria-pressed={onlyPinned} onClick={() => setOnlyPinned(true)}>Đã ghim <span className="c">{d.notes.filter((n) => n.is_pinned).length}</span></button>
-        </div>
-      </div>
+      <input className="input nk-search" id="note-search" type="search" placeholder="Tìm trong ghi chú…" aria-label="Tìm trong ghi chú" value={q} onChange={(e) => setQ(e.target.value)} />
 
       {notes.length === 0 ? (
         <div className="nk-empty">
           {d.notes.length === 0
             ? <><b>Chưa có ghi chú nào</b><span>Ghi điều cần lưu ý khi bán: giá đã báo khách, cách đóng gói, lỗi hay gặp…</span><button className="btn btn-primary" onClick={() => setOpen('new')}><Icon name="plus" />Viết ghi chú đầu tiên</button></>
-            : <span>Không có ghi chú nào khớp “{q || 'Đã ghim'}”.</span>}
+            : <span>Không có ghi chú nào khớp “{q}”.</span>}
         </div>
       ) : (
         <>
-          {pinned.length > 0 && <><p className="nk-sec"><PinIcon on />Đã ghim</p>{grid(pinned)}</>}
-          {others.length > 0 && <>{pinned.length > 0 && <p className="nk-sec">Khác</p>}{grid(others)}</>}
+          {pinned.length > 0 && <><p className="nk-sec"><PinIcon on />Đã ghim <span className="c">{pinned.length}</span></p>{list(pinned)}</>}
+          {others.length > 0 && <><p className="nk-sec">{pinned.length > 0 ? 'Ghi chú khác' : 'Tất cả ghi chú'} <span className="c">{others.length}</span></p>{list(others)}</>}
         </>
       )}
 
@@ -83,24 +75,28 @@ export default function Notes() {
   )
 }
 
-function NoteCard({ n, q, onOpen }: { n: NoteRow; q: string; onOpen: () => void }) {
-  const [expanded, setExpanded] = useState(false)
-  const nl = n.body.indexOf('\n')
-  const title = (nl < 0 ? n.body : n.body.slice(0, nl)).trim()
-  const rest = nl < 0 ? '' : n.body.slice(nl + 1).replace(/^\n+/, '')
-  const long = rest.length > LONG || rest.split('\n').length > 14
+/** Tiêu đề = dòng đầu; ghi chú chỉ 1 dòng dài ⇒ tách ở cuối câu đầu (≤ 70 ký tự) hoặc ~32 ký tự theo từ, phần còn lại làm xem trước. */
+function splitNote(body: string): [string, string] {
+  const b = body.trim()
+  const nl = b.indexOf('\n')
+  if (nl >= 0) return [b.slice(0, nl).trim(), b.slice(nl + 1).replace(/\s*\n\s*/g, ' ').trim()]
+  if (b.length <= 36) return [b, '']
+  const m = /^(.{8,70}?[.!?:])\s+(.+)$/.exec(b)
+  if (m) return [m[1], m[2]]
+  let cut = b.lastIndexOf(' ', 32)
+  if (cut < 12) cut = 32
+  return [b.slice(0, cut).trim(), b.slice(cut).trim()]
+}
+
+/** Dòng kiểu Apple Notes: cao bằng nhau - tiêu đề đậm 1 dòng + ngày / ghim bên phải, 2 dòng xem trước. Màu = vạch trái. */
+function NoteLine({ n, q, onOpen }: { n: NoteRow; q: string; onOpen: () => void }) {
+  const [title, rest] = splitNote(n.body)
   return (
-    <article className={`nk-card c-${n.color}${n.is_pinned ? ' pinned' : ''}`}>
-      <button className="nk-open" onClick={onOpen} aria-label={`Mở ghi chú: ${title}`}>
-        <h3 className="nk-title"><Hi text={title || '(Không tiêu đề)'} q={q} /></h3>
-        {rest && <div className={`nk-body${long && !expanded ? ' clamp' : ''}`}><Hi text={rest} q={q} /></div>}
-      </button>
-      <div className="nk-foot">
-        <span className="nk-when">{when(n.updated_at)}</span>
-        {long && <button className="nk-more" onClick={() => setExpanded((v) => !v)}>{expanded ? 'Thu gọn' : 'Xem thêm'}</button>}
-        {n.is_pinned && <span className="nk-pin" title="Đã ghim"><PinIcon on /></span>}
-      </div>
-    </article>
+    <button type="button" className={`nl-row c-${n.color}`} onClick={onOpen} aria-label={`Mở ghi chú: ${title}`}>
+      <span className="t"><Hi text={title || '(Không tiêu đề)'} q={q} /></span>
+      <span className="w">{n.is_pinned && <PinIcon on />}{when(n.updated_at)}</span>
+      <span className="p">{rest ? <Hi text={rest} q={q} /> : <span className="none">Không có nội dung thêm</span>}</span>
+    </button>
   )
 }
 

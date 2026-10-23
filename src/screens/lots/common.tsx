@@ -38,8 +38,8 @@ export function modelsText(d: DbData, sum: LotSummaryRow | undefined): string {
 export function unitCounts(sum: LotSummaryRow | undefined): [string, string][] {
   if (!sum) return []
   const out: [string, string][] = []
-  if (sum.incoming_count) out.push([`${sum.incoming_count} đang về`, 'way'])
-  if (sum.in_stock_count) out.push([`${sum.in_stock_count} trong kho`, 'ok'])
+  if (sum.incoming_count) out.push([`${sum.incoming_count} ${sum.status === 'vn_warehouse' ? 'Kho VN' : sum.status === 'cn_warehouse' ? 'Kho TQ' : 'đang về'}`, 'way'])
+  if (sum.in_stock_count) out.push([`${sum.in_stock_count} Kho Lumi`, 'ok'])
   if (sum.reserved_count) out.push([`${sum.reserved_count} đã giữ`, 'hold'])
   if (sum.sold_count) out.push([`${sum.sold_count} đã bán`, 'neu'])
   return out
@@ -56,10 +56,8 @@ export function nextStatus(s: LotStatusDb): LotStatusDb | null {
   return i >= 0 && i < LOT_FLOW.length - 1 ? LOT_FLOW[i + 1] : null
 }
 /** CR-004 U9: nhãn bước ngắn cho chip / nút trên điện thoại. */
-export const LOT_SHORT: Record<LotStatusDb, string> = {
-  ordered: 'Đã đặt', cn_shipping: 'Ship TQ', at_forwarder: 'Tới TG', vn_shipping: 'Về VN', received: 'Đã nhận', cancelled: 'Huỷ',
-}
-const LOT_TONE: Record<LotStatusDb, string> = { ordered: 'neu', cn_shipping: 'way', at_forwarder: 'way', vn_shipping: 'way', received: 'ok', cancelled: 'neu' }
+export const LOT_SHORT: Record<LotStatusDb, string> = { cn_warehouse: 'Kho TQ', vn_warehouse: 'Kho VN', received: 'Kho Lumi', cancelled: 'Huỷ' }
+const LOT_TONE: Record<LotStatusDb, string> = { cn_warehouse: 'way', vn_warehouse: 'way', received: 'ok', cancelled: 'neu' }
 /** Chip bước nhãn ngắn (cùng màu LotChip). */
 export const LotStepPill = ({ s }: { s: LotStatusDb }) => <span className={`pill ${LOT_TONE[s]}`}>{LOT_SHORT[s]}</span>
 /** CR-004 LOT-S2: lô về trễ (v_lot_summary.is_lot_late - DB tính theo Cài đặt lot_late_days). */
@@ -79,7 +77,9 @@ export function lotWarnings(d: DbData, l: LotRow): [string, string][] {
   const w: [string, string][] = []
   const idx = LOT_FLOW.indexOf(l.status)
   if (isLate(d, l)) w.push(['Về trễ', 'bad'])
-  if (l.ship_fee_vnd == null && idx >= 2 && isOpen(l.status)) w.push(['Thiếu phí ship', 'bad'])
+  if (l.ship_fee_vnd == null && idx >= 1 && isOpen(l.status)) w.push(['Thiếu phí ship', 'bad'])
+  const s = summaryOf(d, l.id)
+  if (s && l.status !== 'cancelled' && s.outstanding_vnd > 0) w.push([`Còn nợ TG ${tr(s.outstanding_vnd)}`, 'bad'])
   if (sellerOf(d, l)?.is_avoided) w.push(['Người bán bị đánh dấu tránh', 'bad'])
   if (isOpen(l.status) && preordersOfLot(d, l.id).length) w.push(['Có đơn đặt trước đang chờ', 'hold'])
   return w
@@ -150,7 +150,9 @@ export function LotRow2({ d, l, busy, onNext }: { d: DbData; l: LotRow; busy: bo
 
 /** Cảnh báo ngắn nhất cho dòng lô (tối đa 1): thiếu ship → người bán tránh → có đặt trước. */
 export function shortWarning(d: DbData, l: LotRow): [string, string] | null {
-  if (l.ship_fee_vnd == null && LOT_FLOW.indexOf(l.status) >= 2 && isOpen(l.status)) return ['thiếu ship', 'bad']
+  if (l.ship_fee_vnd == null && LOT_FLOW.indexOf(l.status) >= 1 && isOpen(l.status)) return ['thiếu ship', 'bad']
+  const sm = summaryOf(d, l.id)
+  if (sm && l.status !== 'cancelled' && sm.outstanding_vnd > 0) return [`nợ TG ${tr(sm.outstanding_vnd)}`, 'bad']
   if (sellerOf(d, l)?.is_avoided) return ['người bán tránh', 'bad']
   if (isOpen(l.status) && preordersOfLot(d, l.id).length) return ['có đặt trước', 'hold']
   return null
@@ -166,11 +168,11 @@ export function UnitRow2({ d, u }: { d: DbData; u: UnitViewRow }) {
       <span className="l1"><b className="code num">{u.code}</b><span className="nm">{u.model_name}</span></span>
       <span className="r1 num">{price != null ? tr(price) : '-'}</span>
       <span className="l2">
-        <UnitChip s={u.status} holder={holder} />
+        <UnitChip s={u.status} holder={holder} lot={u.lot_status} order={u.holding_order_status} />
         <ConditionChip c={u.condition ?? 'new'} />
         {u.serial_no && <span className="meta">{u.serial_no}</span>}
       </span>
-      <span className="r2 muted small num">nhập {tr(u.cost_vnd)}{u.cost_is_overridden ? '*' : u.cost_is_provisional ? '~' : ''}</span>
+      <span className="r2 muted small num">nhập {tr(u.cost_vnd)}{u.cost_is_overridden ? ' (sửa tay)' : u.cost_is_provisional ? ' + ship' : ''}</span>
     </Link>
   )
 }

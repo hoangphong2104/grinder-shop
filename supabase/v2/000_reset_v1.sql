@@ -26,7 +26,7 @@ begin
               where pubname = 'supabase_realtime' and schemaname = 'public'
                 and tablename in ('models','variants','sellers','lots','lot_lines','units','intermediary_txns',
                                   'customers','orders','order_lines','payments','settings','stock_movements',
-                                  'ai_scan_log','notes')
+                                  'ai_scan_log','notes','cash_entries')
     loop
       execute format('alter publication supabase_realtime drop table %I.%I', r.schemaname, r.tablename);
     end loop;
@@ -34,6 +34,8 @@ begin
 end $$;
 
 -- 2. View (v1 + v2)
+drop view if exists public.v_cash_monthly         cascade;   -- v2 (CR-005)
+drop view if exists public.v_cash_balance         cascade;   -- v2 (CR-005)
 drop view if exists public.v_suggestions          cascade;
 drop view if exists public.v_order_summary        cascade;
 drop view if exists public.v_lot_summary          cascade;
@@ -47,6 +49,7 @@ drop table if exists public.stock_movements   cascade;   -- v1
 drop table if exists public.order_lines       cascade;
 drop table if exists public.payments          cascade;
 drop table if exists public.orders            cascade;
+drop table if exists public.cash_entries      cascade;   -- v2 (CR-005)
 drop table if exists public.lot_lines         cascade;   -- v1
 drop table if exists public.units             cascade;   -- v2
 drop table if exists public.intermediary_txns cascade;
@@ -69,11 +72,13 @@ begin
             where (n.nspname = 'public' and p.proname in (
                      'bootstrap_user','save_lot','set_lot_status','receive_lot','update_lot_ship_fee','cancel_lot',
                      'update_unit','save_order','confirm_preorder','ship_order','cancel_order','complete_order',
-                     'ai_scan_reserve','ai_scan_finish','set_order_cod','return_order'))
+                     'ai_scan_reserve','ai_scan_finish','set_order_cod','return_order','pay_lot','delete_order'))
                or (n.nspname = 'private' and p.proname in (
                      'today_vn','require_uid','check_version','touch_row','touch_model',
                      'recalc_lot','replay_variant_avg','lock_variants','variant_incoming','variant_reserved',
-                     'order_fillable','next_unit_code','order_unreceived_codes'))
+                     'order_fillable','next_unit_code','order_unreceived_codes',
+                     'normalize_lot_status','cash_sync_payment','cash_sync_txn','cash_sync_order',
+                     'cash_on_payment','cash_on_txn','cash_on_order'))
   loop
     execute format('drop function if exists %s cascade', r.sig);
   end loop;

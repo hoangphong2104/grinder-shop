@@ -1,14 +1,22 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useData } from '../data/store.tsx'
-import type { OrderSummaryRow } from '../data/types.ts'
+import type { OrderSummaryRow, UnitViewRow } from '../data/types.ts'
 import { Shell } from '../ui/Shell.tsx'
-import { Gpic, Icon } from '../ui/icons.tsx'
-import { ModelStockChip } from '../ui/status.tsx'
-import { todayVn, tr, vnd } from '../ui/format.ts'
+import { Icon } from '../ui/icons.tsx'
+import { todayVn, tr } from '../ui/format.ts'
 import {
-  GoRow, Ident, LotRow, OrderRow, Row2, Tx, UnitRow, codesText, daysSince, kpiAmount, profitMonth, sortedModelStock, thresholds, useDesk,
+  Ident, LotRow, OrderRow, Profit, Row2, Tx, UnitRow, codesText, daysSince, kpiAmount, lotModelsText, profitMonth, signed, sortedModelStock, thresholds, useDesk,
 } from './overview/common.tsx'
+import { PayLotButton } from './lots/PayLot.tsx'
+
+type Period = 'thang' | '3thang' | 'nam' | 'all'
+const PERIODS: [Period, string][] = [['thang', 'Tháng này'], ['3thang', '3 tháng'], ['nam', 'Năm nay'], ['all', 'Tất cả']]
+const addMonths = (ym: string, k: number) => {
+  const [y, m] = ym.split('-').map(Number)
+  const t = y * 12 + (m - 1) + k
+  return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, '0')}`
+}
 
 /** Đơn Đã gửi quá số ngày này mà chưa Hoàn tất → nhắc (HOME-S1; Cài đặt chưa có cột riêng nên cố định 7 ngày). */
 const SHIP_LATE_DAYS = 7
@@ -16,8 +24,8 @@ const PER_GROUP = 3
 
 type Group = { key: string; title: string; tone?: 'bad' | 'way'; count: number; sum?: number; more: string; rows: ReactNode[] }
 
-// SC_01 Tổng quan (CR-001 + CR-004): dashboard vận hành.
-// Điện thoại: Cần làm → ô số → Tồn kho rút gọn (HOME-M3). Máy tính: ô số trên, Tồn kho | Cần làm.
+// SC_01 Tổng quan (CR-001 + CR-004 + CR-005 ý 6, gộp Báo cáo): Tiền (quỹ, lãi tháng, doanh thu) · Vốn đang nằm ở hàng + khách còn nợ
+// · Việc cần làm (gom nhóm) · Biểu đồ lãi 6 tháng + model bán chạy. Điện thoại: ô số → Cần làm → biểu đồ → model.
 // Cần làm gom theo loại có số đếm, mỗi nhóm tối đa 3 việc + "Xem tất cả" (HOME-M1); thêm việc theo tuổi (HOME-S1).
 // Lãi tháng gom theo profit_date (ngày gửi; đơn Hoàn hàng = ngày hoàn) - số chính thức v_order_summary.
 export default function Home() {
@@ -33,9 +41,12 @@ export default function Home() {
   const shippedN = inMonth.filter((o) => o.status !== 'returned').length
   const returnedN = inMonth.length - shippedN
   const rev = inMonth.filter((o) => o.status !== 'returned').reduce((a, o) => a + o.goods_vnd, 0)
+  const [period, setPeriod] = useState<Period>('thang')
+  // Vốn đang nằm ở hàng (CR-005 ý 4): Kho Lumi + đang về (Kho TQ / Kho VN) - v_model_stock.total_capital_vnd
+  const capital = d.modelStock.reduce((a, s) => a + (s.total_capital_vnd ?? s.stock_value_vnd), 0)
   const stockValue = d.modelStock.reduce((a, s) => a + s.stock_value_vnd, 0)
-  const onHand = d.modelStock.reduce((a, s) => a + s.on_hand_count, 0)
-  const incoming = d.modelStock.reduce((a, s) => a + s.incoming_count, 0)
+  const incomingValue = d.modelStock.reduce((a, s) => a + (s.incoming_value_vnd ?? 0), 0)
+  const cash = d.cashBalance?.balance_vnd ?? 0
   // Khách còn nợ: đơn chưa Hoàn tất (đơn Huỷ / Hoàn hàng = 0 - Q-009); trả dư không trừ
   const dueOrders = d.orderSummary.filter((o) => o.status !== 'completed' && o.receivable_vnd > 0)
   const due = dueOrders.reduce((a, o) => a + o.receivable_vnd, 0)
@@ -72,7 +83,7 @@ export default function Home() {
     .sort((a, b) => (a.shipped_at ?? '').localeCompare(b.shipped_at ?? ''))
   add({ key: 'lateship', title: `Đã gửi > ${SHIP_LATE_DAYS} ngày chưa hoàn tất`, tone: 'way', count: lateShip.length, more: '/don?f=sent', rows: orderRows(lateShip, sentAgo) })
 
-  const noShip = d.lots.filter((l) => (l.status === 'at_forwarder' || l.status === 'vn_shipping') && l.ship_fee_vnd == null)
+  const noShip = d.lots.filter((l) => l.status === 'vn_warehouse' && l.ship_fee_vnd == null)
   add({ key: 'noship', title: 'Thiếu phí ship lô', tone: 'bad', count: noShip.length, more: '/lo', rows: noShip.slice(0, PER_GROUP).map((l) => <LotRow key={l.id} d={d} l={l} />) })
 
   const lateLotIds = new Set(d.lotSummary.filter((s) => s.is_lot_late).map((s) => s.lot_id))
@@ -87,6 +98,22 @@ export default function Home() {
   }
   add({ key: 'wait', title: 'Chờ hàng về (đặt trước)', count: waiting.length, more: '/don?f=pre', rows: orderRows(waiting, waitSub) })
 
+  const owing = d.lotSummary.filter((x) => x.status !== 'cancelled' && x.outstanding_vnd > 0).sort((a, b) => a.ordered_at.localeCompare(b.ordered_at))
+  add({ key: 'pay', title: 'Trả trung gian', tone: 'bad', count: owing.length, sum: owing.reduce((a, x) => a + x.outstanding_vnd, 0), more: '/congno',
+    rows: owing.slice(0, PER_GROUP).map((x) => (
+      <Row2 key={x.lot_id} a={<Link className="row" style={{ gap: 8, minWidth: 0, color: 'inherit', textDecoration: 'none' }} to={`/lo/${x.lot_id}`}><Ident id={d.lotCode[x.lot_id] ?? 'Lô'} text={lotModelsText(d, x.lot_id, 'short')} /></Link>}
+        b={<span className="neg">{tr(x.outstanding_vnd)}</span>} c={<Tx>{x.paid_vnd > 0 ? `đã trả ${tr(x.paid_vnd)} / ${tr(x.payable_vnd)}` : `phải trả ${tr(x.payable_vnd)}`}</Tx>}
+        d={<PayLotButton lotId={x.lot_id} id={`home-pay-${x.lot_id}`} />} />
+    )) })
+
+  const low = sortedModelStock(d).filter((m) => m.is_active && (m.sellable_count <= 0 || m.is_low_stock))
+  add({ key: 'low', title: 'Sắp hết hàng', tone: 'way', count: low.length, more: '/kho',
+    rows: low.slice(0, PER_GROUP).map((m) => (
+      <Row2 key={m.model_id} to={`/kho?model=${m.model_id}`} a={<Ident id={m.code_prefix} text={m.model_name} />}
+        b={<span className={m.sellable_count <= 0 ? 'neg' : 'age-warn'}>{m.sellable_count <= 0 ? 'hết hàng' : `còn ${m.sellable_count}`}</span>}
+        c={<Tx>Kho Lumi {m.in_stock_count} · đang về {m.incoming_count} · đã giữ {m.reserved_count}</Tx>} />
+    )) })
+
   const aged = d.unitView.filter((u) => u.aging_level === 'alert').sort((a, b) => (b.days_in_stock ?? 0) - (a.days_in_stock ?? 0))
   add({ key: 'aged', title: `Tồn lâu > ${th.alert} ngày`, tone: 'bad', count: aged.length, sum: aged.reduce((a, u) => a + u.cost_vnd, 0), more: '/kho?sx=ton',
     rows: aged.slice(0, PER_GROUP).map((u) => <UnitRow key={u.unit_id} d={d} u={u} />) })
@@ -94,7 +121,7 @@ export default function Home() {
   const todoCount = groups.reduce((a, g) => a + g.count, 0)
   const todo = (
     <div className="ov-todo">
-      <p className="section-title">Cần làm <span className="muted">{todoCount}</span></p>
+      <p className="section-title">Việc cần làm <span className="muted">{todoCount}</span></p>
       {groups.length === 0 && <div className="empty">Không có việc tồn - đơn, lô và kho đều ổn.</div>}
       {groups.map((g) => (
         <section key={g.key} className="ov-todo" aria-label={g.title}>
@@ -109,61 +136,84 @@ export default function Home() {
   )
 
   const kpis = (
-    <div className="kpis">
-      <Link className="kpi hero" to="/baocao"><span className="k">Lãi tháng {mNo}</span><span className="v">{kpiAmount(profit, desk)}</span>
-        <span className="s">{shippedN} đơn · DT {tr(rev)}{returnedN ? ` · ${returnedN} hoàn` : ''}</span></Link>
-      <Link className="kpi" to="/kho"><span className="k">Vốn trong kho</span><span className="v">{kpiAmount(stockValue, desk)}</span><span className="s">{onHand} về kho · {incoming} đang về</span></Link>
+    <div className="kpis ov-k6">
+      <Link className="kpi hero" to="/congno"><span className="k">Quỹ hiện có</span><span className={`v ${cash < 0 ? 'neg' : ''}`}>{cash < 0 ? '−' : ''}{kpiAmount(Math.abs(cash), desk)}</span>
+        <span className="s">tiền mặt + tài khoản</span></Link>
+      <button type="button" className="kpi" onClick={() => document.getElementById('home-chart')?.scrollIntoView({ behavior: 'smooth' })}><span className="k">Lãi tháng {mNo}</span><span className={`v ${profit < 0 ? 'neg' : profit > 0 ? 'pos' : ''}`}>{desk ? (profit < 0 ? '−' : profit > 0 ? '+' : '') + kpiAmount(Math.abs(profit), desk) : signed(profit)}</span>
+        <span className="s">{shippedN} đơn đã gửi{returnedN ? ` · ${returnedN} hoàn` : ''}</span></button>
+      <Link className="kpi" to="/don"><span className="k">Doanh thu tháng {mNo}</span><span className="v">{kpiAmount(rev, desk)}</span><span className="s">giá chốt các chiếc đã gửi</span></Link>
+      <Link className="kpi" to="/kho"><span className="k">Vốn ở hàng</span><span className="v">{kpiAmount(capital, desk)}</span>
+        <span className="s">Kho Lumi {tr(stockValue)}{incomingValue > 0 ? ` + về ${tr(incomingValue)}` : ''}</span></Link>
       <Link className="kpi" to="/don?f=due"><span className="k">Khách còn nợ</span><span className="v">{kpiAmount(due, desk)}</span><span className={`s ${dueOrders.length ? 'bad' : ''}`}>{dueOrders.length ? `${dueOrders.length} đơn chưa đủ` : 'đã thu đủ'}</span></Link>
-      <Link className="kpi" to="/congno"><span className="k">Nợ trung gian</span><span className="v">{kpiAmount(debt, desk)}</span><span className={`s ${debt > 0 ? 'bad' : ''}`}>{debt > 0 ? 'còn phải trả' : debt < 0 ? 'đã chuyển dư' : 'không còn nợ'}</span></Link>
+      <Link className="kpi" to="/congno"><span className="k">Nợ trung gian</span><span className="v">{kpiAmount(Math.abs(debt), desk)}</span><span className={`s ${debt > 0 ? 'bad' : ''}`}>{debt > 0 ? 'còn phải trả' : debt < 0 ? 'đã chuyển dư' : 'không còn nợ'}</span></Link>
     </div>
   )
 
-  // Tồn kho: máy tính bảng; điện thoại 1 dòng / model, model có cảnh báo lên trước (HOME-S2)
-  const ms = sortedModelStock(d)
-  const warnRank = (s: (typeof ms)[number]) => (s.sellable_count <= 0 ? 0 : s.is_low_stock ? 1 : 2)
-  const kho = (id: string) => `/kho?model=${id}`
-  const stockList = ms.length === 0
-    ? <div className="empty">Chưa có model đang bán - vào <Link to="/danhmuc">Model</Link> để thêm.</div>
-    : desk
-      ? (
-        <div className="tbl-wrap"><table className="tbl">
-          <thead><tr><th>Model</th><th className="r">Có thể bán</th><th className="r">Trong kho</th><th className="r">Đang về</th><th className="r">Đã giữ</th><th>Tình trạng</th><th className="r">Vốn tồn</th></tr></thead>
-          <tbody>
-            {ms.map((s) => (
-              <GoRow key={s.model_id} to={kho(s.model_id)}>
-                <td><Link className="row cell-link" to={kho(s.model_id)}><Gpic modelName={s.model_name} />{s.model_name}</Link></td>
-                <td className="r"><b>{s.sellable_count}</b></td><td className="r">{s.in_stock_count}</td><td className="r">{s.incoming_count}</td><td className="r">{s.reserved_count}</td>
-                <td><ModelStockChip m={s} /></td>
-                <td className="r">{s.stock_value_vnd ? vnd(s.stock_value_vnd) : '-'}</td>
-              </GoRow>
-            ))}
-          </tbody>
-        </table></div>
-      )
-      : (
-        <div className="ov-list">
-          {[...ms].sort((a, b) => warnRank(a) - warnRank(b)).map((s) => (
-            <Row2 key={s.model_id} to={kho(s.model_id)}
-              a={<Ident id={s.code_prefix} text={s.model_name} />}
-              b={`${s.sellable_count} bán được`}
-              c={<>{s.sellable_count <= 0 ? <span className="pill bad">Hết</span> : s.is_low_stock ? <span className="pill hold">Sắp hết</span> : null}
-                <Tx>kho {s.in_stock_count} · về {s.incoming_count} · giữ {s.reserved_count}</Tx></>}
-              d={s.stock_value_vnd ? `vốn ${tr(s.stock_value_vnd)}` : ''} />
+  // ---------- Biểu đồ lãi 6 tháng (theo profit_date) ----------
+  const byMonth = new Map<string, number>()
+  d.orderSummary.forEach((o) => { const m = profitMonth(o); if (m) byMonth.set(m, (byMonth.get(m) ?? 0) + (o.profit_vnd ?? 0)) })
+  const months = Array.from({ length: 6 }, (_, i) => addMonths(month, i - 5))
+  const ps = months.map((m) => byMonth.get(m) ?? 0)
+  const max = Math.max(1, ...ps.map((p) => Math.abs(p)))
+  const mLabel = (m: string) => `T${Number(m.slice(5))}${m.slice(0, 4) !== month.slice(0, 4) ? `/${m.slice(2, 4)}` : ''}`
+  const chart = (
+    <div className="stack" id="home-chart">
+      <p className="section-title">Lãi 6 tháng <span className="muted">tổng {signed(ps.reduce((a, p) => a + p, 0))}</span></p>
+      <div>
+        <div className="bars" role="img" aria-label={`Lãi theo tháng: ${months.map((m, i) => `${mLabel(m)} ${signed(ps[i])}`).join(', ')}`}>
+          {ps.map((p, i) => (
+            <div key={months[i]} className={`b ${months[i] === month ? 'cur' : ''}`}>
+              <span>{p === 0 ? '0' : signed(p)}</span><i className={p < 0 ? 'neg' : ''} style={{ height: Math.max(2, Math.round((Math.abs(p) / max) * 100)) }} />
+            </div>
           ))}
         </div>
-      )
-  const stock = (
+        <div className="bars-x">{months.map((m) => <span key={m}>{mLabel(m)}</span>)}</div>
+      </div>
+      <p className="hint" style={{ margin: 0 }}>Lãi tính theo ngày gửi hàng (đơn Hoàn hàng: ngày hoàn) = giá chốt − giá nhập − ship shop chịu.</p>
+    </div>
+  )
+
+  // ---------- Model bán chạy (số chiếc đã bán + lãi theo model, chọn kỳ) ----------
+  const inPeriod = (u: UnitViewRow) => {
+    const m = u.sold_at?.slice(0, 7)
+    if (!m) return false
+    if (period === 'thang') return m === month
+    if (period === '3thang') return m >= addMonths(month, -2)
+    if (period === 'nam') return m.slice(0, 4) === month.slice(0, 4)
+    return true
+  }
+  const sold = d.unitView.filter((u) => u.status === 'sold' && inPeriod(u))
+  const best = d.models.map((m) => {
+    const us = sold.filter((u) => u.model_id === m.id)
+    return { m, n: us.length, rev: us.reduce((a, u) => a + (u.sold_price_vnd ?? 0), 0), p: us.reduce((a, u) => a + (u.actual_profit_vnd ?? 0), 0) }
+  }).filter((r) => r.n > 0).sort((a, b) => b.n - a.n || b.p - a.p)
+  const bestBlock = (
     <div className="stack">
-      <p className="section-title">Tồn kho <Link className="link-btn small" to="/kho">Xem kho <Icon name="chev" size={16} /></Link></p>
-      {stockList}
+      <p className="section-title">Model bán chạy</p>
+      <div className="chips" role="group" aria-label="Kỳ">
+        {PERIODS.map(([k, t]) => <button key={k} className="chip" id={`home-ky-${k}`} aria-pressed={period === k} onClick={() => setPeriod(k)}>{t}</button>)}
+      </div>
+      {best.length === 0
+        ? <p className="muted small" style={{ margin: 0 }}>Chưa bán chiếc nào trong kỳ này.</p>
+        : (
+          <div className="ov-list">
+            {best.map((r) => (
+              <Row2 key={r.m.id} to={`/kho?model=${r.m.id}&tt=xong`}
+                a={<Ident id={r.m.code_prefix} text={r.m.name} />}
+                b={`${r.n} chiếc`}
+                c={<Tx>doanh thu {tr(r.rev)}</Tx>}
+                d={<Profit n={r.p} prefix="lãi " />} />
+            ))}
+          </div>
+        )}
     </div>
   )
 
   return (
     <Shell section="home" title="Tổng quan" actions={<span className="muted small only-desk">Tháng {mNo}/{month.slice(0, 4)}</span>}>
       {desk
-        ? <>{kpis}<div className="cols">{stock}{todo}</div></>
-        : <>{todo}{kpis}{stock}</>}
+        ? <>{kpis}<div className="cols">{todo}<div className="stack">{chart}{bestBlock}</div></div></>
+        : <>{kpis}{todo}{chart}{bestBlock}</>}
     </Shell>
   )
 }

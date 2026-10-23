@@ -1,6 +1,6 @@
 // SC_09 Đơn bán mới (/don/new) và Sửa đơn chưa gửi (/don/:id/sua) - CR-001: mỗi dòng = 1 chiếc cụ thể (A6).
 // Lưu 1 lệnh RPC save_order: tạo khách mới (p_order.new_customer) + đơn + cọc (p_order.deposit_vnd) trong cùng
-// transaction; DB quyết trạng thái (có chiếc Đang về ⇒ Đặt trước, tất cả Trong kho ⇒ Đã chốt).
+// transaction; DB quyết trạng thái (có chiếc Kho TQ / Kho VN ⇒ Đặt trước, tất cả Kho Lumi ⇒ Đã chốt).
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useData, useStore } from '../data/store.tsx'
@@ -8,9 +8,9 @@ import { errorMessage } from '../data/errors.ts'
 import type { DbData, OrderStatusDb, PaymentMethodDb, ShipPayerDb, UnitViewRow } from '../data/types.ts'
 import { Sheet, useToast } from '../ui/feedback.tsx'
 import { Shell } from '../ui/Shell.tsx'
-import { ORDER_LABEL, PAY_METHOD_LABEL } from '../ui/status.tsx'
+import { LOT_LABEL, ORDER_LABEL, PAY_METHOD_LABEL } from '../ui/status.tsx'
 import { parseNum, todayVn, vnd } from '../ui/format.ts'
-import { fold, makeLookup, unitAvailability } from './orders/common.ts'
+import { fold, makeLookup, profitStr, unitAvailability } from './orders/common.ts'
 import '../styles/orders.css'
 
 interface LineDraft { unitId: string; price: string }
@@ -22,10 +22,10 @@ interface Draft {
 }
 type Errs = Partial<Record<string, string>>
 const LOCKED_MSG: Partial<Record<OrderStatusDb, string>> = {
-  shipped: 'Đơn đã gửi - không sửa được chiếc / giá (khách bom ⇒ dùng “Hoàn hàng”).',
-  completed: 'Đơn đã hoàn tất - không sửa được chiếc / giá.',
+  shipped: 'Đơn đang vận chuyển tới khách - không sửa được chiếc / giá (khách bom ⇒ dùng “Hoàn hàng”).',
+  completed: 'Đơn đã giao - không sửa được chiếc / giá.',
   cancelled: 'Đơn đã huỷ - không sửa được. Tạo đơn mới nếu khách mua lại.',
-  returned: 'Đơn đã hoàn hàng - chiếc đã về Trong kho, đơn không sửa được. Bán lại chiếc bằng đơn mới.',
+  returned: 'Đơn đã hoàn hàng - chiếc đã về Kho Lumi, đơn không sửa được. Bán lại chiếc bằng đơn mới.',
 }
 const MAX_LINES = 50 // save_order: TOO_MANY_LINES khi > 50
 const fmt = (n: number | null | undefined) => (n != null ? n.toLocaleString('vi-VN') : '')
@@ -74,7 +74,7 @@ function OrderForm({ editId }: { editId: string | null }) {
   }
   if (order && order.status !== 'preorder' && order.status !== 'confirmed') {
     return <Shell section="don" title={`Sửa ${d.orderCode[order.id]}`} back={back}>
-      <div className="warn-box"><span>{LOCKED_MSG[order.status] ?? 'Đơn đã gửi - không sửa được chiếc / giá.'} Mã vận đơn và ghi chú sửa ở chi tiết đơn (menu “⋯”).</span></div>
+      <div className="warn-box"><span>{LOCKED_MSG[order.status] ?? 'Đơn đang vận chuyển tới khách - không sửa được chiếc / giá.'} Mã vận đơn và ghi chú sửa ở chi tiết đơn (menu “⋯”).</span></div>
       <Link className="btn btn-ghost btn-block" to={back}>Về chi tiết đơn</Link>
     </Shell>
   }
@@ -221,8 +221,8 @@ function OrderForm({ editId }: { editId: string | null }) {
             <div className="lrow">
               <span className="ord-unit">
                 <b className="num">{r.u?.code ?? '?'}</b> · {r.u?.model_name ?? 'Không tìm thấy chiếc'}
-                {r.where === 'in_stock' && <span className="pill ok">Trong kho</span>}
-                {r.where === 'incoming' && <span className="pill way">Đang về ({d.lotCode[r.u!.lot_id] ?? 'lô'})</span>}
+                {r.where === 'in_stock' && <span className="pill ok">Kho Lumi</span>}
+                {r.where === 'incoming' && <span className="pill way">{LOT_LABEL[r.u!.lot_status]} ({d.lotCode[r.u!.lot_id] ?? 'lô'})</span>}
                 {!r.where && <span className="pill bad">Không còn chọn được</span>}
               </span>
               <button type="button" className="link-btn" onClick={() => removeLine(r.l.unitId)} aria-label={`Bỏ ${r.u?.code ?? 'chiếc'}`}>Bỏ</button>
@@ -294,7 +294,7 @@ function OrderForm({ editId }: { editId: string | null }) {
             ? <div className="ln"><span>Đã thu</span><span>{vnd(paidBefore)}</span></div>
             : <div className="ln"><span>Cọc</span><span>{vnd(dep)}</span></div>}
           <div className="ln total"><span>Còn phải thu</span><span>{total != null ? vnd(total - (editId ? paidBefore : dep)) : '-'}</span></div>
-          <div className="ln"><span>Lãi dự kiến</span><span>{profit != null ? vnd(profit) : '-'}</span></div>
+          <div className="ln"><span>Lãi dự kiến</span><span className={(profit ?? 0) < 0 ? 'tone-bad' : undefined}>{profitStr(profit, false)}</span></div>
           <div className="formula">= Σ(giá chốt − giá nhập ₫ hiện tại){f.shipPayer === 'shop' ? ' − ship shop chịu' : ''}{provisional ? ' · có chiếc giá nhập tạm tính' : ''}</div>
         </div>
       </div>
@@ -315,7 +315,7 @@ function UnitPicker({ d, editId, chosen, full, onToggle, onClose }: {
     const modelOrder = new Map(d.models.map((m, i) => [m.id, i]))
     return d.unitView
       .filter((u) => unitAvailability(u, editId) != null)
-      // Trong kho trước, rồi Đang về; trong nhóm theo thứ tự model rồi mã.
+      // Kho Lumi trước, rồi Kho VN / Kho TQ; trong nhóm theo thứ tự model rồi mã.
       .sort((a, b) => Number(b.is_received) - Number(a.is_received)
         || (modelOrder.get(a.model_id) ?? 0) - (modelOrder.get(b.model_id) ?? 0) || a.code.localeCompare(b.code))
   }, [d.unitView, d.models, editId])
@@ -344,7 +344,7 @@ function UnitPicker({ d, editId, chosen, full, onToggle, onClose }: {
       )}
       {full && <p className="hint">Đơn đã đủ {MAX_LINES} chiếc - tối đa {MAX_LINES} chiếc / đơn.</p>}
       {avail.length === 0
-        ? <div className="empty">Không còn chiếc nào Trong kho / Đang về chưa giữ. <Link to="/lo/new">Nhập lô Goofish</Link> trước.</div>
+        ? <div className="empty">Không còn chiếc nào ở Kho Lumi / Kho TQ / Kho VN chưa giữ. <Link to="/lo/new">Nhập lô Goofish</Link> trước.</div>
         : list.length === 0
           ? <div className="empty">Không có chiếc khớp - đổi model hoặc từ khoá.</div>
           : (
@@ -357,7 +357,7 @@ function UnitPicker({ d, editId, chosen, full, onToggle, onClose }: {
                     <span className="main">
                       <b className="num">{u.code}</b> · {u.model_name}
                       <span className="s">
-                        {u.is_received ? <span className="pill ok">Trong kho</span> : <span className="pill way">Đang về ({d.lotCode[u.lot_id] ?? 'lô'})</span>}
+                        {u.is_received ? <span className="pill ok">Kho Lumi</span> : <span className="pill way">{LOT_LABEL[u.lot_status]} ({d.lotCode[u.lot_id] ?? 'lô'})</span>}
                         {u.serial_no ? ` · seri ${u.serial_no}` : ''}
                       </span>
                     </span>

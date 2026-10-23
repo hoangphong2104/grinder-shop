@@ -139,6 +139,8 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
   const [scanning, setScanning] = useState(false)
   const [saving, setSaving] = useState(false)
   const [ai, setAi] = useState<AiInfo | null>(null)
+  // CR-005 ý 1: tạo lô ⇒ mặc định đã trả trung gian ngay (save_lot p_lot.paid_now)
+  const [paidNow, setPaidNow] = useState(true)
   const draftRef = useRef(draft)
   draftRef.current = draft
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview) }, [preview])
@@ -288,7 +290,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
     for (const cd of groupCodes[i]) pUnits.push({ id: cd, code: cd, modelId: g.modelId, lotId, priceCny: c!, costOverride: null, listPrice: listVal(g.list) })
   })
   const N = pUnits.length
-  const pLot = { id: lotId, rate: rate ?? 0, shipFee: shipVal, status: 'ordered' as const, buyingFeePct: feeVal ?? 0 }
+  const pLot = { id: lotId, rate: rate ?? 0, shipFee: shipVal, status: 'cn_warehouse' as const, buyingFeePct: feeVal ?? 0 }
   const autoCost = (priceCny: number) => (calcOk && N > 0
     ? (shipVal != null ? autoUnitCost({ priceCny }, pLot, N) : unitCostBeforeShip({ priceCny }, pLot))
     : null)
@@ -363,7 +365,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
         exchange_rate: round2(rate!),
         buying_fee_pct: round2(feeVal ?? 0),
         ship_fee_vnd: shipVal,
-        status: lot?.status ?? 'ordered',
+        ...(lot ? {} : { status: 'cn_warehouse', paid_now: paidNow }),
         note: draft.note.trim() || null,
       }
       if (!existing && nick) p_lot.new_seller = { nickname: nick, region: region || null, profile_url: null }
@@ -587,7 +589,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
         </div>
         <label className="f"><span className="flab">Phí ship về VN cả lô (₫)</span>
           <input className="input money" id="f-ship" inputMode="numeric" value={draft.shipFee} placeholder="để trống" onChange={(e) => set('shipFee', e.target.value)} />
-          <span className="hint">Thường biết khi hàng về{shipPer != null ? ` · lô trước ~${tr(shipPer)}/chiếc` : ''}</span>
+          <span className="hint">Thường biết khi hàng về{shipPer != null ? ` · lô trước khoảng ${tr(shipPer)}/chiếc` : ''}</span>
           {err('f-ship')}
         </label>
         <label className="f"><span className="flab">Ngày đặt</span>
@@ -612,6 +614,12 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
             </div>
           ))}
           <div className="ln total"><span>Phải trả trung gian</span><span>{previewOk && N ? vnd(lotPayable(pLot, pUnits)) : '-'}</span></div>
+          {!editing && (
+            <label className="ln paid-now" htmlFor="f-paid">
+              <span>Đã thanh toán cho trung gian<span className="hint" style={{ display: 'block' }}>{paidNow ? 'Ghi khoản trả = phải trả lúc tạo (tiền ra sổ quỹ). Phí ship nhập sau sẽ thành phần còn nợ.' : 'Chưa trả - lô hiện "còn nợ" ở Sổ quỹ, bấm "Đã thanh toán" khi trả.'}</span></span>
+              <input type="checkbox" className="switch" id="f-paid" checked={paidNow} onChange={(e) => setPaidNow(e.target.checked)} />
+            </label>
+          )}
           <div className="formula">Giá nhập ₫ = giá ¥ × tỷ giá × (1 + phí {feeVal != null ? pct(feeVal) : '%'}) + ship ÷ {N || 'số'} chiếc · mã chiếc do app cấp khi lưu</div>
         </div>
       </div>

@@ -17,7 +17,7 @@ test('validateModel: name, code prefix (D1), default price, threshold', () => {
 });
 
 test('validateLot: rate > 0 (BR-03), ship fee null or whole đồng ≥ 0 (BR-02)', () => {
-  const l = { id: 'L', rate: 3600, shipFee: null, status: 'ordered' as const, receivedAt: null };
+  const l = { id: 'L', rate: 3600, shipFee: null, status: 'cn_warehouse' as const, receivedAt: null };
   assert.equal(validateLot(l).ok, true);
   assert.equal(field(validateLot({ ...l, rate: 0 })), 'rate');
   assert.equal(field(validateLot({ ...l, shipFee: -1 })), 'shipFee');
@@ -25,7 +25,7 @@ test('validateLot: rate > 0 (BR-03), ship fee null or whole đồng ≥ 0 (BR-02
 });
 
 test('CR-003 validateLot: phí mua hộ 0..100 %, tối đa 2 chữ số thập phân; thiếu = 0', () => {
-  const l = { id: 'L', rate: 3600, shipFee: null, status: 'ordered' as const, receivedAt: null };
+  const l = { id: 'L', rate: 3600, shipFee: null, status: 'cn_warehouse' as const, receivedAt: null };
   for (const p of [0, 2.5, 3, 1.75, 100]) assert.equal(validateLot({ ...l, buyingFeePct: p }).ok, true, String(p));
   for (const p of [-0.5, 100.01, 2.555, Number.NaN]) assert.equal(field(validateLot({ ...l, buyingFeePct: p })), 'buyingFeePct', String(p));
   assert.equal(isBuyingFeePct(2.5), true);

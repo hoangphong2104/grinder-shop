@@ -19,7 +19,7 @@ const today = '2026-10-23';
 const L1: Lot = { id: 'L1', rate: 3600, shipFee: 300000, status: 'received', receivedAt: '2026-08-19', orderedAt: '2026-08-04' };
 const L2: Lot = { id: 'L2', rate: 3600, shipFee: 200000, status: 'received', receivedAt: '2026-09-22', orderedAt: '2026-09-03' };
 const L3: Lot = { id: 'L3', rate: 3600, shipFee: 0, status: 'received', receivedAt: '2026-09-23', orderedAt: '2026-09-08' };
-const L4: Lot = { id: 'L4', rate: 3600, shipFee: null, status: 'vn_shipping', receivedAt: null, orderedAt: '2026-10-01' };
+const L4: Lot = { id: 'L4', rate: 3600, shipFee: null, status: 'vn_warehouse', receivedAt: null, orderedAt: '2026-10-01' };
 const lots = [L1, L2, L3, L4];
 const u = (id: string, lotId: string, priceCny: number, over: Partial<Unit> = {}): Unit =>
   ({ id, code: id.toUpperCase(), modelId: lotId === 'L1' || lotId === 'L4' ? 'zp6' : 'ku', lotId, priceCny, costOverride: null, listPrice: null, ...over });
@@ -173,8 +173,8 @@ test('LOT-S2: lot late - open lot ordered > 21 days ago (setting), received / ca
   assert.equal(lotDaysOpen(L4, today), 22);
   assert.equal(isLotLate(L4, today), true);
   assert.equal(isLotLate(L4, today, 22), false);
-  assert.equal(isLotLate({ status: 'ordered', orderedAt: '2026-10-02' }, today), false); // 21 days = not late
+  assert.equal(isLotLate({ status: 'cn_warehouse', orderedAt: '2026-10-02' }, today), false); // 21 days = not late
   assert.equal(isLotLate(L1, today), false);
   assert.equal(isLotLate({ status: 'cancelled', orderedAt: '2026-01-01' }, today), false);
-  assert.equal(lotDaysOpen({ status: 'ordered' }, today), null);
+  assert.equal(lotDaysOpen({ status: 'cn_warehouse' }, today), null);
 });

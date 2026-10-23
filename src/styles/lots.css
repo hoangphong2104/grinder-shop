@@ -74,3 +74,9 @@ a.lot-shot { padding: 0; }
 .lot-calc .cb-f { padding-top: 6px; border-top: 1px dashed var(--line); }
 .lot-detail .kv dd .link-btn { overflow-wrap: normal; max-width: 100%; }
 .lot-detail .kv dd .lot-ext { white-space: nowrap; }
+/* CR-005: ô "Đã thanh toán cho trung gian" trong khối tính (form lô) */
+.calc .ln.paid-now { align-items: center; gap: 12px; cursor: pointer; min-height: 44px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.calc .ln.paid-now .hint { font-weight: 400; margin-top: 2px; }
+.lot-detail .calc .ok-t { color: var(--ok); }
+.calc .ln.paid-now > span:first-child { flex: 1; text-align: left; color: var(--fg); font-weight: 500; }
+.calc .ln.paid-now .hint { text-align: left; color: var(--muted); }

@@ -18,8 +18,15 @@ export type IsoDate = string;
 
 /* ---------- Statuses & kinds (DB codes) ---------- */
 
-/** Lô nhập: ordered → cn_shipping → at_forwarder → vn_shipping → received; cancelled before received. */
-export type LotStatus = 'ordered' | 'cn_shipping' | 'at_forwarder' | 'vn_shipping' | 'received' | 'cancelled';
+/**
+ * Lô nhập (CR-005): cn_warehouse (Kho TQ) → vn_warehouse (Kho VN) → received (Kho Lumi = đã về kho shop, bán được);
+ * cancelled before received. Old codes ordered / cn_shipping / at_forwarder were merged into cn_warehouse, vn_shipping
+ * into vn_warehouse (DB migration 005).
+ */
+export type LotStatus = 'cn_warehouse' | 'vn_warehouse' | 'received' | 'cancelled';
+
+/** CR-005: forward flow of an open lot (receive = `received`). */
+export const LOT_FLOW: readonly LotStatus[] = ['cn_warehouse', 'vn_warehouse', 'received'];
 
 /**
  * Đơn bán: preorder / confirmed → shipped → completed; cancelled before shipped;
@@ -58,26 +65,24 @@ export type TransferKind = 'transfer' | 'adjustment';
 export type ShipPayer = 'customer' | 'shop';
 
 export const LOT_STATUS_LABEL: Readonly<Record<LotStatus, string>> = {
-  ordered: 'Đã đặt',
-  cn_shipping: 'Ship nội địa TQ',
-  at_forwarder: 'Tới trung gian',
-  vn_shipping: 'Đang về VN',
-  received: 'Đã nhận',
+  cn_warehouse: 'Kho TQ',
+  vn_warehouse: 'Kho VN',
+  received: 'Kho Lumi',
   cancelled: 'Huỷ',
 };
 
 export const ORDER_STATUS_LABEL: Readonly<Record<OrderStatus, string>> = {
   preorder: 'Đặt trước',
   confirmed: 'Đã chốt',
-  shipped: 'Đã gửi',
-  completed: 'Hoàn tất',
+  shipped: 'Vận chuyển tới khách',
+  completed: 'Đã giao',
   cancelled: 'Huỷ',
   returned: 'Hoàn hàng',
 };
 
 export const UNIT_STATUS_LABEL: Readonly<Record<UnitStatus, string>> = {
   incoming: 'Đang về',
-  in_stock: 'Trong kho',
+  in_stock: 'Kho Lumi',
   reserved: 'Đã giữ',
   sold: 'Đã bán',
   cancelled: 'Huỷ',
@@ -218,6 +223,61 @@ export interface Transfer {
   kind: TransferKind;
   amount: Vnd;
   note?: string;
+  /** CR-005: a `transfer` may name the lot it pays (Đã thanh toán lô); null / missing = general transfer. */
+  lotId?: string | null;
+}
+
+/* ---------- CR-005 Sổ quỹ (cash book) ---------- */
+
+/** Chiều tiền: vào / ra quỹ. */
+export type CashDirection = 'in' | 'out';
+
+/**
+ * Loại bút toán sổ quỹ (DB `cash_entries.kind`). Tự sinh (từ nguồn, không sửa tay): customer_payment (cọc / thanh toán
+ * khách - vào), customer_refund (hoàn tiền khách - ra), intermediary (trả trung gian - ra), ship_shop (ship cho khách, shop
+ * chịu - ra), return_ship (ship chiều về khi hoàn hàng - ra). Ghi tay: expense (chi phí khác, có loại), capital_in (nạp vốn),
+ * capital_out (rút vốn), adjustment (điều chỉnh, vào hoặc ra).
+ */
+export type CashKind =
+  | 'customer_payment'
+  | 'customer_refund'
+  | 'intermediary'
+  | 'ship_shop'
+  | 'return_ship'
+  | 'expense'
+  | 'capital_in'
+  | 'capital_out'
+  | 'adjustment';
+
+export const AUTO_CASH_KINDS: readonly CashKind[] = ['customer_payment', 'customer_refund', 'intermediary', 'ship_shop', 'return_ship'];
+export const MANUAL_CASH_KINDS: readonly CashKind[] = ['expense', 'capital_in', 'capital_out', 'adjustment'];
+
+export const CASH_KIND_LABEL: Readonly<Record<CashKind, string>> = {
+  customer_payment: 'Thu khách',
+  customer_refund: 'Hoàn tiền khách',
+  intermediary: 'Trả trung gian',
+  ship_shop: 'Ship cho khách (shop chịu)',
+  return_ship: 'Ship chiều về',
+  expense: 'Chi phí khác',
+  capital_in: 'Nạp vốn',
+  capital_out: 'Rút vốn',
+  adjustment: 'Điều chỉnh',
+};
+
+/** One cash-book line. `amount` > 0; the direction gives the sign. */
+export interface CashEntry {
+  id?: string;
+  date?: IsoDate | null;
+  direction: CashDirection;
+  kind: CashKind;
+  amount: Vnd;
+  /** Loại chi phí (only for `expense`), e.g. "Đóng gói". */
+  expenseCategory?: string | null;
+  note?: string | null;
+  /** Source links of auto entries. */
+  orderId?: string | null;
+  lotId?: string | null;
+  isAuto?: boolean;
 }
 
 /* ---------- Results / rule errors ---------- */
@@ -229,7 +289,8 @@ export type RuleErrorCode =
   | 'UNIT_UNAVAILABLE'
   | 'NOT_RECEIVED'
   | 'LOT_LOCKED'
-  | 'OUTSTANDING_DUE';
+  | 'OUTSTANDING_DUE'
+  | 'LOT_ALREADY_PAID';
 
 export interface RuleError {
   code: RuleErrorCode;

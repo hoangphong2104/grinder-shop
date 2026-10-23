@@ -66,11 +66,11 @@ test('A2: expandLotGroups creates N units per group, codes continue per model, l
 
 test('A5: incoming / in_stock depend on the lot; reserved / sold on the holding order; cancelled lot wins', () => {
   const u = unit('001');
-  assert.equal(unitStatus(u, lot({ status: 'vn_shipping', receivedAt: null }), []), 'incoming');
+  assert.equal(unitStatus(u, lot({ status: 'vn_warehouse', receivedAt: null }), []), 'incoming');
   assert.equal(unitStatus(u, lot(), []), 'in_stock');
   assert.equal(unitStatus(u, lot(), [order('preorder', ['001'])]), 'reserved');
   assert.equal(unitStatus(u, lot(), [order('confirmed', ['001'])]), 'reserved');
-  assert.equal(unitStatus(u, lot({ status: 'ordered', receivedAt: null }), [order('preorder', ['001'])]), 'reserved');
+  assert.equal(unitStatus(u, lot({ status: 'cn_warehouse', receivedAt: null }), [order('preorder', ['001'])]), 'reserved');
   assert.equal(unitStatus(u, lot(), [order('shipped', ['001'])]), 'sold');
   assert.equal(unitStatus(u, lot(), [order('completed', ['001'])]), 'sold');
   assert.equal(unitStatus(u, lot({ status: 'cancelled', receivedAt: null }), []), 'cancelled');
@@ -79,7 +79,7 @@ test('A5: incoming / in_stock depend on the lot; reserved / sold on the holding 
 test('A5: a cancelled order releases its unit (back to in_stock / incoming)', () => {
   const u = unit('001');
   assert.equal(unitStatus(u, lot(), [order('cancelled', ['001'])]), 'in_stock');
-  assert.equal(unitStatus(u, lot({ status: 'at_forwarder', receivedAt: null }), [order('cancelled', ['001'])]), 'incoming');
+  assert.equal(unitStatus(u, lot({ status: 'cn_warehouse', receivedAt: null }), [order('cancelled', ['001'])]), 'incoming');
   assert.equal(holdingOrder('001', [order('cancelled', ['001'])]), null);
 });
 
@@ -87,7 +87,7 @@ test('D4: labels - "Đã giữ cho D-xxx"', () => {
   const o = order('preorder', ['001']);
   assert.equal(unitStatusLabel('reserved', o), 'Đã giữ cho D-009');
   assert.equal(unitStatusLabel('sold', o), 'Đã bán (D-009)');
-  assert.equal(unitStatusLabel('in_stock'), 'Trong kho');
+  assert.equal(unitStatusLabel('in_stock'), 'Kho Lumi'); // CR-005
   assert.equal(unitStatusLabel('incoming', null), 'Đang về');
 });
 
@@ -101,13 +101,13 @@ test('days in stock: received → ship date when sold, else → today; null befo
   assert.equal(unitDaysInStock(lot(), null, '2026-10-22'), 19);
   assert.equal(unitDaysInStock(lot(), order('shipped', ['001'], { shippedAt: '2026-10-05' }), '2026-10-22'), 2);
   assert.equal(unitDaysInStock(lot(), order('confirmed', ['001']), '2026-10-22'), 19);
-  assert.equal(unitDaysInStock(lot({ status: 'vn_shipping', receivedAt: null }), null, '2026-10-22'), null);
+  assert.equal(unitDaysInStock(lot({ status: 'vn_warehouse', receivedAt: null }), null, '2026-10-22'), null);
 });
 
 /* ---------- A9 model stock ---------- */
 
 test('A9: sellable = in stock + incoming not held; low stock when sellable ≤ threshold', () => {
-  const lots = [lot(), lot({ id: 'L2', status: 'vn_shipping', shipFee: null, receivedAt: null })];
+  const lots = [lot(), lot({ id: 'L2', status: 'vn_warehouse', shipFee: null, receivedAt: null })];
   const units = [unit('1'), unit('2'), unit('3', { lotId: 'L2' }), unit('4', { lotId: 'L2' })];
   // 1 sold, 3 reserved (incoming) → in stock 2, incoming 4 → sellable 2 > 1
   const os = [order('shipped', ['1'], { id: 'a' }), order('preorder', ['3'], { id: 'b' })];
@@ -135,8 +135,8 @@ test('A9: a model with no units has 0 sellable → low stock (threshold ≥ 0)',
 /* ---------- Lot guards ---------- */
 
 test('BR-02 + Q-011: receive from any open status, ship fee required', () => {
-  assert.equal(checkReceiveLot(lot({ status: 'ordered', receivedAt: null })).ok, true);
-  const r = checkReceiveLot(lot({ status: 'vn_shipping', shipFee: null, receivedAt: null }));
+  assert.equal(checkReceiveLot(lot({ status: 'cn_warehouse', receivedAt: null })).ok, true);
+  const r = checkReceiveLot(lot({ status: 'vn_warehouse', shipFee: null, receivedAt: null }));
   assert.ok(!r.ok);
   assert.equal(r.error.code, 'SHIP_FEE_REQUIRED');
   assert.equal(r.error.rule, 'BR-02');
@@ -145,7 +145,7 @@ test('BR-02 + Q-011: receive from any open status, ship fee required', () => {
 });
 
 test('cancel lot: only before receipt and not while a unit is held by a live order', () => {
-  const open = lot({ status: 'cn_shipping', shipFee: null, receivedAt: null });
+  const open = lot({ status: 'cn_warehouse', shipFee: null, receivedAt: null });
   const units = [unit('1'), unit('2')];
   assert.equal(checkCancelLot(open, units, []).ok, true);
   assert.equal(checkCancelLot(open, units, [order('cancelled', ['1'])]).ok, true);
@@ -175,7 +175,7 @@ test('A10 / Q-014: received lot - ship fee, override, list price, serial editabl
   assert.equal(code({ lot: lot(), units: [unit('1', { priceCny: 1000 }), unit('2')] }), 'LOT_LOCKED:priceCny');
   assert.equal(code({ lot: lot(), units: [unit('1', { modelId: 'ju' }), unit('2')] }), 'LOT_LOCKED:modelId');
   // open lot: anything goes
-  const open = { lot: lot({ status: 'ordered', receivedAt: null }), units: before.units };
-  assert.equal(checkLotEdit(open, { lot: lot({ status: 'ordered', rate: 3700 }), units: [unit('1', { priceCny: 999 })] }).ok, true);
-  assert.equal(checkLotEdit(open, { lot: lot({ status: 'ordered', buyingFeePct: 2.5 }), units: before.units }).ok, true);
+  const open = { lot: lot({ status: 'cn_warehouse', receivedAt: null }), units: before.units };
+  assert.equal(checkLotEdit(open, { lot: lot({ status: 'cn_warehouse', rate: 3700 }), units: [unit('1', { priceCny: 999 })] }).ok, true);
+  assert.equal(checkLotEdit(open, { lot: lot({ status: 'cn_warehouse', buyingFeePct: 2.5 }), units: before.units }).ok, true);
 });

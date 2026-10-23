@@ -1,45 +1,61 @@
 import { Fragment, useCallback, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useData } from '../data/store.tsx'
-import type { UnitConditionDb, UnitStatusDb, UnitViewRow } from '../data/types.ts'
+import type { UnitConditionDb, UnitViewRow } from '../data/types.ts'
 import { Shell } from '../ui/Shell.tsx'
 import { Sheet } from '../ui/feedback.tsx'
 import { Icon } from '../ui/icons.tsx'
 import { CONDITION_LABEL, CONDITION_ORDER, ConditionChip, UnitChip } from '../ui/status.tsx'
 import { cny, tr, vnd } from '../ui/format.ts'
 import {
-  CostCell, GoRow, HowTo, UNIT_SORTS, UnitRow, agingCls, daysSince, holderCode, sortUnits, sortedModelStock, thresholds, unitMatch, unitPrice,
+  CostCell, GoRow, Profit, UNIT_SORTS, UnitRow, agingCls, daysSince, holderCode, sortUnits, sortedModelStock, unitMatch, unitPrice,
   unitProfit, useDesk, type UnitSort,
 } from './overview/common.tsx'
 
-type StatusFilter = 'avail' | UnitStatusDb | 'all'
-const STATUS_TABS: [StatusFilter, string][] = [
-  ['avail', 'Còn hàng'], ['in_stock', 'Trong kho'], ['incoming', 'Đang về'], ['reserved', 'Đã giữ'], ['sold', 'Đã bán'], ['all', 'Tất cả'],
-]
-const AVAIL: UnitStatusDb[] = ['in_stock', 'incoming', 'reserved']
-const isStatus = (s: string | null): s is StatusFilter => STATUS_TABS.some(([k]) => k === s)
+// Ô tóm tắt không trùng nhau: Kho TQ / Kho VN = chiếc đang về CHƯA giữ; Đã giữ = mọi chiếc giữ cho đơn (đã về hay chưa).
+// CR-005 (ý 4, 7–10): trạng thái chiếc theo vị trí - Kho TQ / Kho VN (đang về) → Kho Lumi (bán được) → Giữ cho đơn → Vận chuyển tới khách → Đã giao.
+// Tham khảo Shopify (Incoming / On hand / Committed / Available) + KiotViet / Sapo (thẻ tóm tắt bấm để lọc, cảnh báo tồn theo từng mặt hàng).
+type StatusFilter = 'avail' | 'tq' | 'vn' | 'lumi' | 'giu' | 'giao' | 'xong' | 've' | 'ban' | 'all'
+const TILES: [StatusFilter, string][] = [['tq', 'Kho TQ'], ['vn', 'Kho VN'], ['lumi', 'Kho Lumi'], ['giu', 'Đã giữ'], ['giao', 'Đang giao']]
+const CHIPS: [StatusFilter, string][] = [['avail', 'Còn hàng'], ['xong', 'Đã giao'], ['all', 'Tất cả']]
+/** Lọc ẩn (link cũ ?tt=incoming / sold …) - hiện chip ✕ để bỏ. */
+const HIDDEN: Partial<Record<StatusFilter, string>> = { ve: 'Đang về', ban: 'Đã bán' }
+const ALIAS: Record<string, StatusFilter> = { in_stock: 'lumi', reserved: 'giu', incoming: 've', sold: 'ban' }
+const ALL_KEYS: StatusFilter[] = ['avail', 'tq', 'vn', 'lumi', 'giu', 'giao', 'xong', 've', 'ban', 'all']
+const parseStatus = (s: string | null): StatusFilter => (s && ALL_KEYS.includes(s as StatusFilter) ? (s as StatusFilter) : (s && ALIAS[s]) || 'avail')
 const isSort = (s: string | null): s is UnitSort => UNIT_SORTS.some(([k]) => k === s)
 const isCond = (s: string | null): s is UnitConditionDb => CONDITION_ORDER.includes(s as UnitConditionDb)
-const matchStatus = (u: UnitViewRow, f: StatusFilter) => f === 'all' || (f === 'avail' ? AVAIL.includes(u.status) : u.status === f)
-/** Vốn trong kho = giá nhập chiếc đã về kho chưa bán (Trong kho + Đã giữ đã về) - như v_model_stock.stock_value_vnd. */
+function matchStatus(u: UnitViewRow, f: StatusFilter): boolean {
+  switch (f) {
+    case 'all': return true
+    case 'avail': return u.status === 'in_stock' || u.status === 'incoming' || u.status === 'reserved'
+    case 'tq': return u.status === 'incoming' && u.lot_status === 'cn_warehouse'
+    case 'vn': return u.status === 'incoming' && u.lot_status === 'vn_warehouse'
+    case 've': return !u.is_received && (u.status === 'incoming' || u.status === 'reserved')
+    case 'lumi': return u.status === 'in_stock'
+    case 'giu': return u.status === 'reserved'
+    case 'giao': return u.status === 'sold' && u.holding_order_status === 'shipped'
+    case 'xong': return u.status === 'sold' && u.holding_order_status !== 'shipped'
+    case 'ban': return u.status === 'sold'
+  }
+}
+/** Vốn Kho Lumi = giá nhập chiếc đã về kho chưa bán (Kho Lumi + Đã giữ đã về) - như v_model_stock.stock_value_vnd. */
 const onHand = (u: UnitViewRow) => u.is_received && (u.status === 'in_stock' || u.status === 'reserved')
+/** Vốn đang về = giá nhập chiếc chưa về (Kho TQ / Kho VN, gồm chiếc đã giữ) - như incoming_value_vnd. */
+const onTheWay = (u: UnitViewRow) => !u.is_received && (u.status === 'incoming' || u.status === 'reserved')
 
-// SC_02 Kho (CR-001 + CR-004) - danh sách TỪNG CHIẾC cối. Máy tính: bảng · điện thoại: dòng 2 dòng (research §2.4).
-// Thanh lọc chuẩn (KHO-M2): ô tìm + 1 hàng chip trạng thái có đếm + nút "Lọc" (model, tình trạng, sắp xếp).
-// URL: ?model= · ?tt= (mặc định "Còn hàng") · ?sx= (KHO-M3, mặc định "ma") · ?tinhtrang= (KHO-S3).
 export default function Kho() {
   const d = useData()
   const desk = useDesk()
   const [params, setParams] = useSearchParams()
   const modelF = params.get('model') ?? 'all'
   const ttRaw = params.get('tt'), sxRaw = params.get('sx'), condRaw = params.get('tinhtrang')
-  const statusF: StatusFilter = isStatus(ttRaw) ? ttRaw : 'avail'
+  const statusF: StatusFilter = parseStatus(ttRaw)
   const sx: UnitSort = isSort(sxRaw) ? sxRaw : 'ma'
   const condF: UnitConditionDb | null = isCond(condRaw) ? condRaw : null
   const [q, setQ] = useState('')
   const [sheet, setSheet] = useState(false)
   const closeSheet = useCallback(() => setSheet(false), [])
-  const th = thresholds(d)
 
   const setParam = (k: string, v: string | null, def: string | null = null) => {
     const p = new URLSearchParams(params)
@@ -61,24 +77,36 @@ export default function Kho() {
   })
   const count = (f: StatusFilter) => base.filter((u) => matchStatus(u, f)).length
   const units = sortUnits(d, base.filter((u) => matchStatus(u, statusF)), sx)
-  // KHO-M4: dải tóm tắt theo bộ lọc hiện tại
+  // CR-005 ý 9: tóm tắt có ích - số chiếc theo vị trí (bấm để lọc) + vốn Kho Lumi / vốn đang về (theo model / tình trạng / tìm đang chọn)
   const sellable = units.filter((u) => u.status === 'in_stock' || u.status === 'incoming').length
-  const capital = units.filter(onHand).reduce((a, u) => a + u.cost_vnd, 0)
-  const ms = modelF !== 'all' ? stock.find((m) => m.model_id === modelF) : undefined
-  const lowModels = stock.filter((m) => m.is_active && (m.is_low_stock || m.sellable_count <= 0))
+  const capital = base.filter(onHand).reduce((a, u) => a + u.cost_vnd, 0)
+  const incomingCap = base.filter(onTheWay).reduce((a, u) => a + u.cost_vnd, 0)
+  // CR-005 ý 8: cảnh báo rõ theo từng model (đang bán): hết / còn N chiếc bán được (Kho Lumi + đang về chưa giữ)
+  const lowModels = stock.filter((m) => m.is_active && (m.is_low_stock || m.sellable_count <= 0) && (modelF === 'all' || m.model_id === modelF))
   const filtering = modelF !== 'all' || condF != null || sx !== 'ma'
+  const capText = [capital > 0 && `vốn Kho Lumi ${tr(capital)}`, incomingCap > 0 && `vốn đang về ${tr(incomingCap)}`].filter(Boolean).join(' · ')
 
   const filters = (
     <div className="ov-filter">
       <input className="input" id="kho-q" type="search" placeholder="Tìm mã, seri, model, ghi chú (VD: zp6 1)" aria-label="Tìm chiếc theo mã, số seri, model hoặc ghi chú"
         value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: desk ? 420 : undefined }} />
+      <div className="kho-tiles" role="group" aria-label="Số chiếc theo vị trí - bấm để lọc">
+        {TILES.map(([k, t]) => (
+          <button key={k} type="button" className="kho-tile" id={`kho-tt-${k}`} aria-pressed={statusF === k} onClick={() => setParam('tt', statusF === k ? null : k, 'avail')}>
+            <span className="v">{count(k)}</span><span className="k">{t}</span>
+          </button>
+        ))}
+      </div>
+      {capText && <p className="ov-strip">{capText}</p>}
       <div className="line">
         <div className="chips" role="group" aria-label="Lọc theo trạng thái">
           {modelF !== 'all' && (
             <button className="chip x" id="kho-model-x" onClick={() => setParam('model', null)} aria-label={`Bỏ lọc model ${modelName ?? ''}`}>{modelName ?? 'Model'} ✕</button>
           )}
           {condF && <button className="chip x" id="kho-cond-x" onClick={() => setParam('tinhtrang', null)} aria-label="Bỏ lọc tình trạng">{CONDITION_LABEL[condF]} ✕</button>}
-          {STATUS_TABS.map(([k, t]) => (
+          {HIDDEN[statusF] && <button className="chip x" id="kho-tt-x" onClick={() => setParam('tt', null)}>{HIDDEN[statusF]} ✕</button>}
+          {TILES.some(([k]) => k === statusF) && <button className="chip x" id="kho-tt-x" onClick={() => setParam('tt', null)}>{TILES.find(([k]) => k === statusF)![1]} ✕</button>}
+          {CHIPS.map(([k, t]) => (
             <button key={k} className="chip" id={`kho-tt-${k}`} aria-pressed={statusF === k} onClick={() => setParam('tt', k, 'avail')}>
               {t} <span className="c">{count(k)}</span>
             </button>
@@ -88,16 +116,16 @@ export default function Kho() {
           Lọc{filtering && <span className="dot" aria-label="đang lọc" />}
         </button>
       </div>
-      {ms ? (
-        <p className="ov-strip"><b>{ms.code_prefix}</b> · {ms.in_stock_count} trong kho · {ms.incoming_count} đang về · {ms.reserved_count} đã giữ
-          {ms.sellable_count <= 0 ? <> · <span className="neg">Hết hàng</span></> : ms.is_low_stock ? <> · <span className="age-warn">Sắp hết</span></> : null}</p>
-      ) : (
-        <p className="ov-strip"><b>{units.length} chiếc</b> · bán được {sellable} · vốn {tr(capital)}</p>
-      )}
-      {modelF === 'all' && lowModels.length > 0 && (
-        <Link className="ov-banner" to="/lo/new" id="kho-low">
-          <Icon name="warn" size={16} /><span>Cần nhập thêm: {lowModels.map((m) => `${m.code_prefix}${m.sellable_count <= 0 ? ' (hết)' : ''}`).join(', ')}</span><Icon name="chev" size={16} />
-        </Link>
+      {lowModels.length > 0 && (
+        <div className="kho-low" id="kho-low" role="note" aria-label="Model sắp hết">
+          {lowModels.map((m) => (
+            <Link key={m.model_id} className="ln" to={`/kho?model=${m.model_id}`}>
+              <Icon name="warn" size={15} /><span className="nm">{m.model_name}</span>
+              <span className={m.sellable_count <= 0 ? 'neg' : 'age-warn'}>{m.sellable_count <= 0 ? 'hết hàng bán được' : `còn ${m.sellable_count} bán được`}</span>
+            </Link>
+          ))}
+          <Link className="link-btn small" to="/lo/new">Nhập lô Goofish <Icon name="chev" size={14} /></Link>
+        </div>
       )}
     </div>
   )
@@ -132,19 +160,19 @@ export default function Kho() {
                 <td><Link className="cell-link num" to={`/kho/${u.unit_id}`}><b>{u.code}</b></Link>{u.serial_no && <div className="muted small">seri {u.serial_no}</div>}</td>
                 <td>{u.model_name}</td>
                 <td><Link className="link-btn small" style={{ padding: 0 }} to={`/lo/${u.lot_id}`}>{d.lotCode[u.lot_id] ?? 'Lô'}</Link></td>
-                <td><UnitChip s={u.status} holder={holderCode(d, u)} /></td>
+                <td><UnitChip s={u.status} holder={holderCode(d, u)} lot={u.lot_status} order={u.holding_order_status} /></td>
                 <td><ConditionChip c={u.condition ?? 'new'} /></td>
                 <td className="r">{cny(Number(u.price_cny))}</td>
                 <td className="r"><CostCell u={u} /></td>
                 <td className="r">{vnd(unitPrice(u))}{u.status === 'sold' && <div className="muted small">giá chốt</div>}</td>
-                <td className={`r ${p.value != null && p.value < 0 ? 'req' : ''}`}>{p.value == null ? '-' : vnd(p.value)}<div className="muted small">{p.value == null ? '' : p.actual ? 'thực tế' : 'dự kiến'}</div></td>
+                <td className="r"><Profit n={p.value} full />{p.value != null && !p.actual && <div className="muted small">dự kiến</div>}</td>
                 <td className={`r ${agingCls(u.aging_level)}`}>{u.days_in_stock ?? (ordered != null ? <span className="muted">đặt {ordered}</span> : '-')}</td>
               </GoRow>
             )
           })}
           <tr className="tot">
             <td colSpan={5}>{units.length} chiếc · bán được {sellable}</td>
-            <td colSpan={5} className="muted" style={{ textAlign: 'right' }}>Vốn trong kho (đã về, chưa bán) {vnd(capital)}</td>
+            <td colSpan={5} className="muted" style={{ textAlign: 'right' }}>{capText}</td>
           </tr>
         </tbody>
       </table></div>
@@ -175,12 +203,6 @@ export default function Kho() {
     </>}>
       {filters}
       {list}
-      {units.length > 0 && (
-        <HowTo title="Màu số ngày tồn">
-          Số ngày tồn tính từ ngày nhận lô: tới {th.warn} ngày màu thường, {th.warn + 1}–{th.alert} ngày <span className="age-warn">cam</span>, trên {th.alert} ngày <span className="age-alert">đỏ</span> (đổi ngưỡng ở Cài đặt).
-          Chiếc đang về hiện “đặt N ngày”. Giá bên phải: giá bán dự kiến (chiếc đã bán: giá chốt, dòng dưới là lãi). Giá nhập sửa tay / tạm tính xem ở chi tiết chiếc.
-        </HowTo>
-      )}
       {sheet && (
         <Sheet title="Lọc & sắp xếp" onClose={closeSheet}>
           <p className="ov-sheet-t">Sắp xếp</p>
@@ -194,7 +216,7 @@ export default function Kho() {
             <button className="chip" id="kho-m-all" aria-pressed={modelF === 'all'} onClick={() => setParam('model', null)}>Tất cả</button>
             {stock.map((m) => (
               <button key={m.model_id} className="chip" id={`kho-m-${m.code_prefix}`} aria-pressed={modelF === m.model_id} onClick={() => setParam('model', m.model_id)}>
-                {m.model_name} <span className="c">{m.in_stock_count + m.incoming_count + m.reserved_count}</span>
+                {m.model_name} <span className="c">{m.sellable_count + m.reserved_count}</span>
               </button>
             ))}
           </div>

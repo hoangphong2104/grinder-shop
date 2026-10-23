@@ -12,6 +12,11 @@
 --   tình trạng từng chiếc (units.condition), ngưỡng tuổi tồn / lô trễ (settings.aging_warn_days / aging_alert_days /
 --   lot_late_days; v_units.aging_level, v_lot_summary.is_lot_late). Cột mới ở CUỐI bảng / view ⇒ cài mới = v2 cũ + 002 + 003.
 --   DB đang chạy v2 + 002 có dữ liệu: chạy 003_cod_return_condition.sql (cộng thêm).
+-- Gộp thêm CR-005 (CR_005_so-quy-trang-thai-qr.md — phần dữ liệu): trạng thái lô cn_warehouse / vn_warehouse / received /
+--   cancelled; khoản Đã chuyển gắn lô (v_lot_summary.paid_vnd / outstanding_vnd, RPC pay_lot, save_lot p_lot.paid_now);
+--   sổ quỹ public.cash_entries (bút toán tự sinh bằng trigger + ghi tay; v_cash_balance, v_cash_monthly); RPC delete_order;
+--   settings.bank_bin / bank_account_no / bank_account_name (VietQR); v_model_stock.incoming_value_vnd / total_capital_vnd.
+--   DB đang chạy (pre-003 + 002 + 003 + 004) có dữ liệu: chạy 005_cash_status_qr.sql (cộng thêm, có backfill sổ quỹ).
 -- Cài trên project đang có v1: chạy 000_reset_v1.sql trước (hoặc dán 1 lần setup-v2.sql).
 --
 -- Nguyên tắc:
@@ -46,6 +51,7 @@
 --   EXCHANGE_RATE_REQUIRED   thiếu tỷ giá hoặc ≤ 0 (BR-03)
 --   SHIP_FEE_REQUIRED        nhận lô / sửa phí ship mà không có phí ship (BR-02)
 --   INVALID_STATUS_FOR_SAVE  trạng thái lô không mở (Đã nhận / Huỷ chỉ qua receive_lot / cancel_lot)
+--   INVALID_STATUS_TRANSITION set_lot_status lùi Kho VN → Kho TQ (CR-005); detail 'from→to'
 --   LOT_HAS_NO_LINES         lô không có chiếc nào (p_groups rỗng)
 --   TOO_MANY_LINES           > 1050 phần tử p_groups (≤ 1000 chiếc giữ lại + nhóm mới) · > 50 phần tử p_lines
 --   TOO_MANY_UNITS           lô > 1000 chiếc
@@ -54,6 +60,7 @@
 --   LOT_ALREADY_RECEIVED     nhận / huỷ lô đã nhận
 --   LOT_CANCELLED            nhận / huỷ lô đã huỷ
 --   LOT_NOT_RECEIVED         update_lot_ship_fee trên lô chưa nhận (dùng save_lot)
+--   LOT_ALREADY_PAID         pay_lot khi lô không còn nợ trung gian (CR-005); detail {payable_vnd, paid_vnd, outstanding_vnd}
 --   LOT_HAS_RESERVED_UNITS   huỷ lô khi còn chiếc thuộc đơn chưa huỷ; detail {order_ids, unit_codes}
 --   SELLER_NOT_FOUND         seller_id không thuộc người dùng
 --   MODEL_NOT_FOUND          model_id không thuộc người dùng
@@ -204,8 +211,8 @@ create table public.lots (
   ordered_at       date not null default private.today_vn(),
   exchange_rate    numeric(10,2) not null check (exchange_rate > 0),           -- BR-03
   ship_fee_vnd     bigint check (ship_fee_vnd >= 0),                            -- BR-02: null tới khi nhận
-  status           text not null default 'ordered'
-                   check (status in ('ordered','cn_shipping','at_forwarder','vn_shipping','received','cancelled')),
+  status           text not null default 'cn_warehouse'
+                   check (status in ('cn_warehouse','vn_warehouse','received','cancelled')),   -- CR-005: Kho TQ / Kho VN / Kho Lumi
   received_at      date,
   cancelled_at     timestamptz,
   note             text check (length(note) <= 2000),
@@ -269,7 +276,7 @@ create table public.intermediary_txns (
   updated_at  timestamptz not null default now(),
   version     int not null default 1,
   foreign key (lot_id, user_id) references public.lots (id, user_id) on delete cascade,
-  constraint itx_payable_has_lot check ((kind = 'payable') = (lot_id is not null)),
+  constraint itx_lot_by_kind check (kind = 'transfer' or (kind = 'payable') = (lot_id is not null)),   -- CR-005: Đã chuyển gắn lô tuỳ ý
   constraint itx_sign check (kind = 'adjustment' or amount_vnd >= 0)
 );
 create unique index itx_one_payable_per_lot on public.intermediary_txns (lot_id) where kind = 'payable';
@@ -377,6 +384,9 @@ create table public.settings (
   aging_alert_days         int not null default 60 check (aging_alert_days > 0),   -- CR-004: tồn > N ngày ⇒ đỏ
   lot_late_days            int not null default 21 check (lot_late_days > 0),      -- CR-004: lô đặt > N ngày chưa về ⇒ trễ
   bank_info                text check (length(bank_info) <= 500),                  -- CR-004 DON-S2: STK / tên ngân hàng cho tin xác nhận đơn
+  bank_bin                 text check (bank_bin ~ '^[0-9]{6}$'),                   -- CR-005 VietQR: mã BIN NAPAS 6 số
+  bank_account_no          text check (bank_account_no ~ '^[0-9A-Za-z]{1,19}$'),   -- CR-005 VietQR: số tài khoản
+  bank_account_name        text check (length(btrim(bank_account_name)) between 1 and 50),   -- CR-005 VietQR: tên chủ TK
   constraint settings_aging_days_order check (aging_warn_days < aging_alert_days)
 );
 
@@ -409,6 +419,46 @@ create table public.notes (
 );
 create index notes_user_order_idx on public.notes (user_id, is_pinned desc, updated_at desc);
 
+-- CR-005 Sổ quỹ (một quỹ chung, bắt đầu từ 0). Bút toán tự sinh (is_auto) do trigger ghi theo khoản thu khách / khoản
+-- Đã chuyển trung gian / ship shop chịu / ship chiều về — sửa / xoá nguồn thì bút toán theo (FK on delete cascade).
+-- Bút toán ghi tay: expense (có expense_category) / capital_in / capital_out / adjustment.
+create table public.cash_entries (
+  id                uuid primary key default gen_random_uuid(),
+  user_id           uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  entry_date        date not null default private.today_vn(),
+  direction         text not null check (direction in ('in','out')),
+  amount_vnd        bigint not null check (amount_vnd > 0),
+  kind              text not null check (kind in ('customer_payment','customer_refund','intermediary','ship_shop','return_ship',
+                                                  'expense','capital_in','capital_out','adjustment')),
+  expense_category  text check (length(btrim(expense_category)) between 1 and 60),
+  note              text check (length(note) <= 1000),
+  payment_id        uuid references public.payments(id) on delete cascade,
+  txn_id            uuid references public.intermediary_txns(id) on delete cascade,
+  order_id          uuid references public.orders(id) on delete cascade,
+  lot_id            uuid references public.lots(id) on delete cascade,
+  is_auto           boolean not null default false,
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now(),
+  version           int not null default 1,
+  constraint cash_kind_direction check (
+    (kind in ('customer_payment','capital_in') and direction = 'in')
+    or (kind in ('customer_refund','intermediary','ship_shop','return_ship','expense','capital_out') and direction = 'out')
+    or kind = 'adjustment'),
+  constraint cash_auto_kind check (is_auto = (kind in ('customer_payment','customer_refund','intermediary','ship_shop','return_ship'))),
+  constraint cash_expense_category check (kind = 'expense' or expense_category is null),
+  constraint cash_auto_source check (
+    (kind not in ('customer_payment','customer_refund') or payment_id is not null)
+    and (kind <> 'intermediary' or txn_id is not null)
+    and (kind not in ('ship_shop','return_ship') or order_id is not null)),
+  constraint cash_manual_no_source check (is_auto or (payment_id is null and txn_id is null and order_id is null and lot_id is null))
+);
+create unique index cash_entries_payment_uq on public.cash_entries (payment_id);
+create unique index cash_entries_txn_uq     on public.cash_entries (txn_id);
+create unique index cash_entries_ship_uq    on public.cash_entries (order_id, kind) where kind in ('ship_shop','return_ship');
+create index cash_entries_user_date_idx     on public.cash_entries (user_id, entry_date);
+create index cash_entries_order_idx         on public.cash_entries (order_id);
+create index cash_entries_lot_idx           on public.cash_entries (lot_id);
+
 -- Trigger updated_at/version
 create trigger models_touch before insert or update on public.models
   for each row execute function private.touch_model();
@@ -416,7 +466,7 @@ do $$
 declare t text;
 begin
   foreach t in array array['sellers','lots','units','intermediary_txns','customers','orders',
-                           'order_lines','payments','settings','notes']
+                           'order_lines','payments','settings','notes','cash_entries']
   loop
     execute format('create trigger %I before insert or update on public.%I
                     for each row execute function private.touch_row()', t || '_touch', t);
@@ -449,6 +499,8 @@ grant update (note, tracking_no) on public.orders to authenticated;
 grant select, delete on public.intermediary_txns to authenticated;
 grant insert (txn_date, kind, amount_vnd, note) on public.intermediary_txns to authenticated;
 grant update (txn_date, amount_vnd, note)       on public.intermediary_txns to authenticated;
+grant insert (lot_id) on public.intermediary_txns to authenticated;   -- CR-005: Đã chuyển gắn lô
+grant update (lot_id) on public.intermediary_txns to authenticated;
 
 grant select, insert, update, delete on public.payments to authenticated;
 grant select, insert, update on public.settings to authenticated;
@@ -458,12 +510,15 @@ grant insert (body, is_pinned) on public.notes to authenticated;
 grant update (body, is_pinned) on public.notes to authenticated;
 grant insert (color) on public.notes to authenticated;                 -- 004
 grant update (color) on public.notes to authenticated;
+grant select, delete on public.cash_entries to authenticated;          -- CR-005 (ghi tay; tự sinh chỉ đọc — RLS)
+grant insert (entry_date, direction, amount_vnd, kind, expense_category, note) on public.cash_entries to authenticated;
+grant update (entry_date, direction, amount_vnd, kind, expense_category, note) on public.cash_entries to authenticated;
 
 do $$
 declare t text;
 begin
   foreach t in array array['models','sellers','lots','units','intermediary_txns','customers',
-                           'orders','order_lines','payments','settings','ai_scan_log','notes']
+                           'orders','order_lines','payments','settings','ai_scan_log','notes','cash_entries']
   loop
     execute format('alter table public.%I enable row level security', t);
   end loop;
@@ -486,6 +541,17 @@ create policy itx_update on public.intermediary_txns for update to authenticated
   with check (user_id = (select auth.uid()) and kind in ('transfer','adjustment'));
 create policy itx_delete on public.intermediary_txns for delete to authenticated
   using (user_id = (select auth.uid()) and kind in ('transfer','adjustment'));
+
+-- CR-005 Sổ quỹ: đọc mọi bút toán; ghi / sửa / xoá tay chỉ bút toán ghi tay
+create policy cash_select on public.cash_entries for select to authenticated
+  using (user_id = (select auth.uid()));
+create policy cash_insert on public.cash_entries for insert to authenticated
+  with check (user_id = (select auth.uid()) and not is_auto and kind in ('expense','capital_in','capital_out','adjustment'));
+create policy cash_update on public.cash_entries for update to authenticated
+  using (user_id = (select auth.uid()) and not is_auto and kind in ('expense','capital_in','capital_out','adjustment'))
+  with check (user_id = (select auth.uid()) and not is_auto and kind in ('expense','capital_in','capital_out','adjustment'));
+create policy cash_delete on public.cash_entries for delete to authenticated
+  using (user_id = (select auth.uid()) and not is_auto and kind in ('expense','capital_in','capital_out','adjustment'));
 
 -- -----------------------------------------------------------------------------
 -- 3. View (security_invoker ⇒ RLS của bảng gốc áp dụng)
@@ -564,6 +630,8 @@ left join lateral (
 -- Tồn theo model (A9). in_stock KHÔNG gồm chiếc đã giữ; on_hand = đã về kho & chưa bán (gồm đã giữ);
 -- sellable = Trong kho + Đang về chưa giữ; is_low_stock = sellable ≤ ngưỡng.
 -- stock_value_vnd = Σ giá nhập hiệu lực của chiếc ĐÃ VỀ KHO và chưa bán (Trong kho + Đã giữ đã về).
+-- CR-005 (cột CUỐI): incoming_value_vnd = Σ giá nhập chiếc CHƯA VỀ (gồm chiếc đã giữ cho đơn đặt trước);
+--   total_capital_vnd = stock_value_vnd + incoming_value_vnd.
 create view public.v_model_stock with (security_invoker = true) as
 select m.id                    as model_id,
        m.user_id,
@@ -584,7 +652,11 @@ select m.id                    as model_id,
        coalesce(sum(vu.cost_vnd) filter (where vu.is_received and vu.status in ('in_stock','reserved')), 0)::bigint
                                                                                         as stock_value_vnd,
        count(vu.unit_id) filter (where vu.status in ('in_stock','incoming')) <= m.low_stock_threshold
-                                                                                        as is_low_stock
+                                                                                        as is_low_stock,
+       coalesce(sum(vu.cost_vnd) filter (where not vu.is_received and vu.status in ('incoming','reserved')), 0)::bigint
+                                                                                        as incoming_value_vnd,
+       coalesce(sum(vu.cost_vnd) filter (where vu.status in ('in_stock','incoming','reserved')), 0)::bigint
+                                                                                        as total_capital_vnd
 from public.models m
 left join public.v_units vu on vu.model_id = m.id
 group by m.id;
@@ -593,6 +665,7 @@ group by m.id;
 -- CR-003 (cột thêm ở CUỐI để 002 dùng được create or replace view): buying_fee_pct, buying_fee_vnd = round(Σ¥ × tỷ giá × %/100).
 -- goods_vnd giữ nghĩa cũ (Σ¥ × tỷ giá, CHƯA gồm phí mua hộ).
 -- CR-004 (cột CUỐI): is_lot_late = lô chưa nhận / chưa huỷ và hôm nay − ngày đặt > settings.lot_late_days (mặc định 21).
+-- CR-005 (cột CUỐI): paid_vnd = Σ khoản Đã chuyển gắn lô; outstanding_vnd = payable_vnd − paid_vnd (âm = trả dư).
 create view public.v_lot_summary with (security_invoker = true) as
 select l.id as lot_id, l.user_id, l.status, l.ordered_at, l.received_at, l.exchange_rate, l.ship_fee_vnd,
        l.seller_id, s.nickname as seller_nickname, l.goofish_url, l.goofish_item_id, l.listing_title,
@@ -610,7 +683,9 @@ select l.id as lot_id, l.user_id, l.status, l.ordered_at, l.received_at, l.excha
        l.buying_fee_pct,
        round(agg.total_cny * l.exchange_rate * (l.buying_fee_pct / 100))::bigint   as buying_fee_vnd,
        (l.status not in ('received','cancelled')
-        and private.today_vn() - l.ordered_at > coalesce(st.lot_late_days, 21))    as is_lot_late
+        and private.today_vn() - l.ordered_at > coalesce(st.lot_late_days, 21))    as is_lot_late,
+       coalesce(pd.paid_vnd, 0)::bigint                                       as paid_vnd,
+       (coalesce(t.amount_vnd, 0) - coalesce(pd.paid_vnd, 0))::bigint         as outstanding_vnd
 from public.lots l
 left join public.sellers s on s.id = l.seller_id
 left join public.settings st on st.user_id = l.user_id
@@ -628,7 +703,10 @@ left join lateral (
                             where lot_id = l.id group by model_id, model_name) g), '[]'::jsonb) as models
   from public.v_units vu where vu.lot_id = l.id
 ) agg on true
-left join public.intermediary_txns t on t.lot_id = l.id and t.kind = 'payable';
+left join public.intermediary_txns t on t.lot_id = l.id and t.kind = 'payable'
+left join lateral (
+  select sum(x.amount_vnd) as paid_vnd from public.intermediary_txns x where x.lot_id = l.id and x.kind = 'transfer'
+) pd on true;
 
 -- Đơn: còn phải thu (BR-10), cần hoàn (Q-009), lãi (A8: Σ(giá chốt − giá nhập hiệu lực HIỆN TẠI) − ship shop chịu)
 -- CR-004: đơn Hoàn hàng ('returned'): còn phải thu 0; cần hoàn = max(đã thu ròng − (keep_deposit ? Σ cọc : 0), 0);
@@ -725,8 +803,42 @@ select st.user_id,
          order by l.created_at desc limit 1) as last_buying_fee_pct
 from public.settings st;
 
+-- CR-005 Sổ quỹ: số dư = Σ vào − Σ ra; 1 dòng / người dùng (theo settings).
+create view public.v_cash_balance with (security_invoker = true) as
+select st.user_id,
+       coalesce(c.total_in_vnd, 0)::bigint                               as total_in_vnd,
+       coalesce(c.total_out_vnd, 0)::bigint                              as total_out_vnd,
+       (coalesce(c.total_in_vnd, 0) - coalesce(c.total_out_vnd, 0))::bigint as balance_vnd,
+       coalesce(c.entry_count, 0)::int                                   as entry_count
+from public.settings st
+left join lateral (
+  select sum(e.amount_vnd) filter (where e.direction = 'in')  as total_in_vnd,
+         sum(e.amount_vnd) filter (where e.direction = 'out') as total_out_vnd,
+         count(*)                                             as entry_count
+  from public.cash_entries e where e.user_id = st.user_id
+) c on true;
+
+-- CR-005 Sổ quỹ theo tháng (month = ngày đầu tháng): vào / ra / ròng + tách theo loại.
+create view public.v_cash_monthly with (security_invoker = true) as
+select e.user_id,
+       date_trunc('month', e.entry_date)::date                                                    as month,
+       coalesce(sum(e.amount_vnd) filter (where e.direction = 'in'), 0)::bigint                   as in_vnd,
+       coalesce(sum(e.amount_vnd) filter (where e.direction = 'out'), 0)::bigint                  as out_vnd,
+       sum(case when e.direction = 'in' then e.amount_vnd else -e.amount_vnd end)::bigint         as net_vnd,
+       coalesce(sum(e.amount_vnd) filter (where e.kind = 'customer_payment'), 0)::bigint          as customer_in_vnd,
+       coalesce(sum(e.amount_vnd) filter (where e.kind = 'customer_refund'), 0)::bigint           as refund_out_vnd,
+       coalesce(sum(e.amount_vnd) filter (where e.kind = 'intermediary'), 0)::bigint              as intermediary_out_vnd,
+       coalesce(sum(e.amount_vnd) filter (where e.kind in ('ship_shop','return_ship')), 0)::bigint as ship_out_vnd,
+       coalesce(sum(e.amount_vnd) filter (where e.kind = 'expense'), 0)::bigint                   as expense_out_vnd,
+       coalesce(sum(e.amount_vnd) filter (where e.kind = 'capital_in'), 0)::bigint                as capital_in_vnd,
+       coalesce(sum(e.amount_vnd) filter (where e.kind = 'capital_out'), 0)::bigint               as capital_out_vnd,
+       coalesce(sum(case when e.direction = 'in' then e.amount_vnd else -e.amount_vnd end)
+                filter (where e.kind = 'adjustment'), 0)::bigint                                  as adjustment_net_vnd
+from public.cash_entries e
+group by e.user_id, date_trunc('month', e.entry_date);
+
 grant select on public.v_units, public.v_model_stock, public.v_lot_summary, public.v_order_summary,
-                public.v_intermediary_balance, public.v_suggestions to authenticated;
+                public.v_intermediary_balance, public.v_suggestions, public.v_cash_balance, public.v_cash_monthly to authenticated;
 
 -- -----------------------------------------------------------------------------
 -- 4. Hàm nội bộ (schema private — PostgREST không lộ ra)
@@ -804,6 +916,121 @@ language sql stable set search_path = '' as $$
   where ol.order_id = p_order_id and not ol.cancelled and l.status <> 'received'
 $$;
 
+-- CR-005 ---------------------------------------------------------------------
+-- Mã trạng thái lô cũ (trước CR-005) → mã mới; mã khác giữ nguyên (null ⇒ null).
+create or replace function private.normalize_lot_status(p_status text) returns text
+language sql immutable set search_path = '' as $$
+  select case when p_status in ('ordered','cn_shipping','at_forwarder') then 'cn_warehouse'
+              when p_status = 'vn_shipping' then 'vn_warehouse'
+              else p_status end
+$$;
+
+-- Khoản thu khách → bút toán: deposit / payment ⇒ in 'customer_payment'; refund ⇒ out 'customer_refund'.
+create or replace function private.cash_sync_payment(p_payment_id uuid) returns void
+language plpgsql security definer set search_path = '' as $$
+declare p public.payments%rowtype;
+begin
+  select * into p from public.payments where id = p_payment_id;
+  if not found then
+    delete from public.cash_entries where payment_id = p_payment_id;
+    return;
+  end if;
+  insert into public.cash_entries as c (user_id, entry_date, direction, amount_vnd, kind, note, payment_id, order_id, is_auto)
+  values (p.user_id, p.paid_at, case when p.kind = 'refund' then 'out' else 'in' end, p.amount_vnd,
+          case when p.kind = 'refund' then 'customer_refund' else 'customer_payment' end, p.note, p.id, p.order_id, true)
+  on conflict (payment_id) do update
+     set user_id = excluded.user_id, entry_date = excluded.entry_date, direction = excluded.direction,
+         amount_vnd = excluded.amount_vnd, kind = excluded.kind, note = excluded.note, order_id = excluded.order_id
+   where (c.user_id, c.entry_date, c.direction, c.amount_vnd, c.kind, c.note, c.order_id)
+         is distinct from (excluded.user_id, excluded.entry_date, excluded.direction, excluded.amount_vnd, excluded.kind,
+                           excluded.note, excluded.order_id);
+end $$;
+
+-- Khoản trung gian → bút toán: chỉ 'transfer' > 0 ⇒ out 'intermediary' (kèm lot_id). Khác ⇒ không có bút toán.
+create or replace function private.cash_sync_txn(p_txn_id uuid) returns void
+language plpgsql security definer set search_path = '' as $$
+declare t public.intermediary_txns%rowtype;
+begin
+  select * into t from public.intermediary_txns where id = p_txn_id;
+  if not found or t.kind <> 'transfer' or t.amount_vnd <= 0 then
+    delete from public.cash_entries where txn_id = p_txn_id;
+    return;
+  end if;
+  insert into public.cash_entries as c (user_id, entry_date, direction, amount_vnd, kind, note, txn_id, lot_id, is_auto)
+  values (t.user_id, t.txn_date, 'out', t.amount_vnd, 'intermediary', t.note, t.id, t.lot_id, true)
+  on conflict (txn_id) do update
+     set user_id = excluded.user_id, entry_date = excluded.entry_date, amount_vnd = excluded.amount_vnd,
+         note = excluded.note, lot_id = excluded.lot_id
+   where (c.user_id, c.entry_date, c.amount_vnd, c.note, c.lot_id)
+         is distinct from (excluded.user_id, excluded.entry_date, excluded.amount_vnd, excluded.note, excluded.lot_id);
+end $$;
+
+-- Đơn → bút toán ship: 'ship_shop' khi đơn đã gửi (shipped / completed / returned), shop chịu ship, phí > 0 (ngày gửi);
+-- 'return_ship' khi đơn Hoàn hàng có phí ship chiều về > 0 (ngày hoàn). Hết điều kiện ⇒ xoá bút toán.
+create or replace function private.cash_sync_order(p_order_id uuid) returns void
+language plpgsql security definer set search_path = '' as $$
+declare o public.orders%rowtype;
+begin
+  select * into o from public.orders where id = p_order_id;
+  if not found then
+    delete from public.cash_entries where order_id = p_order_id and kind in ('ship_shop','return_ship');
+    return;
+  end if;
+  if o.status in ('shipped','completed','returned') and o.ship_fee_payer = 'shop' and o.ship_fee_vnd > 0 then
+    insert into public.cash_entries as c (user_id, entry_date, direction, amount_vnd, kind, order_id, is_auto)
+    values (o.user_id, o.shipped_at, 'out', o.ship_fee_vnd, 'ship_shop', o.id, true)
+    on conflict (order_id, kind) where kind in ('ship_shop','return_ship') do update
+       set user_id = excluded.user_id, entry_date = excluded.entry_date, amount_vnd = excluded.amount_vnd
+     where (c.user_id, c.entry_date, c.amount_vnd) is distinct from (excluded.user_id, excluded.entry_date, excluded.amount_vnd);
+  else
+    delete from public.cash_entries where order_id = p_order_id and kind = 'ship_shop';
+  end if;
+  if o.status = 'returned' and o.return_ship_fee_vnd > 0 then
+    insert into public.cash_entries as c (user_id, entry_date, direction, amount_vnd, kind, order_id, is_auto)
+    values (o.user_id, o.returned_at, 'out', o.return_ship_fee_vnd, 'return_ship', o.id, true)
+    on conflict (order_id, kind) where kind in ('ship_shop','return_ship') do update
+       set user_id = excluded.user_id, entry_date = excluded.entry_date, amount_vnd = excluded.amount_vnd
+     where (c.user_id, c.entry_date, c.amount_vnd) is distinct from (excluded.user_id, excluded.entry_date, excluded.amount_vnd);
+  else
+    delete from public.cash_entries where order_id = p_order_id and kind = 'return_ship';
+  end if;
+end $$;
+
+-- Trigger (sau insert / update; xoá nguồn ⇒ FK on delete cascade xoá bút toán)
+create or replace function private.cash_on_payment() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  perform private.cash_sync_payment(new.id);
+  return null;
+end $$;
+
+create or replace function private.cash_on_txn() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if new.kind = 'transfer' then
+    perform private.cash_sync_txn(new.id);
+  end if;
+  return null;
+end $$;
+
+create or replace function private.cash_on_order() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  perform private.cash_sync_order(new.id);
+  return null;
+end $$;
+
+drop trigger if exists payments_cash on public.payments;
+create trigger payments_cash after insert or update on public.payments
+  for each row execute function private.cash_on_payment();
+drop trigger if exists intermediary_txns_cash on public.intermediary_txns;
+create trigger intermediary_txns_cash after insert or update on public.intermediary_txns
+  for each row execute function private.cash_on_txn();
+drop trigger if exists orders_cash on public.orders;
+create trigger orders_cash
+  after insert or update of status, ship_fee_vnd, ship_fee_payer, shipped_at, returned_at, return_ship_fee_vnd on public.orders
+  for each row execute function private.cash_on_order();
+
 -- -----------------------------------------------------------------------------
 -- 5. RPC (public, SECURITY DEFINER, search_path rỗng, luôn lọc user_id = auth.uid())
 -- -----------------------------------------------------------------------------
@@ -827,9 +1054,12 @@ end $$;
 -- Tạo / sửa lô CHƯA NHẬN (A2, A10). p_lot_id null = tạo mới.
 --   p_lot = { goofish_url, goofish_item_id, seller_id | new_seller: {nickname, region, profile_url},
 --             screenshot_path, listing_title, ordered_at 'YYYY-MM-DD', exchange_rate (bắt buộc > 0),
---             ship_fee_vnd (null = chưa biết), status ('ordered'|'cn_shipping'|'at_forwarder'|'vn_shipping'), note,
+--             ship_fee_vnd (null = chưa biết), status ('cn_warehouse'|'vn_warehouse'; mã cũ ordered / cn_shipping /
+--             at_forwarder / vn_shipping được tự đổi — CR-005; thiếu ⇒ TẠO: cn_warehouse, SỬA: giữ nguyên), note,
 --             buying_fee_pct (CR-003: phí mua hộ % 0..100; thiếu / null ⇒ TẠO: lấy settings.default_buying_fee_pct,
---                             SỬA: giữ nguyên; lô đã nhận ⇒ LOT_LOCKED như tỷ giá) }
+--                             SỬA: giữ nguyên; lô đã nhận ⇒ LOT_LOCKED như tỷ giá),
+--             paid_now (CR-005, bool, chỉ khi TẠO: true ⇒ ghi khoản Đã chuyển gắn lô = phải trả lúc tạo, ngày = ngày đặt;
+--                       khi SỬA bị bỏ qua) }
 --     (thay thế toàn bộ trường lô như v1; goofish_item_id tự tách từ ?id= của link nếu trống)
 --   p_groups = mảng (≤ 50) gồm 2 loại phần tử:
 --     * nhóm mới  {model_id, qty 1..1000, price_cny > 0, list_price_vnd?}  → tạo qty chiếc, mỗi chiếc 1 mã;
@@ -839,7 +1069,8 @@ end $$;
 --   UNIT_RESERVED; chiếc chỉ thuộc đơn ĐÃ HUỶ ⇒ xoá luôn dòng đơn huỷ đó (trả về detached_cancelled_order_ids).
 --   Mã của chiếc bị bỏ không bao giờ cấp lại.
 -- Trả về { lot_id, version, created_units: [{unit_id, code, model_id}], removed_units: [{unit_id, code}],
---          detached_cancelled_order_ids: [uuid], duplicate_lot_ids: [uuid], payable_vnd }
+--          detached_cancelled_order_ids: [uuid], duplicate_lot_ids: [uuid], payable_vnd,
+--          paid_txn_id (CR-005: khoản trả khi tạo, null nếu không), outstanding_vnd (CR-005: còn nợ của lô) }
 create or replace function public.save_lot(p_lot_id uuid, p_lot jsonb, p_groups jsonb, p_expected_version int default null)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
@@ -867,6 +1098,9 @@ declare
   v_removed   jsonb := '[]'::jsonb;
   v_detached  uuid[] := '{}';
   v_n         int;
+  v_paid_now  boolean;
+  v_pay       bigint;
+  v_paid_txn  uuid;
 begin
   if p_lot is null or jsonb_typeof(p_lot) <> 'object' then
     raise exception using errcode = 'P0001', message = 'INVALID_INPUT', detail = 'p_lot';
@@ -877,15 +1111,19 @@ begin
   if jsonb_array_length(p_groups) > 1050 then
     raise exception using errcode = 'P0001', message = 'TOO_MANY_LINES';
   end if;
+  if p_lot ? 'paid_now' and jsonb_typeof(p_lot->'paid_now') not in ('boolean','null') then
+    raise exception using errcode = 'P0001', message = 'INVALID_INPUT', detail = 'paid_now';           -- CR-005
+  end if;
 
-  v_seller := nullif(p_lot->>'seller_id', '')::uuid;
-  v_status := coalesce(nullif(p_lot->>'status', ''), 'ordered');
-  v_url    := nullif(btrim(p_lot->>'goofish_url'), '');
-  v_rate   := nullif(p_lot->>'exchange_rate', '')::numeric;
-  v_ship   := nullif(p_lot->>'ship_fee_vnd', '')::bigint;
-  v_fee    := nullif(p_lot->>'buying_fee_pct', '')::numeric;                -- CR-003
+  v_seller   := nullif(p_lot->>'seller_id', '')::uuid;
+  v_status   := private.normalize_lot_status(nullif(p_lot->>'status', ''));               -- CR-005: mã cũ ⇒ mã mới
+  v_url      := nullif(btrim(p_lot->>'goofish_url'), '');
+  v_rate     := nullif(p_lot->>'exchange_rate', '')::numeric;
+  v_ship     := nullif(p_lot->>'ship_fee_vnd', '')::bigint;
+  v_fee      := nullif(p_lot->>'buying_fee_pct', '')::numeric;                -- CR-003
+  v_paid_now := coalesce((p_lot->>'paid_now')::boolean, false);               -- CR-005
 
-  if v_status not in ('ordered','cn_shipping','at_forwarder','vn_shipping') then
+  if v_status is not null and v_status not in ('cn_warehouse','vn_warehouse') then
     raise exception using errcode = 'P0001', message = 'INVALID_STATUS_FOR_SAVE';
   end if;
   if v_rate is null or v_rate <= 0 then
@@ -956,7 +1194,7 @@ begin
                              ordered_at, exchange_rate, ship_fee_vnd, status, note, buying_fee_pct)
     values (v_uid, v_url, v_item, v_seller, nullif(p_lot->>'screenshot_path', ''), nullif(p_lot->>'listing_title', ''),
             coalesce(nullif(p_lot->>'ordered_at', '')::date, private.today_vn()),
-            v_rate, v_ship, v_status, nullif(p_lot->>'note', ''),
+            v_rate, v_ship, coalesce(v_status, 'cn_warehouse'), nullif(p_lot->>'note', ''),
             coalesce(v_fee, (select st.default_buying_fee_pct from public.settings st where st.user_id = v_uid), 0))
     returning id into v_id;
   else
@@ -981,7 +1219,7 @@ begin
       goofish_url = v_url, goofish_item_id = v_item, seller_id = v_seller,
       screenshot_path = nullif(p_lot->>'screenshot_path', ''), listing_title = nullif(p_lot->>'listing_title', ''),
       ordered_at = coalesce(nullif(p_lot->>'ordered_at', '')::date, v_lot.ordered_at),
-      exchange_rate = v_rate, ship_fee_vnd = v_ship, status = v_status, note = nullif(p_lot->>'note', ''),
+      exchange_rate = v_rate, ship_fee_vnd = v_ship, status = coalesce(v_status, v_lot.status), note = nullif(p_lot->>'note', ''),
       buying_fee_pct = coalesce(v_fee, v_lot.buying_fee_pct)
     where id = v_id;
 
@@ -1036,6 +1274,16 @@ begin
 
   perform private.recalc_lot(v_id);                                     -- D2, A3, A4/BR-12
 
+  -- CR-005: "Đã thanh toán cho trung gian" khi tạo ⇒ khoản Đã chuyển gắn lô = phải trả lúc này (trigger ghi sổ quỹ)
+  if p_lot_id is null and v_paid_now then
+    select amount_vnd into v_pay from public.intermediary_txns where lot_id = v_id and kind = 'payable';
+    if v_pay > 0 then
+      insert into public.intermediary_txns (user_id, txn_date, kind, amount_vnd, lot_id, note)
+      values (v_uid, (select ordered_at from public.lots where id = v_id), 'transfer', v_pay, v_id, 'Trả khi tạo lô')
+      returning id into v_paid_txn;
+    end if;
+  end if;
+
   -- Cảnh báo trùng tin Goofish (không chặn)
   if v_item is not null then
     select array_agg(id order by created_at) into v_dups from public.lots
@@ -1049,18 +1297,23 @@ begin
     'removed_units', v_removed,
     'detached_cancelled_order_ids', to_jsonb(v_detached),
     'duplicate_lot_ids', coalesce(to_jsonb(v_dups), '[]'::jsonb),
-    'payable_vnd', (select amount_vnd from public.intermediary_txns where lot_id = v_id and kind = 'payable'));
+    'payable_vnd', (select amount_vnd from public.intermediary_txns where lot_id = v_id and kind = 'payable'),
+    'paid_txn_id', v_paid_txn,
+    'outstanding_vnd', (select outstanding_vnd from public.v_lot_summary where lot_id = v_id));
 end $$;
 
--- set_lot_status(p_lot_id, p_status 'ordered'|'cn_shipping'|'at_forwarder'|'vn_shipping', p_expected_version)
+-- set_lot_status(p_lot_id, p_status 'cn_warehouse'|'vn_warehouse' (mã cũ tự đổi), p_expected_version)
 --   → { lot_id, status, version }
+-- CR-005: chỉ đi TỚI (Kho TQ → Kho VN; giữ nguyên = không đổi gì). Lùi Kho VN → Kho TQ ⇒ INVALID_STATUS_TRANSITION.
+-- Nhận vào Kho Lumi: receive_lot; huỷ: cancel_lot.
 create or replace function public.set_lot_status(p_lot_id uuid, p_status text, p_expected_version int default null)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
-  v_uid uuid := private.require_uid();
-  v_lot public.lots%rowtype;
+  v_uid    uuid := private.require_uid();
+  v_lot    public.lots%rowtype;
+  v_status text := private.normalize_lot_status(p_status);
 begin
-  if p_status is null or p_status not in ('ordered','cn_shipping','at_forwarder','vn_shipping') then
+  if v_status is null or v_status not in ('cn_warehouse','vn_warehouse') then
     raise exception using errcode = 'P0001', message = 'INVALID_STATUS_FOR_SAVE';
   end if;
   select * into v_lot from public.lots where id = p_lot_id and user_id = v_uid for update;
@@ -1069,9 +1322,53 @@ begin
     raise exception using errcode = 'P0001', message = 'LOT_LOCKED';
   end if;
   perform private.check_version(p_expected_version, v_lot.version);
-  update public.lots set status = p_status where id = p_lot_id;
-  return jsonb_build_object('lot_id', p_lot_id, 'status', p_status,
+  if v_lot.status = 'vn_warehouse' and v_status = 'cn_warehouse' then
+    raise exception using errcode = 'P0001', message = 'INVALID_STATUS_TRANSITION',
+      detail = v_lot.status || '→' || v_status;
+  end if;
+  update public.lots set status = v_status where id = p_lot_id and status is distinct from v_status;
+  return jsonb_build_object('lot_id', p_lot_id, 'status', v_status,
                             'version', (select version from public.lots where id = p_lot_id));
+end $$;
+
+-- pay_lot(p_lot_id, p_paid_at date|null (mặc định hôm nay), p_note text|null (≤ 1000))
+--   → { lot_id, txn_id, amount_vnd, payable_vnd, paid_vnd, outstanding_vnd: 0 }
+-- CR-005 "Đã thanh toán" một chạm: ghi 1 khoản Đã chuyển gắn lô = phần CÒN NỢ của lô (phải trả − Σ đã chuyển gắn lô) —
+-- vd. lô tạo đã trả tiền hàng, nhập phí ship sau ⇒ còn nợ = ship ⇒ "Đã thanh toán ship". Trigger ghi sổ quỹ (tiền ra).
+-- Lô huỷ ⇒ LOT_CANCELLED; còn nợ ≤ 0 ⇒ LOT_ALREADY_PAID (detail {payable_vnd, paid_vnd, outstanding_vnd}).
+-- Khoá dòng lô ⇒ 2 máy bấm cùng lúc không trả 2 lần.
+create or replace function public.pay_lot(p_lot_id uuid, p_paid_at date default null, p_note text default null)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  v_uid     uuid := private.require_uid();
+  v_lot     public.lots%rowtype;
+  v_note    text := nullif(btrim(p_note), '');
+  v_payable bigint;
+  v_paid    bigint;
+  v_out     bigint;
+  v_id      uuid;
+begin
+  if length(v_note) > 1000 then
+    raise exception using errcode = 'P0001', message = 'INVALID_INPUT', detail = 'note';
+  end if;
+  select * into v_lot from public.lots where id = p_lot_id and user_id = v_uid for update;
+  if not found then raise exception using errcode = 'P0001', message = 'LOT_NOT_FOUND'; end if;
+  if v_lot.status = 'cancelled' then raise exception using errcode = 'P0001', message = 'LOT_CANCELLED'; end if;
+
+  v_payable := coalesce((select amount_vnd from public.intermediary_txns where lot_id = p_lot_id and kind = 'payable'), 0);
+  v_paid    := coalesce((select sum(amount_vnd) from public.intermediary_txns where lot_id = p_lot_id and kind = 'transfer'), 0);
+  v_out     := v_payable - v_paid;
+  if v_out <= 0 then
+    raise exception using errcode = 'P0001', message = 'LOT_ALREADY_PAID',
+      detail = jsonb_build_object('payable_vnd', v_payable, 'paid_vnd', v_paid, 'outstanding_vnd', v_out)::text;
+  end if;
+
+  insert into public.intermediary_txns (user_id, txn_date, kind, amount_vnd, lot_id, note)
+  values (v_uid, coalesce(p_paid_at, private.today_vn()), 'transfer', v_out, p_lot_id, v_note)
+  returning id into v_id;
+
+  return jsonb_build_object('lot_id', p_lot_id, 'txn_id', v_id, 'amount_vnd', v_out,
+                            'payable_vnd', v_payable, 'paid_vnd', v_paid + v_out, 'outstanding_vnd', 0);
 end $$;
 
 -- receive_lot(p_lot_id, p_ship_fee_vnd bigint|null, p_received_at date|null, p_expected_version, p_units jsonb|null) → jsonb
@@ -1669,6 +1966,36 @@ begin
     'version', (select version from public.orders where id = p_order_id));
 end $$;
 
+-- delete_order(p_order_id, p_expected_version) → { order_id, status (trạng thái lúc xoá), released_unit_ids: [uuid],
+--                                                   deleted_payment_ids: [uuid], deleted_cash_entry_count }
+-- CR-005 ý 13: xoá HẲN đơn ở MỌI trạng thái (app hỏi xác nhận). Xoá theo FK cascade: dòng đơn (chiếc được nhả ⇒ về Kho /
+-- Đang về, bán lại được), khoản thu (+ bút toán sổ quỹ của chúng), bút toán ship của đơn. Không hoàn tác được.
+create or replace function public.delete_order(p_order_id uuid, p_expected_version int default null)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  v_uid      uuid := private.require_uid();
+  v_order    public.orders%rowtype;
+  v_released jsonb;
+  v_pays     jsonb;
+  v_cash     int;
+begin
+  select * into v_order from public.orders where id = p_order_id and user_id = v_uid for update;
+  if not found then raise exception using errcode = 'P0001', message = 'ORDER_NOT_FOUND'; end if;
+  perform private.check_version(p_expected_version, v_order.version);
+
+  select coalesce(jsonb_agg(unit_id order by line_no), '[]'::jsonb) into v_released
+    from public.order_lines where order_id = p_order_id and not cancelled;
+  select coalesce(jsonb_agg(id order by paid_at, created_at), '[]'::jsonb) into v_pays
+    from public.payments where order_id = p_order_id;
+  select count(*) into v_cash from public.cash_entries
+   where order_id = p_order_id or payment_id in (select id from public.payments where order_id = p_order_id);
+
+  delete from public.orders where id = p_order_id;          -- cascade: order_lines, payments → cash_entries
+
+  return jsonb_build_object('order_id', p_order_id, 'status', v_order.status, 'released_unit_ids', v_released,
+                            'deleted_payment_ids', v_pays, 'deleted_cash_entry_count', v_cash);
+end $$;
+
 -- complete_order(p_order_id, p_force boolean, p_expected_version)
 --   → { order_id, status: 'completed', receivable_vnd, version }
 -- BR-10 / Q-010: chỉ khi còn phải thu = 0, hoặc p_force = true (người dùng xác nhận bỏ qua thiếu / dư).
@@ -1770,6 +2097,8 @@ grant execute on function
   public.set_order_cod(uuid, bigint, int),
   public.return_order(uuid, boolean, bigint, date, text, int),
   public.cancel_order(uuid, int),
+  public.pay_lot(uuid, date, text),
+  public.delete_order(uuid, int),
   public.complete_order(uuid, boolean, int),
   public.ai_scan_reserve(text),
   public.ai_scan_finish(uuid, text, text, int, int, numeric, text)
@@ -1807,7 +2136,7 @@ begin
     alter publication supabase_realtime add table
       public.models, public.sellers, public.lots, public.units,
       public.intermediary_txns, public.customers, public.orders, public.order_lines,
-      public.payments, public.settings, public.notes;
+      public.payments, public.settings, public.notes, public.cash_entries;
   end if;
 end $$;
 

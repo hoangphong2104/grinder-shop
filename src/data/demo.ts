@@ -6,15 +6,18 @@
 // được TÍNH bằng hàm domain (cost / units / orders / debt) cho số liệu khớp nhau, theo đúng định nghĩa view SQL
 // (supabase/v2/001_schema_v2.sql + 002_buying_fee.sql + 003_cod_return_condition.sql). Ngày tháng tính lùi từ hôm nay
 // (giờ VN) để luôn "mới". CR-004: có tình trạng chiếc, khoản thu tiền mặt / COD, 1 đơn COD chờ về, 1 đơn Hoàn hàng.
+// CR-005 (005_cash_status_qr.sql): lô Kho TQ / Kho VN / Kho Lumi; khoản Đã chuyển gắn lô (lô trả đủ, lô còn nợ ship, lô chưa trả);
+// sổ quỹ = bút toán tự sinh (giống trigger DB, kiểm chéo bằng domain autoCashEntries / cashBalance) + ghi tay; cài đặt VietQR mẫu.
 import type { Session } from '@supabase/supabase-js'
 import {
   buildUnitViews, lotBuyingFeeVnd, lotGoodsCny, lotGoodsVnd, lotPayable, modelStocks, orderGoodsTotal, orderPaid,
   orderProfit, orderReceivable, orderRefundDue, orderShipCharged, effectiveCosts, roundVnd, intermediaryBalance,
   isLotLate, orderCodPending, orderCodReceived, orderDeposits, orderKept, orderProfitDate, DEFAULT_AGING, DEFAULT_LOT_LATE_DAYS,
-  type Lot, type Model, type Order, type PaymentKind, type Transfer, type Unit,
+  autoCashEntries, cashBalance, cashByMonth, lotOutstanding, lotPaid,
+  type CashEntry, type Lot, type Model, type Order, type PaymentKind, type Transfer, type Unit,
 } from '../domain/index.ts'
 import type {
-  BalanceRow, CustomerRow, DbData, LotRow, LotStatusDb, LotSummaryRow, ModelRow, ModelStockRow, NoteRow, OrderLineRow,
+  BalanceRow, CashBalanceRow, CashEntryRow, CashKindDb, CashMonthlyRow, CustomerRow, DbData, LotRow, LotStatusDb, LotSummaryRow, ModelRow, ModelStockRow, NoteRow, OrderLineRow,
   OrderRow, OrderStatusDb, OrderSummaryRow, PaymentMethodDb, PaymentRow, SellerRow, SettingsRow, ShipPayerDb, SuggestionsRow, TxnRow,
   UnitConditionDb, UnitRow, UnitViewRow,
 } from './types.ts'
@@ -111,16 +114,16 @@ const LOTS: LotSpec[] = [
   { id: 'demo-l-5', ago: 15, status: 'cancelled', rate: 3612, ship: null, fee: 0, seller: 'demo-s-3',
     title: 'K-Ultra 二手 成色好', itemId: '780011223305', note: 'Người bán không giao, đã hoàn tiền qua trung gian.',
     units: [{ model: 'demo-m-ku', cny: 990 }] },
-  { id: 'demo-l-6', ago: 12, status: 'vn_shipping', rate: 3615, ship: null, fee: 3, seller: 'demo-s-2',
+  { id: 'demo-l-6', ago: 12, status: 'vn_warehouse', rate: 3615, ship: null, fee: 3, seller: 'demo-s-2',
     title: '1Zpresso K-Ultra 全新 3台 现货', itemId: '780011223306',
     units: [{ model: 'demo-m-ku', cny: 1050, list: 7000000 }, { model: 'demo-m-ku', cny: 1050, list: 6900000 }, { model: 'demo-m-ku', cny: 1050, list: 6900000 }] },
-  { id: 'demo-l-7', ago: 8, status: 'at_forwarder', rate: 3620, ship: 500000, fee: 0, seller: 'demo-s-4',
+  { id: 'demo-l-7', ago: 8, status: 'cn_warehouse', rate: 3620, ship: 500000, fee: 0, seller: 'demo-s-4',
     title: 'J-Ultra 2台', itemId: '780011223307',
     units: [{ model: 'demo-m-ju', cny: 1180, list: 7400000 }, { model: 'demo-m-ju', cny: 1180 }] },
-  { id: 'demo-l-8', ago: 5, status: 'cn_shipping', rate: 3625, ship: null, fee: 0, seller: 'demo-s-1',
+  { id: 'demo-l-8', ago: 5, status: 'cn_warehouse', rate: 3625, ship: null, fee: 0, seller: 'demo-s-1',
     title: 'ZP6 Special ×2 + 泰摩 C3S Pro Max', itemId: '780011223308',
     units: [{ model: 'demo-m-zp6', cny: 745.5 }, { model: 'demo-m-zp6', cny: 745.5 }, { model: 'demo-m-c3', cny: 435, list: 2250000 }] },
-  { id: 'demo-l-9', ago: 2, status: 'ordered', rate: 3630, ship: null, fee: 0, seller: null,
+  { id: 'demo-l-9', ago: 2, status: 'cn_warehouse', rate: 3630, ship: null, fee: 0, seller: null,
     title: null, itemId: null, note: 'Đặt qua Zalo người quen, chưa có link Goofish.',
     units: [{ model: 'demo-m-ju', cny: 1200 }] },
 ]
@@ -153,15 +156,28 @@ const ORDERS: OrderSpec[] = [
     lines: [['ZP6-006', 4550000]], pays: [] },
 ]
 
-const TRANSFERS: { ago: number; kind: 'transfer' | 'adjustment'; amount: number; note: string | null }[] = [
-  { ago: 59, kind: 'transfer', amount: 10000000, note: 'CK Vietcombank' },
-  { ago: 44, kind: 'transfer', amount: 12000000, note: null },
-  { ago: 29, kind: 'transfer', amount: 25000000, note: 'CK Techcombank - lô trộn JU/ZP6/C3' },
-  { ago: 19, kind: 'transfer', amount: 10000000, note: null },
+// CR-005: amount 'payable' = trả đủ phải trả của lô; 'goods' = phải trả − phí ship (còn nợ ship); lot = khoản gắn lô.
+// Lô L-007 còn nợ ship 500.000, L-009 chưa trả (nút "Đã thanh toán"); khoản ago 3 không gắn lô.
+const TRANSFERS: { ago: number; kind: 'transfer' | 'adjustment'; amount: number | 'payable' | 'goods'; lot?: string; note: string | null }[] = [
+  { ago: 59, kind: 'transfer', amount: 'payable', lot: 'demo-l-1', note: 'CK Vietcombank' },
+  { ago: 44, kind: 'transfer', amount: 'payable', lot: 'demo-l-2', note: null },
+  { ago: 29, kind: 'transfer', amount: 'payable', lot: 'demo-l-3', note: 'CK Techcombank - lô trộn JU/ZP6/C3' },
+  { ago: 19, kind: 'transfer', amount: 'payable', lot: 'demo-l-4', note: null },
   { ago: 16, kind: 'adjustment', amount: 50000, note: 'Phí chuyển khoản quốc tế' },
-  { ago: 11, kind: 'transfer', amount: 15000000, note: 'Ứng trước lô KU đang về' },
+  { ago: 12, kind: 'transfer', amount: 'payable', lot: 'demo-l-6', note: 'Trả khi tạo lô' },
+  { ago: 8, kind: 'transfer', amount: 'goods', lot: 'demo-l-7', note: 'Trả tiền hàng, ship trả sau' },
   { ago: 7, kind: 'adjustment', amount: -120000, note: 'Trung gian giảm phí do giao trễ' },
-  { ago: 3, kind: 'transfer', amount: 5000000, note: 'Ứng trước lô JU' },
+  { ago: 5, kind: 'transfer', amount: 'payable', lot: 'demo-l-8', note: 'Trả khi tạo lô' },
+  { ago: 3, kind: 'transfer', amount: 2000000, note: 'Ứng trước cho trung gian' },
+]
+
+// CR-005 sổ quỹ ghi tay (bút toán tự sinh dựng từ khoản thu / khoản trả / đơn bên dưới)
+const CASH_MANUAL: { ago: number; kind: CashKindDb; dir: 'in' | 'out'; amount: number; cat?: string; note?: string }[] = [
+  { ago: 75, kind: 'capital_in', dir: 'in', amount: 100000000, note: 'Vốn ban đầu' },
+  { ago: 40, kind: 'expense', dir: 'out', amount: 180000, cat: 'Đóng gói', note: 'Hộp carton + xốp' },
+  { ago: 20, kind: 'expense', dir: 'out', amount: 300000, cat: 'Quảng cáo', note: 'Boost bài Facebook' },
+  { ago: 4, kind: 'capital_out', dir: 'out', amount: 5000000, note: 'Rút chi tiêu cá nhân' },
+  { ago: 2, kind: 'adjustment', dir: 'in', amount: 20000, note: 'Lệch quỹ tiền mặt' },
 ]
 
 const NOTES: { ago: number; pinned: boolean; body: string }[] = [
@@ -311,15 +327,20 @@ export function buildDemoData(): DbData {
       in_stock_count: s.inStock, incoming_count: s.incoming, reserved_count: s.reserved,
       reserved_received_count: unitView.filter((x) => x.model_id === m.id && x.status === 'reserved' && x.is_received).length,
       on_hand_count: s.onHand, sold_count: s.sold, sellable_count: s.sellable, stock_value_vnd: s.stockValue, is_low_stock: s.lowStock,
+      incoming_value_vnd: s.incomingValue, total_capital_vnd: s.totalCapital,
     }
   })
 
-  // Giao dịch trung gian: "phải trả" tự sinh từ mỗi lô (lô huỷ = 0) + chuyển tiền / điều chỉnh nhập tay
+  // Giao dịch trung gian: "phải trả" tự sinh từ mỗi lô (lô huỷ = 0) + chuyển tiền (CR-005: có thể gắn lô) / điều chỉnh nhập tay
   const payable = new Map(dLots.map((l) => [l.id, lotPayable(l, dUnits)]))
+  const transferAmount = (t: (typeof TRANSFERS)[number]) =>
+    t.amount === 'payable' ? payable.get(t.lot!)! : t.amount === 'goods' ? payable.get(t.lot!)! - (lotById.get(t.lot!)!.ship_fee_vnd ?? 0) : t.amount
   const txns: TxnRow[] = [
     ...lots.map((l): TxnRow => ({ ...base(`demo-t-pay-${l.id}`, l.ordered_at, 10, 30), txn_date: l.ordered_at, kind: 'payable', amount_vnd: payable.get(l.id)!, lot_id: l.id, note: 'Tự sinh từ lô' })),
-    ...TRANSFERS.map((t, i): TxnRow => ({ ...base(`demo-t-${i + 1}`, ago(t.ago), 11), txn_date: ago(t.ago), kind: t.kind, amount_vnd: t.amount, lot_id: null, note: t.note })),
+    ...TRANSFERS.map((t, i): TxnRow => ({ ...base(`demo-t-${i + 1}`, ago(t.ago), 11), txn_date: ago(t.ago), kind: t.kind, amount_vnd: transferAmount(t), lot_id: t.lot ?? null, note: t.note })),
   ].sort((a, b) => a.txn_date.localeCompare(b.txn_date) || a.created_at.localeCompare(b.created_at))
+  const dTransfers: Transfer[] = txns.filter((t) => t.kind !== 'payable')
+    .map((t) => ({ id: t.id, date: t.txn_date, kind: t.kind as Transfer['kind'], amount: t.amount_vnd, lotId: t.lot_id, note: t.note ?? undefined }))
 
   // v_lot_summary
   const sellerById = new Map(sellers.map((s) => [s.id, s]))
@@ -345,6 +366,7 @@ export function buildDemoData(): DbData {
       models: [...byModel.values()].sort((a, b) => a.model_name.localeCompare(b.model_name)),
       buying_fee_pct: l.buying_fee_pct, buying_fee_vnd: lotBuyingFeeVnd(dl, dUnits),
       is_lot_late: isLotLate(dl, today, DEFAULT_LOT_LATE_DAYS),
+      paid_vnd: lotPaid(l.id, dTransfers), outstanding_vnd: lotOutstanding(dl, dUnits, dTransfers),
     }
   })
 
@@ -375,9 +397,45 @@ export function buildDemoData(): DbData {
     total_payable_vnd: sum('payable'), total_transferred_vnd: sum('transfer'), total_adjustment_vnd: sum('adjustment'),
     balance_vnd: sum('payable') - sum('transfer') + sum('adjustment'),
   }
-  const transfers: Transfer[] = TRANSFERS.map((t) => ({ kind: t.kind, amount: t.amount }))
-  const check = intermediaryBalance(dLots, dUnits, transfers)
+  const check = intermediaryBalance(dLots, dUnits, dTransfers)
   if (check.balance !== balance.balance_vnd) throw new Error('demo: công nợ không khớp domain')
+
+  // CR-005 sổ quỹ: bút toán tự sinh (như trigger DB: khoản thu, khoản Đã chuyển > 0, ship shop chịu khi đã gửi, ship chiều về)
+  const cashEntries: CashEntryRow[] = []
+  const cash = (id: string, date: string, e: Omit<CashEntryRow, keyof ReturnType<typeof base> | 'entry_date' | 'expense_category' | 'note' | 'payment_id' | 'txn_id' | 'order_id' | 'lot_id'> & Partial<CashEntryRow>) =>
+    cashEntries.push({ expense_category: null, note: null, payment_id: null, txn_id: null, order_id: null, lot_id: null, ...base(id, date, 12), entry_date: date, ...e })
+  for (const p of payments) {
+    const refund = p.kind === 'refund'
+    cash(`demo-ce-${p.id}`, p.paid_at, { direction: refund ? 'out' : 'in', kind: refund ? 'customer_refund' : 'customer_payment', amount_vnd: p.amount_vnd, note: p.note, payment_id: p.id, order_id: p.order_id, is_auto: true })
+  }
+  for (const t of txns) {
+    if (t.kind === 'transfer' && t.amount_vnd > 0) cash(`demo-ce-${t.id}`, t.txn_date, { direction: 'out', kind: 'intermediary', amount_vnd: t.amount_vnd, note: t.note, txn_id: t.id, lot_id: t.lot_id, is_auto: true })
+  }
+  for (const o of orders) {
+    if (['shipped', 'completed', 'returned'].includes(o.status) && o.ship_fee_payer === 'shop' && o.ship_fee_vnd > 0)
+      cash(`demo-ce-ship-${o.id}`, o.shipped_at!, { direction: 'out', kind: 'ship_shop', amount_vnd: o.ship_fee_vnd, order_id: o.id, is_auto: true })
+    if (o.status === 'returned' && o.return_ship_fee_vnd > 0)
+      cash(`demo-ce-ret-${o.id}`, o.returned_at!, { direction: 'out', kind: 'return_ship', amount_vnd: o.return_ship_fee_vnd, order_id: o.id, is_auto: true })
+  }
+  CASH_MANUAL.forEach((m, i) => cash(`demo-ce-m${i + 1}`, ago(m.ago), { direction: m.dir, kind: m.kind, amount_vnd: m.amount, expense_category: m.cat ?? null, note: m.note ?? null, is_auto: false }))
+  cashEntries.sort((a, b) => a.entry_date.localeCompare(b.entry_date) || a.created_at.localeCompare(b.created_at))
+  const dCash: CashEntry[] = cashEntries.map((e) => ({ date: e.entry_date, direction: e.direction, kind: e.kind, amount: e.amount_vnd }))
+  const cb = cashBalance(dCash)
+  const cashBal: CashBalanceRow = { total_in_vnd: cb.totalIn, total_out_vnd: cb.totalOut, balance_vnd: cb.balance, entry_count: cashEntries.length }
+  // kiểm chéo: bút toán tự sinh dựng ở trên = luật domain (autoCashEntries) ⇒ số dư khớp
+  const manualCash = dCash.filter((e) => e.kind === 'expense' || e.kind === 'capital_in' || e.kind === 'capital_out' || e.kind === 'adjustment')
+  if (cashBalance([...autoCashEntries(dOrders, dTransfers), ...manualCash]).balance !== cb.balance) throw new Error('demo: sổ quỹ không khớp domain')
+  const sumKind = (rows: CashEntryRow[], ...kinds: CashKindDb[]) => rows.reduce((a, e) => a + (kinds.includes(e.kind) ? e.amount_vnd : 0), 0)
+  const cashMonthly: CashMonthlyRow[] = cashByMonth(dCash).map((m) => {
+    const rows = cashEntries.filter((e) => e.entry_date.slice(0, 7) === m.month.slice(0, 7))
+    return {
+      month: m.month, in_vnd: m.in, out_vnd: m.out, net_vnd: m.net,
+      customer_in_vnd: sumKind(rows, 'customer_payment'), refund_out_vnd: sumKind(rows, 'customer_refund'), intermediary_out_vnd: sumKind(rows, 'intermediary'),
+      ship_out_vnd: sumKind(rows, 'ship_shop', 'return_ship'), expense_out_vnd: sumKind(rows, 'expense'), capital_in_vnd: sumKind(rows, 'capital_in'),
+      capital_out_vnd: sumKind(rows, 'capital_out'),
+      adjustment_net_vnd: rows.reduce((a, e) => a + (e.kind === 'adjustment' ? (e.direction === 'in' ? e.amount_vnd : -e.amount_vnd) : 0), 0),
+    }
+  })
 
   // v_suggestions
   const active = lots.filter((l) => l.status !== 'cancelled')
@@ -395,6 +453,7 @@ export function buildDemoData(): DbData {
     user_id: UID, ai_scan_enabled: true, ai_scan_monthly_cap: 100, ai_confidence_threshold: 0.7, default_ship_fee_payer: 'customer',
     default_buying_fee_pct: 3, aging_warn_days: DEFAULT_AGING.warnDays, aging_alert_days: DEFAULT_AGING.alertDays,
     lot_late_days: DEFAULT_LOT_LATE_DAYS, bank_info: 'Vietcombank 0123456789 · NGUYEN VAN A (mẫu)', updated_at: stamp(ago(30)), version: 1,
+    bank_bin: '970436', bank_account_no: '0123456789', bank_account_name: 'NGUYEN VAN A', // CR-005 VietQR mẫu (Vietcombank)
   }
 
   const notes: NoteRow[] = NOTES.map((n, i) => {
@@ -409,5 +468,6 @@ export function buildDemoData(): DbData {
   return {
     models, units, sellers, lots, txns, customers, orders, orderLines, payments, settings, notes,
     unitView, modelStock, lotSummary, orderSummary, balance, suggestions, lotCode, orderCode,
+    cashEntries, cashBalance: cashBal, cashMonthly,
   }
 }

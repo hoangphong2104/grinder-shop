@@ -1,10 +1,10 @@
-// Dùng chung cho nhóm Tổng quan / Kho / Công nợ / Báo cáo / Người bán / Model / Cài đặt (CR-001: quản lý từng chiếc).
+// Dùng chung cho nhóm Tổng quan / Kho / Sổ quỹ / Model / Cài đặt (CR-001: quản lý từng chiếc).
 // CR-004: dòng danh sách 2 dòng (UI-M1, research §1.3) - Row2 + UnitRow / LotRow / OrderRow.
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import type { AgingLevelDb, DbData, LotRow as LotDbRow, ModelStockRow, OrderSummaryRow, UnitStatusDb, UnitViewRow } from '../../data/types.ts'
 import { supabase } from '../../lib/supabase.ts'
-import { CONDITION_LABEL, LotChip, OrderChip, UNIT_LABEL } from '../../ui/status.tsx'
+import { CONDITION_LABEL, LotChip, OrderChip, unitLabel } from '../../ui/status.tsx'
 import { todayVn, tr, vnd } from '../../ui/format.ts'
 import '../../styles/overview.css'
 
@@ -101,9 +101,11 @@ export function unitMatch(u: UnitViewRow, q: string): false | 'code' | 'serial' 
 export const holderCode = (d: DbData, u: UnitViewRow) => (u.holding_order_id ? d.orderCode[u.holding_order_id] : undefined)
 
 const UNIT_TONE: Record<UnitStatusDb, string> = { incoming: 'way', in_stock: 'ok', reserved: 'hold', sold: 'neu', cancelled: 'neu' }
-/** Chip trạng thái chiếc rút gọn ≤ 2 từ (research §2.4): "Giữ D-005" / "Bán D-005". */
+/** Chip trạng thái chiếc rút gọn (CR-005): Kho TQ / Kho VN / Kho Lumi / "Giữ D-005" / Vận chuyển tới khách / "Đã giao D-005". */
 export function UnitChipShort({ u, holder }: { u: UnitViewRow; holder?: string }) {
-  const t = u.status === 'reserved' && holder ? `Giữ ${holder}` : u.status === 'sold' && holder ? `Bán ${holder}` : UNIT_LABEL[u.status]
+  const t = u.status === 'reserved' && holder ? `Giữ ${holder}`
+    : u.status === 'sold' && u.holding_order_status === 'completed' && holder ? `Đã giao ${holder}`
+      : unitLabel(u.status, u.lot_status, u.holding_order_status)
   return <span className={`pill ${UNIT_TONE[u.status]}`}>{t}</span>
 }
 
@@ -165,7 +167,14 @@ export const Ident = ({ id, text }: { id: ReactNode; text?: ReactNode }) => <><b
 export const Tx = ({ children, className }: { children: ReactNode; className?: string }) => <span className={`tx ${className ?? ''}`}>{children}</span>
 /** Tiền âm đỏ, có dấu −. */
 export const Money = ({ n, prefix }: { n: number | null | undefined; prefix?: string }) =>
-  <span className={n != null && n < 0 ? 'neg' : ''}>{prefix}{tr(n)}</span>
+  <span className={n != null && n < 0 ? 'neg' : ''}>{prefix}{n != null && n < 0 ? `−${tr(-n)}` : tr(n)}</span>
+/** CR-005 ý 12: lãi luôn có dấu "+2.592k" / "−35k" (0 ⇒ "0k"). */
+export const signed = (n: number) => (n > 0 ? `+${tr(n)}` : n < 0 ? `−${tr(-n)}` : tr(0))
+export const signedVnd = (n: number) => (n > 0 ? `+${vnd(n)}` : n < 0 ? `−${vnd(-n)}` : vnd(0))
+/** Lãi có dấu, màu xanh / đỏ; est = lãi chưa chốt ⇒ thêm chữ "dự kiến"; full = đủ đồng. */
+export const Profit = ({ n, est, full, prefix }: { n: number | null | undefined; est?: boolean; full?: boolean; prefix?: string }) =>
+  n == null ? <span>-</span>
+    : <span className={n < 0 ? 'neg' : n > 0 ? 'pos' : ''}>{prefix}{full ? signedVnd(n) : signed(n)}{est ? ' dự kiến' : ''}</span>
 
 /** Dòng 1 chiếc (research §2.4): mã + model … giá bán · chip + tuổi tồn … nhập (đã bán: lãi). */
 export function UnitRow({ d, u, right2, sub }: { d: DbData; u: UnitViewRow; right2?: ReactNode; sub?: ReactNode }) {
@@ -181,7 +190,7 @@ export function UnitRow({ d, u, right2, sub }: { d: DbData; u: UnitViewRow; righ
       a={<Ident id={u.code} text={u.model_name} />}
       b={unitPrice(u) != null ? tr(unitPrice(u)) : '-'}
       c={<><UnitChipShort u={u} holder={holder} />{cond}<Tx>{sub ?? age}</Tx></>}
-      d={right2 ?? (u.status === 'sold' ? <Money n={p.value} prefix="lãi " /> : <>nhập {tr(u.cost_vnd)}</>)} />
+      d={right2 ?? (u.status === 'sold' ? <Profit n={p.value} prefix="lãi " /> : <>nhập {tr(u.cost_vnd)}</>)} />
   )
 }
 
@@ -190,7 +199,7 @@ export function LotRow({ d, l, noChip }: { d: DbData; l: LotDbRow; noChip?: bool
   const s = d.lotSummary.find((x) => x.lot_id === l.id)
   const open = l.status !== 'received' && l.status !== 'cancelled'
   const when = open ? `đặt ${daysSince(l.ordered_at) ?? 0} ngày` : l.status === 'received' ? `nhận ${dmyShort(l.received_at)}` : `đặt ${dmyShort(l.ordered_at)}`
-  const warn = open && l.ship_fee_vnd == null && (l.status === 'at_forwarder' || l.status === 'vn_shipping') ? 'thiếu ship' : s?.is_lot_late ? 'về trễ' : null
+  const warn = open && l.ship_fee_vnd == null && l.status === 'vn_warehouse' ? 'thiếu ship' : s?.is_lot_late ? 'về trễ' : null
   return (
     <Row2 to={`/lo/${l.id}`}
       a={<Ident id={d.lotCode[l.id] ?? 'Lô'} text={lotModelsText(d, l.id, 'short')} />}
@@ -205,7 +214,7 @@ const dmyShort = (iso: string | null | undefined) => (iso ? `${iso.slice(8, 10)}
 export function PayText({ o }: { o: OrderSummaryRow }) {
   if (o.refund_due_vnd > 0) return <span className="neg">hoàn {tr(o.refund_due_vnd)}</span>
   if (o.status === 'cancelled') return <span>-</span>
-  if (o.status === 'returned') return <Money n={o.profit_vnd} prefix="lãi " />
+  if (o.status === 'returned') return <Profit n={o.profit_vnd} prefix="lãi " />
   if (o.cod_pending_vnd > 0) return <span className="age-warn">COD {tr(o.cod_pending_vnd)}</span>
   if (o.receivable_vnd > 0) return <span className="neg">còn {tr(o.receivable_vnd)}</span>
   if (o.receivable_vnd < 0) return <span>trả dư {tr(-o.receivable_vnd)}</span>

@@ -9,7 +9,7 @@ import { Icon } from '../ui/icons.tsx'
 import { Shell } from '../ui/Shell.tsx'
 import { ORDER_LABEL, OrderChip } from '../ui/status.tsx'
 import { dmy, todayVn, tr, vnd } from '../ui/format.ts'
-import { codesText, daysBetween, fold, makeLookup, ORDER_FILTERS, parseOrderFilter, payState, sortOrders, useIsDesk, type Lookup, type OrderFilter } from './orders/common.ts'
+import { codesText, daysBetween, fold, makeLookup, ORDER_FILTERS, parseOrderFilter, payState, profitStr, sortOrders, useIsDesk, type Lookup, type OrderFilter } from './orders/common.ts'
 import { OrderRow2 } from './orders/OrderRow.tsx'
 import '../styles/orders.css'
 
@@ -131,7 +131,7 @@ export default function Orders() {
       summary = <div className="o-sum"><span>Cần hoàn khách</span><b className="tone-bad">{tr(os.reduce((a, s) => a + s.refund_due_vnd, 0))}</b></div>
     }
     const EMPTY: Record<OrderFilter, string> = {
-      todo: 'Không có đơn cần xử lý.', pre: 'Không có đơn đặt trước.', wait: 'Không có đơn chờ gửi.', sent: 'Không có đơn đang gửi.',
+      todo: 'Không có đơn cần xử lý.', pre: 'Không có đơn đặt trước.', wait: 'Không có đơn chờ gửi.', sent: 'Không có đơn đang vận chuyển tới khách.',
       cod: 'Không có tiền COD đang chờ hãng chuyển về.', due: 'Không có đơn nào còn nợ.', refund: 'Không có đơn cần hoàn tiền.',
       ret: 'Chưa có đơn hoàn hàng.', all: 'Không có đơn.',
     }
@@ -162,7 +162,7 @@ export default function Orders() {
                         : s.receivable_vnd > 0 ? <span className="req">{vnd(s.receivable_vnd)}</span>
                           : s.receivable_vnd < 0 ? <span className="muted">trả dư {vnd(-s.receivable_vnd)}</span> : '-'}
                     </td>
-                    <td className="r">{p.value == null ? '-' : p.est ? <span className="muted">~{vnd(p.value)}</span> : vnd(p.value)}</td>
+                    <td className={`r ${(p.value ?? 0) < 0 ? 'tone-bad' : ''}`}>{p.est ? <span className="muted">{profitStr(p.value, true, true)}</span> : profitStr(p.value, false, true)}</td>
                   </tr>
                 )
               })}

@@ -62,7 +62,7 @@ select t.err(format('select public.receive_lot(%L, 300000, %L, null, %L)', :'l1'
              'CR-004: receive_lot p_units trùng chiếc → DUPLICATE_UNIT');
 select t.err(format('select public.receive_lot(%L, 300000, %L, null, %L)', :'l1', :'d65', '{"unit_id":"x"}'), 'INVALID_INPUT',
              'CR-004: receive_lot p_units không phải mảng → INVALID_INPUT');
-select t.eq((select status || '/' || (ship_fee_vnd is null) from public.lots where id = :'l1'), 'ordered/true',
+select t.eq((select (status in ('ordered','cn_warehouse')) || '/' || (ship_fee_vnd is null) from public.lots where id = :'l1'), 'true/true',
             'CR-004: receive_lot lỗi p_units ⇒ lô không đổi (rollback)');
 select x::text as g_recv1 from (select public.receive_lot(p_lot_id => :'l1', p_ship_fee_vnd => 300000, p_received_at => :'d65',
     p_units => jsonb_build_array(jsonb_build_object('unit_id', :'g_u1', 'condition', 'used', 'serial_no', ' SN-A '),

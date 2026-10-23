@@ -16,7 +16,7 @@ const EMPTY_BAL = { total_payable_vnd: 0, total_transferred_vnd: 0, total_adjust
 async function fetchAll(): Promise<DbData> {
   const q = <T,>(p: PromiseLike<{ data: T | null; error: unknown }>) =>
     Promise.resolve(p).then(({ data, error }) => { if (error) throw error; return data as T })
-  const [models, units, sellers, lots, txns, customers, orders, orderLines, payments, settings, unitView, modelStock, lotSummary, orderSummary, balance, suggestions, notes] =
+  const [models, units, sellers, lots, txns, customers, orders, orderLines, payments, settings, unitView, modelStock, lotSummary, orderSummary, balance, suggestions, notes, cashEntries, cashBalance, cashMonthly] =
     await Promise.all([
       q(supabase.from('models').select('*').order('sort_order').order('created_at')),
       q(supabase.from('units').select('*').order('code')),
@@ -35,10 +35,13 @@ async function fetchAll(): Promise<DbData> {
       q(supabase.from('v_intermediary_balance').select('*').maybeSingle()),
       q(supabase.from('v_suggestions').select('*').maybeSingle()),
       q(supabase.from('notes').select('*')),
+      q(supabase.from('cash_entries').select('*').order('entry_date', { ascending: false }).order('created_at', { ascending: false })),
+      q(supabase.from('v_cash_balance').select('*').maybeSingle()),
+      q(supabase.from('v_cash_monthly').select('*')),
     ])
   const code = (rows: { id: string }[], p: string) => Object.fromEntries(rows.map((r, i) => [r.id, `${p}-${String(i + 1).padStart(3, '0')}`]))
   return {
-    models, units, sellers, lots, txns, customers, orders, orderLines, payments, settings, unitView, modelStock, lotSummary, orderSummary, notes,
+    models, units, sellers, lots, txns, customers, orders, orderLines, payments, settings, unitView, modelStock, lotSummary, orderSummary, notes, cashEntries, cashBalance: cashBalance ?? undefined, cashMonthly,
     balance: balance ?? EMPTY_BAL,
     suggestions: suggestions ?? { last_exchange_rate: null, last_ship_fee_per_unit_vnd: null, last_buying_fee_pct: null },
     lotCode: code(lots, 'L'), orderCode: code(orders, 'D'),

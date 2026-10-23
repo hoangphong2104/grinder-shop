@@ -11,9 +11,6 @@ import Orders from '../screens/Orders.tsx'
 import OrderDetail from '../screens/OrderDetail.tsx'
 import OrderNew from '../screens/OrderNew.tsx'
 import Debt from '../screens/Debt.tsx'
-import Reports from '../screens/Reports.tsx'
-import Sellers from '../screens/Sellers.tsx'
-import SellerDetail from '../screens/SellerDetail.tsx'
 import Customers from '../screens/Customers.tsx'
 import Catalog from '../screens/Catalog.tsx'
 import Settings from '../screens/Settings.tsx'
@@ -41,9 +38,6 @@ export default function App() {
           <Route path="/don/:id" element={<OrderDetail />} />
           <Route path="/don/:id/sua" element={<OrderNew />} />
           <Route path="/congno" element={<Debt />} />
-          <Route path="/baocao" element={<Reports />} />
-          <Route path="/nguoiban" element={<Sellers />} />
-          <Route path="/nguoiban/:id" element={<SellerDetail />} />
           <Route path="/khach" element={<Customers />} />
           <Route path="/danhmuc" element={<Catalog />} />
           <Route path="/caidat" element={<Settings />} />

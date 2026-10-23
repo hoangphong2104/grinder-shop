@@ -2,6 +2,7 @@
 // danh sách chiếc của lô (v_units, CR-001), thông tin tin Goofish, huỷ.
 // CR-004: thanh dính đáy (chuyển bước + phí ship), menu ⋯ (Sửa / Ghi chú / Nhận ngay / Huỷ), chip Về trễ + đặt N ngày,
 // dòng chiếc 2 dòng có tình trạng, khối "Giá nhập từng chiếc" (LOT-M4, LOT-S2, LOT-S3, KHO-S3).
+// CR-005: Kho TQ → Kho VN → Kho Lumi; đã trả / còn nợ trung gian + nút "Đã thanh toán" (pay_lot); người bán hiện ngay ở đây (bỏ màn Người bán).
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useData, useStore } from '../data/store.tsx'
@@ -16,6 +17,7 @@ import { unitCostBeforeShip } from '../domain/index.ts'
 import { errorMessage } from '../data/errors.ts'
 import { codesText, daysOpen, isOpen, LOT_SHORT, lotFeePct, lotWarnings, modelsText, nextStatus, sellerOf, summaryOf, UnitCost, UnitCounts, UnitRow2, unitsOfLot, useIsDesk } from './lots/common.tsx'
 import { useLotFlow } from './lots/LotFlow.tsx'
+import { PayLotButton } from './lots/PayLot.tsx'
 import '../styles/lots.css'
 
 /** Link tin Goofish an toàn (chỉ http/https); không có link thì dựng từ item id. */
@@ -83,7 +85,7 @@ export default function LotDetail() {
     <>
       <button className="btn btn-ghost" id="lot-ship" style={{ flex: 1 }} onClick={() => flow.shipFee(l)}>Phí ship</button>
       <button className="btn btn-primary" id="lot-next" style={{ flex: 2 }} disabled={flow.busy === l.id} onClick={() => flow.next(l)}>
-        {flow.busy === l.id ? <><span className="spin" /> Đang chuyển…</> : next === 'received' ? 'Nhận vào kho' : `Chuyển sang: ${LOT_SHORT[next]}`}
+        {flow.busy === l.id ? <><span className="spin" /> Đang chuyển…</> : next === 'received' ? 'Nhận vào Kho Lumi' : `Chuyển sang: ${LOT_SHORT[next]}`}
       </button>
     </>
   ) : undefined
@@ -113,9 +115,14 @@ export default function LotDetail() {
               <div className="ln"><span>Phí ship về VN</span><span>{l.ship_fee_vnd == null ? <span className="req">chưa nhập</span> : vnd(l.ship_fee_vnd)}</span></div>
               <div className="ln"><span>Ship / chiếc ({totalQty})</span><span>{sum?.ship_per_unit_vnd != null ? vnd(sum.ship_per_unit_vnd) : '-'}</span></div>
               <div className="ln total"><span>Phải trả trung gian</span><span>{vnd(sum?.payable_vnd ?? 0)}</span></div>
-              {l.status === 'received' && <div className="formula">Lô đã nhận: phí mua hộ và tỷ giá đã khoá (sai thì ghi Điều chỉnh công nợ).</div>}
+              {l.status !== 'cancelled' && sum && <>
+                <div className="ln"><span>Đã trả trung gian</span><span>{vnd(sum.paid_vnd)}</span></div>
+                <div className="ln"><span><b>{sum.outstanding_vnd < 0 ? 'Trả dư' : 'Còn nợ trung gian'}</b></span><span className={sum.outstanding_vnd > 0 ? 'req' : 'ok-t'}><b>{sum.outstanding_vnd === 0 ? 'đã trả đủ' : vnd(Math.abs(sum.outstanding_vnd))}</b></span></div>
+              </>}
+              {l.status === 'received' && <div className="formula">Lô đã nhận: phí mua hộ và tỷ giá đã khoá (sai thì ghi Điều chỉnh nợ ở Sổ quỹ).</div>}
               {provisional && l.status !== 'cancelled' && <div className="formula">Giá nhập ₫ đang tạm tính - chưa gồm phí ship về VN.</div>}
             </div>
+            <PayLotButton lotId={l.id} id="lot-pay" className="btn btn-primary btn-block" />
             {l.status === 'received' && (
               <button className="btn btn-ghost btn-block" id="lot-ship-fix" onClick={() => flow.shipFee(l)}>Sửa phí ship</button>
             )}
@@ -126,8 +133,9 @@ export default function LotDetail() {
               <dd>{href ? <a className="link-btn small lot-ext" href={href} target="_blank" rel="noopener noreferrer">Mở tin <Icon name="ext" /></a> : '-'}</dd>
               <dt>Tiêu đề</dt><dd className="small">{l.listing_title || '-'}</dd>
               <dt>Người bán</dt>
-              <dd>{s ? <><Link className="link-btn small" to={`/nguoiban/${s.id}`}>{s.nickname}</Link>{s.is_avoided && <> <span className="pill err">tránh</span></>}</> : '-'}</dd>
+              <dd>{s ? <>{s.profile_url && /^https?:\/\//i.test(s.profile_url) ? <a className="link-btn small lot-ext" href={s.profile_url} target="_blank" rel="noopener noreferrer">{s.nickname} <Icon name="ext" /></a> : <b>{s.nickname}</b>}{s.is_avoided && <> <span className="pill bad">tránh</span></>}</> : '-'}</dd>
               <dt>Khu vực</dt><dd>{s?.region || '-'}</dd>
+              {s?.reputation_note && <><dt>Uy tín người bán</dt><dd className="small">{s.reputation_note}</dd></>}
               <dt>Ngày đặt</dt><dd>{dmy(l.ordered_at)}{days != null ? ` · ${days} ngày` : ''}</dd>
               <dt>Ngày nhận</dt><dd>{dmy(l.received_at)}</dd>
               <dt>Ghi chú</dt><dd className="small">{l.note || '-'}</dd>
@@ -153,7 +161,7 @@ export default function LotDetail() {
         <Sheet title={`Thao tác ${d.lotCode[l.id] ?? 'lô'}`} onClose={() => setMenu(false)}>
           <div className="list">
             {open && <button className="li" id="m-edit" onClick={act(() => nav(`/lo/${l.id}/sua`))}><div className="main"><b>Sửa lô</b><div className="s">Link, người bán, tỷ giá, nhóm chiếc</div></div><Icon name="chev" size={16} /></button>}
-            {open && next !== 'received' && <button className="li" id="m-receive" onClick={act(() => flow.receive(l))}><div className="main"><b>Nhận vào kho ngay</b><div className="s">Bỏ qua các bước còn lại</div></div><Icon name="chev" size={16} /></button>}
+            {open && next !== 'received' && <button className="li" id="m-receive" onClick={act(() => flow.receive(l))}><div className="main"><b>Nhận vào Kho Lumi ngay</b><div className="s">Bỏ qua các bước còn lại</div></div><Icon name="chev" size={16} /></button>}
             <button className="li" id="m-note" onClick={act(() => setNoteOpen(true))}><div className="main"><b>Ghi chú lô</b><div className="s">{l.note || 'Chưa có ghi chú'}</div></div><Icon name="chev" size={16} /></button>
             {open && <button className="li menu-danger" id="m-cancel" onClick={act(() => flow.cancel(l))}><div className="main"><b>Huỷ lô</b><div className="s">Không hoàn tác được</div></div></button>}
           </div>
@@ -183,7 +191,7 @@ function CostBreakdown({ units, rate, feePct, shipPer }: { units: UnitViewRow[];
           const base = unitCostBeforeShip({ priceCny: g.cny }, { rate, buyingFeePct: feePct })
           return (
             <div className="cb" key={`${g.prefix}|${g.cny}`}>
-              <div className="ln"><span>{codesText(g.codes, 3)}</span><span>{vnd(g.cost)}{shipPer == null ? '~' : ''}</span></div>
+              <div className="ln"><span>{codesText(g.codes, 3)}</span><span>{vnd(g.cost)}{shipPer == null ? ' + ship' : ''}</span></div>
               <div className="formula">{cny(g.cny)} × {rate.toLocaleString('vi-VN')}{feePct > 0 ? ` + ${pct(feePct)}` : ''} = {tr(base)} + ship {shipPer != null ? tr(shipPer) : 'chưa có'}</div>
             </div>
           )
@@ -194,7 +202,7 @@ function CostBreakdown({ units, rate, feePct, shipPer }: { units: UnitViewRow[];
             <div className="formula">tự tính {vnd(u.cost_vnd_auto)}</div>
           </div>
         ))}
-        <div className="formula cb-f">= giá ¥ × tỷ giá × (1 + phí {pct(feePct)}) + ship lô ÷ {units.length} chiếc{shipPer == null ? ' · ~ = chưa có phí ship' : ''}</div>
+        <div className="formula cb-f">= giá ¥ × tỷ giá × (1 + phí {pct(feePct)}) + ship lô ÷ {units.length} chiếc{shipPer == null ? ' · chưa có phí ship' : ''}</div>
       </div>
     </>
   )
@@ -223,8 +231,8 @@ function UnitTable({ d, units }: { d: DbData; units: UnitViewRow[] }) {
                 <td className="r">{u.list_price_vnd != null ? vnd(u.list_price_vnd) : '-'}</td>
                 <td>
                   {u.holding_order_id
-                    ? <Link to={`/don/${u.holding_order_id}`} onClick={(e) => e.stopPropagation()} aria-label={`Mở đơn ${h ?? ''}`}><UnitChip s={u.status} holder={h} /></Link>
-                    : <UnitChip s={u.status} />}
+                    ? <Link to={`/don/${u.holding_order_id}`} onClick={(e) => e.stopPropagation()} aria-label={`Mở đơn ${h ?? ''}`}><UnitChip s={u.status} holder={h} lot={u.lot_status} order={u.holding_order_status} /></Link>
+                    : <UnitChip s={u.status} lot={u.lot_status} />}
                 </td>
               </tr>
             )

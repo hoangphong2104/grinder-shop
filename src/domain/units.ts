@@ -3,8 +3,8 @@
  * derived status (A5), days in stock, per-model stock counts (A9) and lot guards
  * (BR-02 / Q-011 receive, A10 / Q-014 edit lock, cancel). Pure: inputs are never mutated.
  */
-import type { AgingLevel, AgingThresholds, Cny, IsoDate, Lot, Model, Order, Result, RuleError, Unit, UnitStatus, Vnd } from './types.ts';
-import { DEFAULT_AGING, DEFAULT_LOT_LATE_DAYS, LOT_STATUS_LABEL, UNIT_STATUS_LABEL, fail, ok } from './types.ts';
+import type { AgingLevel, AgingThresholds, Cny, IsoDate, Lot, LotStatus, Model, Order, OrderStatus, Result, RuleError, Unit, UnitStatus, Vnd } from './types.ts';
+import { DEFAULT_AGING, DEFAULT_LOT_LATE_DAYS, LOT_STATUS_LABEL, ORDER_STATUS_LABEL, UNIT_STATUS_LABEL, fail, ok } from './types.ts';
 import { unitCosts, type UnitCost } from './cost.ts';
 import { validateLotGroup } from './validate.ts';
 
@@ -110,6 +110,17 @@ function statusOf(lot: Pick<Lot, 'status'>, holder: Order | null | undefined): U
  */
 export const unitStatus = (unit: Pick<Unit, 'id'>, lot: Pick<Lot, 'status'>, orders: readonly Order[]): UnitStatus =>
   statusOf(lot, holdingOrder(unit.id, orders));
+
+/**
+ * CR-005 - where a unit physically is / what happened to it, in the owner's words:
+ * incoming ⇒ "Kho TQ" / "Kho VN" (by lot status) · in_stock ⇒ "Kho Lumi" · reserved ⇒ "Đã giữ" · sold ⇒ the order's label
+ * ("Vận chuyển tới khách" / "Đã giao") · cancelled ⇒ "Huỷ".
+ */
+export function unitLocationLabel(status: UnitStatus, lotStatus: LotStatus, holderStatus?: OrderStatus | null): string {
+  if (status === 'incoming' && (lotStatus === 'cn_warehouse' || lotStatus === 'vn_warehouse')) return LOT_STATUS_LABEL[lotStatus];
+  if (status === 'sold' && holderStatus) return ORDER_STATUS_LABEL[holderStatus];
+  return UNIT_STATUS_LABEL[status];
+}
 
 /** Display text; a reserved unit shows the order holding it (D4): "Đã giữ cho D-005". */
 export function unitStatusLabel(status: UnitStatus, holder?: Pick<Order, 'id' | 'code'> | null): string {
@@ -256,6 +267,10 @@ export interface ModelStock {
   lowStock: boolean;
   /** Giá trị tồn = Σ giá nhập ₫ hiệu lực of received, not-sold units (CR §3 v_model_stock). */
   stockValue: Vnd;
+  /** CR-005 - vốn hàng đang về = Σ giá nhập ₫ hiệu lực of units whose lot is not received yet (incl. reserved by a pre-order). */
+  incomingValue: Vnd;
+  /** CR-005 - vốn nằm ở hàng = stockValue + incomingValue. */
+  totalCapital: Vnd;
 }
 
 /** A9 - stock figures per model, in the order of `models`. Same input requirements as `buildUnitViews`. */
@@ -264,7 +279,10 @@ export function modelStocks(models: readonly Model[], units: readonly Unit[], lo
   const costs = unitCosts(units, lots);
   const holders = holderIndex(orders);
   return models.map((m) => {
-    const s: ModelStock = { modelId: m.id, inStock: 0, incoming: 0, reserved: 0, sold: 0, onHand: 0, sellable: 0, lowStock: false, stockValue: 0 };
+    const s: ModelStock = {
+      modelId: m.id, inStock: 0, incoming: 0, reserved: 0, sold: 0, onHand: 0, sellable: 0, lowStock: false, stockValue: 0,
+      incomingValue: 0, totalCapital: 0,
+    };
     for (const u of units) {
       if (u.modelId !== m.id) continue;
       const lot = lotById.get(u.lotId)!;
@@ -276,9 +294,12 @@ export function modelStocks(models: readonly Model[], units: readonly Unit[], lo
       if (lot.status === 'received' && status !== 'sold') {
         s.onHand++;
         s.stockValue += costs.get(u.id)!.effective;
+      } else if (status === 'incoming' || status === 'reserved') {
+        s.incomingValue += costs.get(u.id)!.effective; // lô chưa nhận (Kho TQ / Kho VN), chưa huỷ
       }
     }
     s.sellable = s.inStock + s.incoming;
+    s.totalCapital = s.stockValue + s.incomingValue;
     s.lowStock = s.sellable <= m.lowStockThreshold;
     return s;
   });

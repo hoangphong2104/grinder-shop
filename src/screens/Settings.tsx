@@ -10,16 +10,23 @@ import { isBuyingFeePct } from '../domain/index.ts'
 import { CONFLICT_MSG, useDesk, writeError } from './overview/common.tsx'
 import { readTheme, setTheme, type ThemeChoice } from './overview/theme.ts'
 import { exportExcel } from './overview/exportData.ts'
+import { accountNameNorm, BANKS, QrImg, useVietQr } from './orders/vietqr.tsx'
+import { checkVietQr } from '../domain/vietqr.ts'
+import { vnd } from '../ui/format.ts'
+import '../styles/orders.css'
 
 /** main.tsx gọi trước khi render để áp giao diện Sáng / Tối đã chọn. */
 export { applyStoredTheme } from './overview/theme.ts'
 
-type SettingsPatch = Partial<Pick<SettingsRow, 'ai_scan_enabled' | 'ai_scan_monthly_cap' | 'ai_confidence_threshold' | 'default_ship_fee_payer' | 'default_buying_fee_pct' | 'aging_warn_days' | 'aging_alert_days' | 'lot_late_days' | 'bank_info'>>
+type SettingsPatch = Partial<Pick<SettingsRow, 'ai_scan_enabled' | 'ai_scan_monthly_cap' | 'ai_confidence_threshold' | 'default_ship_fee_payer' | 'default_buying_fee_pct' | 'aging_warn_days' | 'aging_alert_days' | 'lot_late_days' | 'bank_info' | 'bank_bin' | 'bank_account_no' | 'bank_account_name'>>
+/** Số tiền mẫu cho xem trước QR trong Cài đặt. */
+const QR_SAMPLE_VND = 100000
 
 /** Số % → chữ trong ô nhập kiểu VN: 2.5 → "2,5". */
 const pctStr = (n: number | null | undefined) => String(Number(n ?? 0)).replace('.', ',')
 
 // SC_15 Cài đặt: giao diện, AI quét tin, phí mua hộ mặc định (CR-003), mặc định ship, xuất Excel, tài khoản.
+// CR-005 ý 12: tài khoản nhận tiền VietQR (bank_bin / bank_account_no / bank_account_name) + xem trước mã QR.
 // CR-004: ngưỡng tuổi tồn (cam / đỏ) + lô về trễ (HOME-S1, KHO-S1, LOT-S2); STK in trong tin xác nhận đơn (DON-S2).
 export default function Settings() {
   const d = useData()
@@ -35,7 +42,13 @@ export default function Settings() {
   const [alert, setAlert] = useState(String(st?.aging_alert_days ?? 60))
   const [late, setLate] = useState(String(st?.lot_late_days ?? 21))
   const [bank, setBank] = useState(st?.bank_info ?? '')
-  const [errs, setErrs] = useState<{ cap?: string; conf?: string; fee?: string; warn?: string; alert?: string; late?: string; bank?: string; form?: string }>({})
+  // VietQR: chọn ngân hàng trong danh sách hoặc "Khác" (nhập BIN 6 số)
+  const knownBin = (b: string | null | undefined) => !!b && BANKS.some((x) => x.bin === b)
+  const [qBank, setQBank] = useState(st?.bank_bin ? (knownBin(st.bank_bin) ? st.bank_bin : 'other') : '')
+  const [qBin, setQBin] = useState(st?.bank_bin ?? '')
+  const [qNo, setQNo] = useState(st?.bank_account_no ?? '')
+  const [qName, setQName] = useState(st?.bank_account_name ?? '')
+  const [errs, setErrs] = useState<{ cap?: string; conf?: string; fee?: string; warn?: string; alert?: string; late?: string; bank?: string; qBin?: string; qNo?: string; qName?: string; form?: string }>({})
   const [busy, setBusy] = useState(false)
   const [scans, setScans] = useState<number | null>(null)
   const [exporting, setExporting] = useState(false)
@@ -50,6 +63,10 @@ export default function Settings() {
     setWarn(String(st?.aging_warn_days ?? 30)); setAlert(String(st?.aging_alert_days ?? 60)); setLate(String(st?.lot_late_days ?? 21))
   }, [st?.aging_warn_days, st?.aging_alert_days, st?.lot_late_days])
   useEffect(() => { setBank(st?.bank_info ?? '') }, [st?.bank_info])
+  useEffect(() => {
+    setQBank(st?.bank_bin ? (BANKS.some((x) => x.bin === st.bank_bin) ? st.bank_bin : 'other') : '')
+    setQBin(st?.bank_bin ?? ''); setQNo(st?.bank_account_no ?? ''); setQName(st?.bank_account_name ?? '')
+  }, [st?.bank_bin, st?.bank_account_no, st?.bank_account_name])
 
   // Lượt quét tháng này (cùng cách đếm với ai_scan_reserve: lỗi trước khi gọi AI không tính)
   useEffect(() => {
@@ -122,6 +139,27 @@ export default function Settings() {
     if (v.length > 500) { setErrs({ bank: 'Tối đa 500 ký tự.' }); return }
     save({ bank_info: v || null }, v ? 'Đã lưu số tài khoản' : 'Đã xoá số tài khoản')
   }
+
+  // VietQR: BIN đang chọn (danh sách / tự nhập), số TK bỏ khoảng trắng, tên HOA không dấu
+  const curBin = qBank === 'other' ? qBin.trim() : qBank
+  const curNo = qNo.replace(/\s/g, '')
+  const curName = accountNameNorm(qName).trim()
+  function saveQr() {
+    const e: typeof errs = {}
+    const empty = !qBank && !curNo && !curName
+    if (!empty) {
+      if (!/^[0-9]{6}$/.test(curBin)) e.qBin = qBank === 'other' ? 'Mã BIN gồm đúng 6 số (vd. 970436).' : 'Chọn ngân hàng.'
+      if (!/^[0-9A-Za-z]{1,19}$/.test(curNo)) e.qNo = 'Số tài khoản chỉ gồm chữ / số, tối đa 19 ký tự.'
+      if (!curName || curName.length > 50) e.qName = 'Nhập tên chủ tài khoản (chữ HOA không dấu, tối đa 50 ký tự) như trên app ngân hàng.'
+    }
+    setErrs(e)
+    if (e.qBin || e.qNo || e.qName) return
+    save(empty ? { bank_bin: null, bank_account_no: null, bank_account_name: null } : { bank_bin: curBin, bank_account_no: curNo, bank_account_name: curName },
+      empty ? 'Đã xoá tài khoản VietQR' : 'Đã lưu tài khoản VietQR')
+  }
+  const qrOk = !checkVietQr({ bin: curBin, accountNo: curNo })
+  const qrPreview = useVietQr(qrOk ? { bin: curBin, accountNo: curNo, accountName: curName } : null, QR_SAMPLE_VND, 'D-001', [])
+  const dirtyQr = curBin !== (st?.bank_bin ?? '') || curNo !== (st?.bank_account_no ?? '') || curName !== (st?.bank_account_name ?? '')
 
   function pickTheme(t: ThemeChoice) { setTheme(t); setThemeState(t) }
 
@@ -198,8 +236,45 @@ export default function Settings() {
         <p className="hint">Số ngày tồn trong Kho đổi màu cam / đỏ theo ngưỡng; Tổng quan nhắc chiếc tồn quá ngưỡng đỏ và lô đặt quá số ngày trên mà chưa nhận.</p>
         <button className="btn btn-ghost" id="days-save" style={{ alignSelf: 'flex-start' }} disabled={busy || !dirtyDays} onClick={saveDays}>Lưu ngưỡng ngày</button>
 
+        <p className="section-title">QR chuyển khoản (VietQR)</p>
+        <p className="hint" style={{ marginTop: 0 }}>Tài khoản nhận tiền của shop. Chi tiết đơn có nút “QR” tạo mã đúng số tiền còn phải thu, nội dung là mã đơn - khách quét bằng app ngân hàng.</p>
+        <div className="two ov-two">
+          <label className="f">Ngân hàng
+            <select className={`input ${errs.qBin ? 'invalid' : ''}`} id="qr-bank" value={qBank} onChange={(e) => setQBank(e.target.value)}>
+              <option value="">Chọn ngân hàng…</option>
+              {BANKS.map((b) => <option key={b.bin} value={b.bin}>{b.name}</option>)}
+              <option value="other">Khác (nhập mã BIN)</option>
+            </select>
+            {qBank !== 'other' && errs.qBin && <span className="field-err">{errs.qBin}</span>}
+          </label>
+          {qBank === 'other' && (
+            <label className="f">Mã BIN ngân hàng (6 số)
+              <input className={`input money ${errs.qBin ? 'invalid' : ''}`} id="qr-bin" inputMode="numeric" maxLength={6} value={qBin} placeholder="970436" onChange={(e) => setQBin(e.target.value.replace(/\D/g, ''))} />
+              {errs.qBin && <span className="field-err">{errs.qBin}</span>}
+            </label>
+          )}
+        </div>
+        <div className="two ov-two">
+          <label className="f">Số tài khoản
+            <input className={`input money ${errs.qNo ? 'invalid' : ''}`} id="qr-account-no" inputMode="numeric" autoComplete="off" maxLength={24} value={qNo} placeholder="0123456789" onChange={(e) => setQNo(e.target.value)} />
+            {errs.qNo && <span className="field-err">{errs.qNo}</span>}
+          </label>
+          <label className="f">Tên chủ tài khoản
+            <input className={`input ${errs.qName ? 'invalid' : ''}`} id="qr-account-name" autoComplete="off" autoCapitalize="characters" maxLength={50} value={qName} placeholder="NGUYEN VAN A"
+              onChange={(e) => setQName(accountNameNorm(e.target.value))} />
+            {errs.qName && <span className="field-err">{errs.qName}</span>}
+          </label>
+        </div>
+        <div className="set-qr">
+          {qrPreview.img
+            ? <QrImg src={qrPreview.img.dataUrl} label="Mã QR xem trước" />
+            : <div className="note-box" style={{ flex: 1 }}><span>Chọn ngân hàng và nhập số tài khoản để xem trước mã QR.</span></div>}
+          {qrPreview.img && <p className="hint" style={{ margin: 0, flex: 1, minWidth: 160 }}>Mã mẫu {vnd(QR_SAMPLE_VND)}, nội dung “D-001”. Thử quét bằng app ngân hàng: phải hiện đúng ngân hàng, số TK và tên chủ tài khoản trước khi lưu.</p>}
+        </div>
+        <button className="btn btn-ghost" id="qr-save-settings" style={{ alignSelf: 'flex-start' }} disabled={busy || !dirtyQr} onClick={saveQr}>Lưu tài khoản VietQR</button>
+
         <p className="section-title">Đơn bán</p>
-        <label className="f">Số tài khoản (in trong tin xác nhận đơn)
+        <label className="f">Dòng STK in trong tin xác nhận đơn (khi không dùng dòng VietQR)
           <textarea className={`input ${errs.bank ? 'invalid' : ''}`} id="bank-info" rows={3} maxLength={500} value={bank}
             placeholder="VD: STK 0123456789 · Vietcombank · NGUYEN VAN A" onChange={(e) => setBank(e.target.value)} />
           {errs.bank && <span className="field-err">{errs.bank}</span>}

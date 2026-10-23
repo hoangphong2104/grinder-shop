@@ -2,14 +2,16 @@
 
 Pure TypeScript, no runtime dependencies, no I/O. The DB is the source of truth; these functions power form
 previews and checks and must give the same numbers as the DB views (`v_units`, `v_model_stock`,
-`v_lot_summary`, `v_order_summary`, `v_intermediary_balance`) built from the same CR.
+`v_lot_summary`, `v_order_summary`, `v_intermediary_balance`, CR-005: `v_cash_balance`, `v_cash_monthly`) built from the same CR.
 
 Sources: `1.5-change-control/draft/CR_001_quan-ly-tung-chiec.md` (D1–D4, A1–A11, §3, §4) +
 `1.0-requirements/approved/data-and-rules-v1.md` (rules still in force: BR-02, BR-03, BR-10..BR-14, §6).
 
 Runs directly on Node ≥ 23.6 (built-in type stripping; erasable TS only, `.ts` import specifiers).
-Status / kind codes are the **DB codes** (`ordered…cancelled`, `preorder…cancelled`, `deposit|payment|refund`,
-`transfer|adjustment`, `customer|shop`); Vietnamese labels are in `*_LABEL` maps.
+Status / kind codes are the **DB codes** (lot `cn_warehouse|vn_warehouse|received|cancelled` since CR-005 - labels
+"Kho TQ / Kho VN / Kho Lumi / Huỷ"; order `preorder…returned` - `shipped` = "Vận chuyển tới khách", `completed` = "Đã giao";
+`deposit|payment|refund`, `transfer|adjustment`, `customer|shop`, cash kinds `customer_payment…adjustment`);
+Vietnamese labels are in `*_LABEL` maps.
 
 | File | Contents |
 |---|---|
@@ -20,6 +22,8 @@ Status / kind codes are the **DB codes** (`ordered…cancelled`, `preorder…can
 | `orders.ts` | `checkUnitAvailable`, `checkOrderUnits`, `orderStatusFor` (A6), `canShip` (A8, Q-007), `preordersToAutoConfirm` (A7), `checkCancelOrder`, `completeOrder` (BR-10, Q-010), `orderTotal` / `orderPaid` / `orderReceivable` / `orderRefundDue` / `customersTotalDue` / `totalRefundDue` (BR-10, Q-009, Q-015), `orderMargin` / `orderProfit` / `profitForMonth` / `profitByMonth` (BR-11 + A8); CR-004: `checkReturnOrder` / `returnOrder`, `orderDeposits`, `orderKept`, `returnedOrderProfit`, `orderProfitDate`, `orderCodReceived` / `orderCodPending` / `totalCodPending` |
 | `debt.ts` | `intermediaryBalance` (≈ `v_intermediary_balance`), `intermediaryDebt`, `totalPayable`, `transferEffect` (BR-12) |
 | `validate.ts` | Field checks: `validateModel`, `validateLot`, `validateLotGroup`, `validateUnit`, `validateOrder`, `validatePayment`, `validateTransfer` |
+| `cash.ts` | CR-005 sổ quỹ: `autoCashEntries` (≈ trigger DB), `cashBalance` (≈ `v_cash_balance`), `cashByMonth` (≈ `v_cash_monthly`), `cashEffect`, `cashKindDirection`, `isAutoCashKind` / `isManualCashKind`, `validateCashEntry`; trả trung gian theo lô: `lotPaid`, `lotOutstanding` (≈ `v_lot_summary.paid_vnd / outstanding_vnd`), `checkPayLot` (≈ RPC `pay_lot`) |
+| `vietqr.ts` | CR-005 VietQR: `buildVietQrPayload({bin, accountNo, accountName?, amount, content})` (EMVCo, GUID A000000727, QRIBFTTA, 704, VN), `crc16Ccitt` (CRC-16/CCITT-FALSE), `vietQrText` (bỏ dấu, ≤ 25), `checkVietQr` |
 | `index.ts` | Public re-exports |
 
 Rule violations come back as `{ ok: false, error: { code, rule, message, … } }`; nothing throws for user
@@ -48,6 +52,15 @@ lãi đơn hoàn hàng    = tiền giữ − ship đi (shop chịu) − ship chi
 COD chờ về           = max(min(COD − Σ thu method 'cod', còn phải thu), 0); chỉ Đã gửi / Hoàn tất / Hoàn hàng
 tuổi tồn             = chiếc đã về kho chưa bán: > 60 alert, > 30 warn, còn lại ok (ngưỡng trong Cài đặt)
 lô về trễ            = lô chưa nhận / chưa huỷ, hôm nay − ngày đặt > 21 (Cài đặt)
+--- CR-005 ---
+trạng thái lô        = Kho TQ (cn_warehouse) → Kho VN (vn_warehouse) → Kho Lumi (received, bán được); Huỷ
+nhãn chiếc           = Đang về ⇒ "Kho TQ" / "Kho VN" theo lô · Trong kho ⇒ "Kho Lumi" · Đã bán ⇒ nhãn đơn   unitLocationLabel
+vốn đang về (model)  = Σ giá nhập hiệu lực của chiếc lô chưa nhận, chưa huỷ (gồm chiếc đã giữ); vốn = trong kho + đang về
+đã trả lô            = Σ khoản Đã chuyển gắn lô;  còn nợ lô = phải trả − đã trả (âm = trả dư; ship nhập sau ⇒ còn nợ = ship)
+số dư quỹ            = Σ vào − Σ ra, bắt đầu từ 0
+bút toán tự sinh     = cọc / thanh toán → vào · hoàn tiền → ra · Đã chuyển > 0 → ra · ship shop chịu khi đơn đã gửi
+                       (Vận chuyển tới khách / Đã giao / Hoàn hàng) → ra ngày gửi · ship chiều về đơn Hoàn hàng → ra ngày hoàn
+ghi tay              = expense (ra, có loại chi phí) · capital_in (vào) · capital_out (ra) · adjustment (vào hoặc ra)
 ```
 
 The ship fee is divided by **all** units of the lot (every model, sold or not). Costs are never frozen:

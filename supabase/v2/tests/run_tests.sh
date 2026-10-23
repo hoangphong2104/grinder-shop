@@ -4,11 +4,13 @@
 # Luồng: initdb → stub Supabase → cài v1 (migrations/001 + 002) + dữ liệu v1 → setup-v2.sql (2 lần, idempotent)
 #        → kiểm tra reset → test nghiệp vụ → test 2 phiên tranh 1 chiếc
 #        → CR-003: 002_buying_fee.sql 2 lần trên DB cài mới + test phí mua hộ
-#        → CR-004: 003 (2 lần) trên DB cài mới (001 đã gồm CR-003 + CR-004; 002 chạy lại phải lỗi an toàn) + test 05, 10
+#        → CR-004 / CR-005 trên DB cài mới (001 đã gồm CR-003 + CR-004 + CR-005): 004 + 005 (2 lần, không đổi gì);
+#          002 / 003 chạy nhầm phải lỗi an toàn (rollback) + test 05, 10, 13
 #        → nâng cấp (mô phỏng LỊCH SỬ DB THẬT): DB thứ 2 = v1 có dữ liệu → 000 + fixtures/001_schema_v2_pre003.sql
 #          (bản v2 trước CR-003) + dữ liệu (test 03) → chụp → 002 (2 lần) → dữ liệu không đổi → dữ liệu thêm (test 05)
-#          → chụp → 003 (2 lần) → dữ liệu cũ không đổi (test 09) + test CR-004 (10)
-#          → so schema: cài mới (setup-v2) = v2 cũ + 002 + 003
+#          → chụp → 003 (2 lần) → dữ liệu cũ không đổi (test 09) + test CR-004 (10) → 004 (2 lần)
+#          → chụp (11) → 005 (2 lần) → trạng thái lô đổi mã, dữ liệu khác không đổi, sổ quỹ backfill khớp (12) + test CR-005 (13)
+#          → so schema: cài mới (setup-v2) = v2 cũ + 002 + 003 + 004 + 005
 #        → dừng server, xoá cụm.
 set -euo pipefail
 export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
@@ -79,18 +81,21 @@ else
   echo "FAIL: race: phiên B không chờ khoá ($((T1 - T0))s)" >> "$LOG"; exit 1
 fi
 
-# ---------- CR-003 + CR-004 trên DB cài mới ----------
-step "003_cod_return_condition.sql (lần 1 + 2) trên DB cài mới (001 đã gồm CR-004 ⇒ không đổi gì)"
-"${P[@]}" -f "$V2/003_cod_return_condition.sql" >>"$LOG" 2>&1; "${P[@]}" -f "$V2/003_cod_return_condition.sql" >>"$LOG" 2>&1
+# ---------- CR-003 + CR-004 + CR-005 trên DB cài mới ----------
 step "004_note_color.sql (lần 1 + 2) trên DB cài mới"; "${P[@]}" -f "$V2/004_note_color.sql" >>"$LOG" 2>&1; "${P[@]}" -f "$V2/004_note_color.sql" >>"$LOG" 2>&1
-step "002_buying_fee.sql chạy nhầm SAU 003 phải lỗi và rollback (không hỏng gì — so schema bên dưới chứng minh)"
-if "${P[@]}" -f "$V2/002_buying_fee.sql" >>"$LOG" 2>&1; then
-  echo "FAIL: 002 chạy lại sau 003 lẽ ra phải lỗi (v_lot_summary bớt cột)" | tee -a "$LOG"; exit 1
-else
-  echo "PASS: 002 chạy nhầm sau 003 ⇒ lỗi 'cannot drop columns from view', transaction rollback" | tee -a "$LOG"
-fi
+step "005_cash_status_qr.sql (lần 1 + 2) trên DB cài mới có dữ liệu test 03 (001 đã gồm CR-005 ⇒ không đổi gì)"
+"${P[@]}" -f "$V2/005_cash_status_qr.sql" >>"$LOG" 2>&1; "${P[@]}" -f "$V2/005_cash_status_qr.sql" >>"$LOG" 2>&1
+for f in 003_cod_return_condition.sql 002_buying_fee.sql; do
+  step "$f chạy nhầm SAU 005 phải lỗi và rollback (không hỏng gì — so schema bên dưới chứng minh)"
+  if "${P[@]}" -f "$V2/$f" >>"$LOG" 2>&1; then
+    echo "FAIL: $f chạy lại sau 005 lẽ ra phải lỗi (v_lot_summary bớt cột)" | tee -a "$LOG"; exit 1
+  else
+    echo "PASS: $f chạy nhầm sau 005 ⇒ lỗi 'cannot drop columns from view', transaction rollback" | tee -a "$LOG"
+  fi
+done
 step "test CR-003 trên DB cài mới"; "${P[@]}" -f "$HERE/05_buying_fee_tests.sql" >>"$LOG" 2>&1
 step "test CR-004 trên DB cài mới"; "${P[@]}" -f "$HERE/10_cr004_tests.sql" >>"$LOG" 2>&1
+step "test CR-005 trên DB cài mới"; "${P[@]}" -f "$HERE/13_cr005_tests.sql" >>"$LOG" 2>&1
 
 step "nâng cấp: DB v1 → v2 TRƯỚC CR-003 (fixtures/001_schema_v2_pre003.sql) + dữ liệu"
 "${PSQL[@]}" -d postgres -c "create database grinder_up" >/dev/null
@@ -112,15 +117,20 @@ step "nâng cấp: 003_cod_return_condition.sql lần 2 (idempotent)";  "${U[@]}
 step "nâng cấp: dữ liệu cũ giữ nguyên sau 003";  "${U[@]}" -f "$HERE/09_cr004_verify.sql" >>"$LOG" 2>&1
 step "nâng cấp: test CR-004 trên DB đã nâng cấp"; "${U[@]}" -f "$HERE/10_cr004_tests.sql" >>"$LOG" 2>&1
 step "nâng cấp: 004_note_color.sql lần 1 + 2"; "${U[@]}" -f "$V2/004_note_color.sql" >>"$LOG" 2>&1; "${U[@]}" -f "$V2/004_note_color.sql" >>"$LOG" 2>&1
+step "nâng cấp: chụp số liệu trước 005 (+ lô mã cũ cn_shipping / at_forwarder)"; "${U[@]}" -f "$HERE/11_cr005_snapshot.sql" >>"$LOG" 2>&1
+step "nâng cấp: 005_cash_status_qr.sql lần 1 (DB thật mô phỏng: pre-003 + 002 + 003 + 004 + dữ liệu)"; "${U[@]}" -f "$V2/005_cash_status_qr.sql" >>"$LOG" 2>&1
+step "nâng cấp: 005_cash_status_qr.sql lần 2 (idempotent)"; "${U[@]}" -f "$V2/005_cash_status_qr.sql" >>"$LOG" 2>&1
+step "nâng cấp: trạng thái lô đổi mã + dữ liệu khác giữ nguyên + sổ quỹ backfill sau 005"; "${U[@]}" -f "$HERE/12_cr005_verify.sql" >>"$LOG" 2>&1
+step "nâng cấp: test CR-005 trên DB đã nâng cấp"; "${U[@]}" -f "$HERE/13_cr005_tests.sql" >>"$LOG" 2>&1
 
-step "so schema public + private: cài mới (setup-v2) = v2 cũ + 002 + 003"
+step "so schema public + private: cài mới (setup-v2) = v2 cũ + 002 + 003 + 004 + 005"
 dump() { "$PGBIN/pg_dump" -h "$BASE" -p "$PORT" -U postgres -d "$1" --schema-only --no-owner -n public -n private \
            | grep -vE '^(--|\\restrict|\\unrestrict)' | sed '/^$/d'; }
 dump grinder > "$BASE/schema_fresh.sql"; dump grinder_up > "$BASE/schema_up.sql"
 if [ -s "$BASE/schema_fresh.sql" ] && diff -u "$BASE/schema_fresh.sql" "$BASE/schema_up.sql" >> "$LOG" 2>&1; then
-  echo "PASS: schema giống hệt: cài mới (001 có CR-003 + CR-004) = v2 cũ + 002 + 003 ($(wc -l < "$BASE/schema_fresh.sql" | tr -d ' ') dòng pg_dump)" | tee -a "$LOG"
+  echo "PASS: schema giống hệt: cài mới (001 có CR-003 + CR-004 + CR-005) = v2 cũ + 002 + 003 + 004 + 005 ($(wc -l < "$BASE/schema_fresh.sql" | tr -d ' ') dòng pg_dump)" | tee -a "$LOG"
 else
-  echo "FAIL: schema cài mới khác v2 cũ + 002 + 003 (xem diff trong log)" | tee -a "$LOG"; exit 1
+  echo "FAIL: schema cài mới khác v2 cũ + 002 + 003 + 004 + 005 (xem diff trong log)" | tee -a "$LOG"; exit 1
 fi
 
 if grep -q 'FAIL' "$LOG"; then

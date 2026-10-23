@@ -2,20 +2,16 @@ import { Link } from 'react-router-dom'
 import { useData, useStore } from '../data/store.tsx'
 import { Icon } from '../ui/icons.tsx'
 import { NAV, Shell } from '../ui/Shell.tsx'
-import { todayVn, tr } from '../ui/format.ts'
-import { profitMonth } from './overview/common.tsx'
+import { tr } from '../ui/format.ts'
 
-// Menu (điện thoại): các mục ngoài 4 tab. CR-004: mỗi mục ≥ 52px, 2 dòng (tên · mô tả ngắn cắt …), số bên phải (research §10).
+// Menu (điện thoại): các mục ngoài 4 tab (CR-005: bỏ Báo cáo + Người bán; Sổ quỹ hiện số dư quỹ). CR-004: mỗi mục ≥ 52px, 2 dòng (tên · mô tả ngắn cắt …), số bên phải (research §10).
 export default function MoreMenu() {
   const d = useData()
   const { signOut } = useStore()
-  const month = todayVn().slice(0, 7)
-  const profit = d.orderSummary.filter((o) => profitMonth(o) === month).reduce((a, o) => a + (o.profit_vnd ?? 0), 0)
-  const bal = d.balance.balance_vnd
+  const cash = d.cashBalance?.balance_vnd ?? 0
+  const debt = d.balance.balance_vnd
   const info: Record<string, [string, string | null]> = {
-    '/congno': [bal > 0 ? 'Còn phải trả trung gian' : bal < 0 ? 'Đã chuyển dư' : 'Không còn nợ', tr(bal)],
-    '/baocao': [`Lãi tháng ${Number(month.slice(5))}, tuổi tồn, theo model`, tr(profit)],
-    '/nguoiban': ['Uy tín, đánh dấu tránh', `${d.sellers.filter((s) => !s.is_hidden).length}`],
+    '/congno': [`Thu chi, quỹ${debt > 0 ? ` · nợ trung gian ${tr(debt)}` : ''}`, `${cash < 0 ? '−' : ''}${tr(Math.abs(cash))}`],
     '/khach': ['Khách Facebook, công nợ', `${d.customers.filter((c) => !c.is_hidden).length}`],
     '/danhmuc': ['Tiền tố mã, giá mặc định, ngưỡng sắp hết', `${d.models.filter((m) => m.is_active).length}`],
     '/caidat': ['Giao diện, AI, ngưỡng ngày, STK, xuất Excel', null],

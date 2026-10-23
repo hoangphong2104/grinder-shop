@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import type { Lot, Transfer, Unit } from './types.ts';
 import { intermediaryBalance, intermediaryDebt, totalPayable, transferEffect } from './debt.ts';
 
-const lot = (over: Partial<Lot> = {}): Lot => ({ id: 'L1', rate: 3600, shipFee: 600000, status: 'vn_shipping', receivedAt: null, ...over });
+const lot = (over: Partial<Lot> = {}): Lot => ({ id: 'L1', rate: 3600, shipFee: 600000, status: 'vn_warehouse', receivedAt: null, ...over });
 const unit = (id: string, lotId = 'L1', over: Partial<Unit> = {}): Unit => ({
   id, code: id, modelId: 'ku', lotId, priceCny: 1010, costOverride: null, listPrice: null, ...over,
 });

@@ -1,7 +1,7 @@
 // Tra cứu + tính phụ dùng chung cho nhóm màn Đơn bán / Khách (CR-001: đơn = danh sách chiếc cụ thể).
 // Số tiền chính thức lấy từ view v_order_summary / v_units; ở đây chỉ ghép tên và ƯỚC lãi đơn chưa gửi.
 import { useEffect, useState } from 'react'
-import { tr } from '../../ui/format.ts'
+import { tr, vnd } from '../../ui/format.ts'
 import type { CustomerRow, DbData, OrderLineRow, OrderRow, OrderStatusDb, OrderSummaryRow, PaymentKindDb, UnitViewRow } from '../../data/types.ts'
 
 /** true khi màn hình ≥ 960px (bảng trên máy tính, thẻ trên điện thoại). */
@@ -45,7 +45,7 @@ export const ORDER_FILTERS: { k: OrderFilter; t: string; test: (s: OrderSummaryR
   { k: 'todo', t: 'Cần xử lý', test: (s) => OPEN_STATUSES.includes(s.status) || needsRefund(s) },
   { k: 'pre', t: 'Đặt trước', test: (s) => s.status === 'preorder' },
   { k: 'wait', t: 'Chờ gửi', test: (s) => s.status === 'confirmed' },
-  { k: 'sent', t: 'Đã gửi', test: (s) => s.status === 'shipped' },
+  { k: 'sent', t: 'Vận chuyển tới khách', test: (s) => s.status === 'shipped' },
   { k: 'cod', t: 'COD chờ về', test: (s) => s.cod_pending_vnd > 0 },
   { k: 'due', t: 'Còn nợ', test: (s) => s.receivable_vnd > 0 },
   // Chỉ hiện chip khi có đơn (hoặc đang chọn qua URL, vd. từ Tổng quan "Cần hoàn")
@@ -75,6 +75,16 @@ export function payState(s: OrderSummaryRow): PayState | null {
   }
   if (s.receivable_vnd < 0) return { short: `trả dư ${tr(-s.receivable_vnd)}`, long: `Trả dư ${tr(-s.receivable_vnd)}`, tone: 'hold' }
   return { short: 'đã đủ', long: 'Đã thu đủ', tone: 'ok' }
+}
+
+/**
+ * CR-005 ý 12: lãi luôn có dấu - "+2.592k" / "−35k"; lãi chưa chốt (đơn chưa gửi) thêm chữ "dự kiến" (không dùng "~").
+ * compact = dạng gọn tr() cho dòng / bảng; mặc định số đầy đủ ₫.
+ */
+export function profitStr(value: number | null | undefined, est = false, compact = false): string {
+  if (value == null) return '-'
+  const t = (value > 0 ? '+' : '') + (compact ? tr(value) : vnd(value))
+  return est ? `${t} dự kiến` : t
 }
 
 /** Bỏ dấu + chữ thường để tìm kiếm ("Đen" ~ "den"). */

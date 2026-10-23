@@ -5,12 +5,18 @@ import { useData, useStore } from '../data/store.tsx'
 import { Brandmark, Icon } from './icons.tsx'
 import { Sheet } from './feedback.tsx'
 
-export type Section = 'home' | 'kho' | 'lo' | 'don' | 'ghichu' | 'congno' | 'baocao' | 'nguoiban' | 'khach' | 'danhmuc' | 'caidat' | ''
+export type Section = 'home' | 'kho' | 'lo' | 'don' | 'ghichu' | 'congno' | 'khach' | 'danhmuc' | 'caidat' | ''
 export const NAV: [string, string, Section, string][] = [
   ['/', 'Tổng quan', 'home', 'home'], ['/kho', 'Kho', 'kho', 'box'], ['/lo', 'Lô nhập', 'lo', 'truck'], ['/don', 'Đơn bán', 'don', 'receipt'], ['/ghichu', 'Ghi chú', 'ghichu', 'note'],
-  ['/congno', 'Công nợ trung gian', 'congno', 'wallet'], ['/baocao', 'Báo cáo', 'baocao', 'chart'],
-  ['/nguoiban', 'Người bán Goofish', 'nguoiban', 'store'], ['/khach', 'Khách', 'khach', 'user'], ['/danhmuc', 'Model', 'danhmuc', 'tag'], ['/caidat', 'Cài đặt', 'caidat', 'gear'],
+  ['/congno', 'Sổ quỹ', 'congno', 'wallet'],
+  ['/khach', 'Khách', 'khach', 'user'], ['/danhmuc', 'Model', 'danhmuc', 'tag'], ['/caidat', 'Cài đặt', 'caidat', 'gear'],
 ]
+
+/** CR-005 ý 3: quay lại = về đúng màn trước (lịch sử trong app); mở thẳng link (không có lịch sử) thì về màn cha. */
+function goBack(nav: ReturnType<typeof useNavigate>, fallback: string) {
+  const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0
+  if (idx > 0) nav(-1); else nav(fallback, { replace: true })
+}
 
 export function Shell({ section, title, back, actions, savebar, children }: {
   section: Section; title: string; back?: string; actions?: ReactNode; savebar?: ReactNode; children: ReactNode
@@ -37,7 +43,7 @@ export function Shell({ section, title, back, actions, savebar, children }: {
         {NAV.map((n, i) => (
           <span key={n[0]} style={{ display: 'contents' }}>
             {i === 5 && <div className="grp-t">Tiền</div>}
-            {i === 7 && <div className="grp-t">Danh bạ</div>}
+            {i === 6 && <div className="grp-t">Danh mục</div>}
             <Link to={n[0]} aria-current={n[2] === section ? 'page' : undefined}><Icon name={n[3]} />{n[1]}{cnt[n[2]] ? <span className="n">{cnt[n[2]]}</span> : null}</Link>
           </span>
         ))}
@@ -47,7 +53,7 @@ export function Shell({ section, title, back, actions, savebar, children }: {
         {!online && <div className="banner-offline">Đang mất mạng - chỉ xem dữ liệu đã tải, chưa lưu được.</div>}
         <header className="hdr">
           {back
-            ? <button className="icon-btn" onClick={() => nav(back)} aria-label="Quay lại"><Icon name="back" /></button>
+            ? <button className="icon-btn" onClick={() => goBack(nav, back)} aria-label="Quay lại"><Icon name="back" /></button>
             : <Link className="icon-btn menu-btn" to="/them" aria-label="Menu"><Icon name="menu" /></Link>}
           <h1>{title}</h1>
           <div className="act">{actions}</div>

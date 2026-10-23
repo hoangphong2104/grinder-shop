@@ -4,3 +4,4 @@
 002_buying_fee.sql
 003_cod_return_condition.sql
 004_note_color.sql
+005_cash_status_qr.sql

@@ -58,7 +58,7 @@ test('A3 CR example: ship 600.000 → 800.000: non-overridden 4.036.000, overrid
 });
 
 test('D2: ship fee blank → provisional cost = ¥ × rate only; override is never provisional', () => {
-  const l = lot({ shipFee: null, status: 'vn_shipping', receivedAt: null });
+  const l = lot({ shipFee: null, status: 'vn_warehouse', receivedAt: null });
   const us = crUnits({ costOverride: 3900000 });
   assert.equal(autoUnitCost(us[0]!, l, 2), 3636000);
   assert.equal(unitCostBeforeShip(us[0]!, l), 3636000);

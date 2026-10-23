@@ -8,8 +8,8 @@
  *   L3 2 × KU  ¥1.010, rate 3.600, ship 600.000 → 3.636.000 + 300.000 = 3.936.000 (KU-004 override 4.000.000)
  *   L4 2 × JU ¥1.150 + 1 × ZP6 ¥740, rate 3.600, ship 900.000 (÷ 3 = 300.000)
  *        JU → 4.140.000 + 300.000 = 4.440.000 · ZP6 → 2.664.000 + 300.000 = 2.964.000
- *   L5 2 × KU ¥1.050, rate 3.610, ship blank (vn_shipping) → provisional 3.790.500
- *   L6 2 × ZP6 ¥745,5, rate 3.620, ship blank (cn_shipping) → provisional 2.698.710
+ *   L5 2 × KU ¥1.050, rate 3.610, ship blank (vn_warehouse) → provisional 3.790.500
+ *   L6 2 × ZP6 ¥745,5, rate 3.620, ship blank (cn_warehouse) → provisional 2.698.710
  *   L7 1 × JU ¥1.180, rate 3.615 - cancelled
  */
 import type { Lot, Model, Order, Transfer, Unit } from './types.ts';
@@ -27,8 +27,8 @@ export const lots: Lot[] = [
   { id: 'l2', code: 'L-002', orderedAt: '2026-09-05', rate: 3580, shipFee: 560000, status: 'received', receivedAt: '2026-09-18' },
   { id: 'l3', code: 'L-003', orderedAt: '2026-09-20', rate: 3600, shipFee: 600000, status: 'received', receivedAt: '2026-10-03' },
   { id: 'l4', code: 'L-004', orderedAt: '2026-09-25', rate: 3600, shipFee: 900000, status: 'received', receivedAt: '2026-10-06' },
-  { id: 'l5', code: 'L-005', orderedAt: '2026-10-10', rate: 3610, shipFee: null, status: 'vn_shipping', receivedAt: null },
-  { id: 'l6', code: 'L-006', orderedAt: '2026-10-18', rate: 3620, shipFee: null, status: 'cn_shipping', receivedAt: null },
+  { id: 'l5', code: 'L-005', orderedAt: '2026-10-10', rate: 3610, shipFee: null, status: 'vn_warehouse', receivedAt: null },
+  { id: 'l6', code: 'L-006', orderedAt: '2026-10-18', rate: 3620, shipFee: null, status: 'cn_warehouse', receivedAt: null },
   { id: 'l7', code: 'L-007', orderedAt: '2026-10-12', rate: 3615, shipFee: null, status: 'cancelled', receivedAt: null },
 ];
 

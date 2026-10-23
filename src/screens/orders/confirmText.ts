@@ -13,6 +13,8 @@ export interface ConfirmLine { code: string; model: string; price: number }
 
 export function buildConfirmText(p: {
   code: string; o: OrderRow; s: OrderSummaryRow; c: CustomerRow | undefined; lines: ConfirmLine[]; bankLine?: string | null
+  /** CR-005: dòng chuyển khoản VietQR (ngân hàng · STK · số tiền · nội dung + nhắc quét QR) - có thì thay dòng STK. */
+  qrLines?: string[] | null
 }): string {
   const { code, o, s, c, lines } = p
   const out: string[] = []
@@ -34,7 +36,10 @@ export function buildConfirmText(p: {
     out.push(`Còn lại: ${vnd(s.receivable_vnd)}`)
     if (o.cod_amount_vnd > 0) out.push(`Thu hộ COD khi giao: ${vnd(o.cod_amount_vnd)}`)
     // Còn phần phải chuyển khoản ngoài COD ⇒ cần STK
-    if (s.receivable_vnd > o.cod_amount_vnd) out.push(p.bankLine?.trim() || BANK_LINE_PLACEHOLDER)
+    if (s.receivable_vnd > o.cod_amount_vnd) {
+      if (p.qrLines?.length) out.push(...p.qrLines)
+      else out.push(p.bankLine?.trim() || BANK_LINE_PLACEHOLDER)
+    }
   } else if (s.receivable_vnd < 0) {
     out.push(`Anh/chị đã chuyển dư: ${vnd(-s.receivable_vnd)}`)
   } else {

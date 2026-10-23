@@ -17,7 +17,7 @@ type View = 'board' | 'list'
 type Filter = 'open' | 'done' | 'all'
 /** Chip bước trên điện thoại: 'open' = mọi bước chưa nhận (mặc định), 1 bước cụ thể, hoặc 'all' (kể cả lô huỷ). */
 type Stage = 'open' | LotStatusDb | 'all'
-const CC: Record<string, string> = { ordered: 'var(--faint)', cn_shipping: 'var(--way)', at_forwarder: 'var(--way)', vn_shipping: 'var(--hold)', received: 'var(--ok)' }
+const CC: Record<string, string> = { cn_warehouse: 'var(--way)', vn_warehouse: 'var(--hold)', received: 'var(--ok)' } // Kho TQ → Kho VN → Kho Lumi (CR-005)
 // Nhớ lựa chọn khi quay lại màn (như prototype).
 const memo: { view: View; filter: Filter; stage: Stage; q: string } = { view: 'board', filter: 'open', stage: 'open', q: '' }
 
@@ -85,7 +85,7 @@ export default function Lots() {
     body = (
       <>
         {search}
-        <div className="board" style={{ ['--cols' as string]: 5 }}>
+        <div className="board" style={{ ['--cols' as string]: LOT_FLOW.length }}>
           {LOT_FLOW.map((k) => {
             const ls = live.filter((l) => l.status === k)
             return (
@@ -109,7 +109,7 @@ export default function Lots() {
         {!ls.length ? <div className="empty">{emptyMsg}</div> : (
           <div className="tbl-wrap">
             <table className="tbl">
-              <thead><tr><th>Lô</th><th>Ngày đặt</th><th>Hàng</th><th>Người bán</th><th>Trạng thái</th><th>Chiếc</th><th className="r">Tiền hàng</th><th className="r">Phí mua hộ</th><th className="r">Ship về VN</th><th className="r">Ship / chiếc</th><th className="r">Phải trả TG</th></tr></thead>
+              <thead><tr><th>Lô</th><th>Ngày đặt</th><th>Hàng</th><th>Người bán</th><th>Trạng thái</th><th>Chiếc</th><th className="r">Tiền hàng</th><th className="r">Phí mua hộ</th><th className="r">Ship về VN</th><th className="r">Ship / chiếc</th><th className="r">Phải trả TG</th><th className="r">Còn nợ TG</th></tr></thead>
               <tbody>
                 {ls.map((l) => {
                   const s = sellerOf(d, l), sum = summaryOf(d, l.id), days = daysOpen(l)
@@ -126,6 +126,7 @@ export default function Lots() {
                       <td className="r">{l.ship_fee_vnd == null ? <span className="pill bad">chưa nhập</span> : vnd(l.ship_fee_vnd)}</td>
                       <td className="r">{sum?.ship_per_unit_vnd != null ? vnd(sum.ship_per_unit_vnd) : '-'}</td>
                       <td className="r">{vnd(sum?.payable_vnd ?? 0)}</td>
+                      <td className="r">{sum && l.status !== 'cancelled' && sum.outstanding_vnd > 0 ? <span className="req">{vnd(sum.outstanding_vnd)}</span> : <span className="muted">đã trả</span>}</td>
                     </tr>
                   )
                 })}

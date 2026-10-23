@@ -7,7 +7,7 @@ import { useToast } from '../ui/feedback.tsx'
 import { Gpic } from '../ui/icons.tsx'
 import { CONDITION_LABEL, CONDITION_ORDER, ConditionChip, LotChip, ORDER_LABEL, UnitChip } from '../ui/status.tsx'
 import { cny, dmy, parseNum, pct, vnd } from '../ui/format.ts'
-import { CostCell, HowTo, LotRow, OrderRow, agingCls, daysSince, holderCode, thresholds, unitProfit } from './overview/common.tsx'
+import { CostCell, HowTo, Profit, LotRow, OrderRow, agingCls, daysSince, holderCode, thresholds, unitProfit } from './overview/common.tsx'
 
 const fullDate = (iso: string | null | undefined) => (iso ? `${dmy(iso)}/${iso.slice(0, 4)}` : '-')
 const numStr = (n: number | null | undefined) => (n == null ? '' : String(n))
@@ -44,7 +44,7 @@ function UnitView({ u }: { u: UnitViewRow }) {
           <div style={{ textAlign: 'center' }}>
             <div className="num" style={{ fontSize: 22, fontWeight: 600 }}>{u.code}</div>
             <div className="muted small">{u.model_name}{u.serial_no ? ` · seri ${u.serial_no}` : ''}</div>
-            <div className="row" style={{ marginTop: 6, justifyContent: 'center' }}><UnitChip s={u.status} holder={holder} /><ConditionChip c={u.condition ?? 'new'} /></div>
+            <div className="row" style={{ marginTop: 6, justifyContent: 'center' }}><UnitChip s={u.status} holder={holder} lot={u.lot_status} order={u.holding_order_status} /><ConditionChip c={u.condition ?? 'new'} /></div>
             {order && (
               <div className="small" style={{ marginTop: 4 }}>
                 <Link className="link-btn small" to={`/don/${order.id}`}>{holder} · {u.holding_customer_name ?? ''} · {ORDER_LABEL[order.status]}</Link>
@@ -56,7 +56,7 @@ function UnitView({ u }: { u: UnitViewRow }) {
           <dl className="kv">
             <dt>Model</dt><dd>{u.model_name}</dd>
             <dt>Lô nhập</dt><dd><Link className="link-btn" style={{ padding: 0 }} to={`/lo/${u.lot_id}`}>{d.lotCode[u.lot_id] ?? 'Lô'}</Link> <LotChip s={u.lot_status} /></dd>
-            <dt>Người bán</dt><dd>{seller ? <Link className="link-btn" style={{ padding: 0 }} to={`/nguoiban/${seller.id}`}>{seller.nickname}</Link> : '-'}</dd>
+            <dt>Người bán</dt><dd>{seller ? <>{seller.nickname}{seller.is_avoided && <> <span className="pill bad">tránh</span></>}</> : '-'}</dd>
             <dt>Ngày đặt</dt><dd>{fullDate(u.ordered_at)}</dd>
             <dt>Ngày nhận</dt><dd>{u.received_at ? fullDate(u.received_at) : u.status === 'cancelled' ? '- (lô huỷ)' : '- (đang về)'}</dd>
             <dt>Tình trạng</dt><dd>{CONDITION_LABEL[u.condition ?? 'new']}</dd>
@@ -75,7 +75,7 @@ function UnitView({ u }: { u: UnitViewRow }) {
             <dt><b>Giá nhập dùng tính lãi</b></dt><dd className="num"><b><CostCell u={u} /></b></dd>
             <dt>Giá bán dự kiến</dt><dd className="num">{vnd(u.list_price_vnd)}</dd>
             {u.order_unit_price_vnd != null && <><dt>{u.status === 'sold' ? 'Giá chốt (đã bán)' : 'Giá chốt trên đơn'}</dt><dd className="num">{vnd(u.order_unit_price_vnd)}</dd></>}
-            <dt>{p.actual ? 'Lãi thực tế' : 'Lãi dự kiến'}</dt><dd className={`num ${p.value != null && p.value < 0 ? 'req' : ''}`}>{vnd(p.value)}</dd>
+            <dt>{p.actual ? 'Lãi thực tế' : 'Lãi dự kiến'}</dt><dd className="num"><Profit n={p.value} full est={!p.actual} /></dd>
           </dl>
           <HowTo>Giá nhập tự tính = giá web × tỷ giá × (1 + phí mua hộ {pct(Number(lot?.buying_fee_pct ?? 0))}) + phí ship lô ÷ {ls?.total_qty ?? 'số'} chiếc; tự cập nhật khi đổi tỷ giá / phí mua hộ / phí ship (kể cả chiếc đã bán). Đã sửa tay thì giữ số sửa tay.</HowTo>
         </div>

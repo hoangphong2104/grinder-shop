@@ -20,7 +20,7 @@ import {
 } from './orders.ts';
 
 const received: Lot = { id: 'R', rate: 3600, shipFee: 600000, status: 'received', receivedAt: '2026-10-03' };
-const incoming: Lot = { id: 'I', rate: 3610, shipFee: null, status: 'vn_shipping', receivedAt: null };
+const incoming: Lot = { id: 'I', rate: 3610, shipFee: null, status: 'vn_warehouse', receivedAt: null };
 const cancelled: Lot = { id: 'C', rate: 3610, shipFee: null, status: 'cancelled', receivedAt: null };
 const lots = [received, incoming, cancelled];
 const unit = (id: string, lotId: string): Unit => ({ id, code: `KU-${id}`, modelId: 'ku', lotId, priceCny: 1010, costOverride: null, listPrice: 6800000 });
@@ -86,7 +86,7 @@ test('A8 + Q-007: ship only confirmed orders whose units are all received', () =
   assert.ok(!nr.ok);
   assert.equal(nr.error.code, 'NOT_RECEIVED');
   assert.equal(nr.error.rule, 'A8');
-  assert.equal(nr.error.message, 'Chiếc KU-i2 chưa về kho (lô đang "Đang về VN").');
+  assert.equal(nr.error.message, 'Chiếc KU-i2 chưa về kho (lô đang "Kho VN").');
   assert.equal(canShip(order({ status: 'shipped' }), units, lots).ok, false);
   assert.equal(canShip(order({ lines: [] }), units, lots).ok, false);
 });
@@ -95,7 +95,7 @@ test('A8 + Q-007: ship only confirmed orders whose units are all received', () =
 
 test('A7: receiving a lot auto-confirms pre-orders whose units are now all received', () => {
   const nowReceived = lots.map((l) => (l.id === 'I' ? { ...l, status: 'received' as const, shipFee: 700000, receivedAt: '2026-10-23' } : l));
-  const other: Lot = { id: 'X', rate: 3600, shipFee: null, status: 'ordered', receivedAt: null };
+  const other: Lot = { id: 'X', rate: 3600, shipFee: null, status: 'cn_warehouse', receivedAt: null };
   const allUnits = [...units, unit('x1', 'X')];
   const os = [
     order({ id: 'a', status: 'preorder', lines: [{ unitId: 'i1', price: 1 }] }), // → confirm
