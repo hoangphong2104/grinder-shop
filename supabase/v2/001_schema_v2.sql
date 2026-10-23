@@ -404,7 +404,8 @@ create table public.notes (
   is_pinned   boolean not null default false,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now(),
-  version     int not null default 1
+  version     int not null default 1,
+  color       text not null default 'default' check (color in ('default','yellow','green','blue','pink','purple'))  -- 004: màu thẻ
 );
 create index notes_user_order_idx on public.notes (user_id, is_pinned desc, updated_at desc);
 
@@ -455,6 +456,8 @@ grant select on public.ai_scan_log to authenticated;
 grant select, delete on public.notes to authenticated;                 -- CR-002
 grant insert (body, is_pinned) on public.notes to authenticated;
 grant update (body, is_pinned) on public.notes to authenticated;
+grant insert (color) on public.notes to authenticated;                 -- 004
+grant update (color) on public.notes to authenticated;
 
 do $$
 declare t text;

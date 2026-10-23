@@ -82,6 +82,7 @@ fi
 # ---------- CR-003 + CR-004 trên DB cài mới ----------
 step "003_cod_return_condition.sql (lần 1 + 2) trên DB cài mới (001 đã gồm CR-004 ⇒ không đổi gì)"
 "${P[@]}" -f "$V2/003_cod_return_condition.sql" >>"$LOG" 2>&1; "${P[@]}" -f "$V2/003_cod_return_condition.sql" >>"$LOG" 2>&1
+step "004_note_color.sql (lần 1 + 2) trên DB cài mới"; "${P[@]}" -f "$V2/004_note_color.sql" >>"$LOG" 2>&1; "${P[@]}" -f "$V2/004_note_color.sql" >>"$LOG" 2>&1
 step "002_buying_fee.sql chạy nhầm SAU 003 phải lỗi và rollback (không hỏng gì — so schema bên dưới chứng minh)"
 if "${P[@]}" -f "$V2/002_buying_fee.sql" >>"$LOG" 2>&1; then
   echo "FAIL: 002 chạy lại sau 003 lẽ ra phải lỗi (v_lot_summary bớt cột)" | tee -a "$LOG"; exit 1
@@ -110,6 +111,7 @@ step "nâng cấp: 003_cod_return_condition.sql lần 1 (DB thật mô phỏng: 
 step "nâng cấp: 003_cod_return_condition.sql lần 2 (idempotent)";  "${U[@]}" -f "$V2/003_cod_return_condition.sql" >>"$LOG" 2>&1
 step "nâng cấp: dữ liệu cũ giữ nguyên sau 003";  "${U[@]}" -f "$HERE/09_cr004_verify.sql" >>"$LOG" 2>&1
 step "nâng cấp: test CR-004 trên DB đã nâng cấp"; "${U[@]}" -f "$HERE/10_cr004_tests.sql" >>"$LOG" 2>&1
+step "nâng cấp: 004_note_color.sql lần 1 + 2"; "${U[@]}" -f "$V2/004_note_color.sql" >>"$LOG" 2>&1; "${U[@]}" -f "$V2/004_note_color.sql" >>"$LOG" 2>&1
 
 step "so schema public + private: cài mới (setup-v2) = v2 cũ + 002 + 003"
 dump() { "$PGBIN/pg_dump" -h "$BASE" -p "$PORT" -U postgres -d "$1" --schema-only --no-owner -n public -n private \

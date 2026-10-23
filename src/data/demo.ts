@@ -399,7 +399,7 @@ export function buildDemoData(): DbData {
 
   const notes: NoteRow[] = NOTES.map((n, i) => {
     const t = stamp(ago(n.ago), 8 + i, 15)
-    return { id: `demo-n-${i + 1}`, user_id: UID, body: n.body, is_pinned: n.pinned, created_at: t, updated_at: t, version: 1 }
+    return { id: `demo-n-${i + 1}`, user_id: UID, body: n.body, is_pinned: n.pinned, color: (['yellow', 'default', 'green', 'blue', 'pink', 'purple'] as const)[i % 6], created_at: t, updated_at: t, version: 1 }
   })
 
   units.sort((a, b) => a.code.localeCompare(b.code))

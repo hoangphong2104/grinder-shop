@@ -3,3 +3,4 @@
 # Mốc ban đầu (đã chạy tay trên Supabase trước khi có CI): setup-v2 (bản pre-003) + 002 — xem deploy-baseline.txt.
 002_buying_fee.sql
 003_cod_return_condition.sql
+004_note_color.sql
