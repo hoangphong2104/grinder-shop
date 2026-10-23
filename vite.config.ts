@@ -21,7 +21,8 @@ export default defineConfig(({ mode }) => {
       react(),
       cspMeta(),
       VitePWA({
-        registerType: 'prompt',
+        registerType: 'autoUpdate', // tự cập nhật: bản mới kích hoạt ngay, trang tự tải lại (tránh kẹt bản cũ sau khi đổi DB)
+        injectRegister: false,
         includeManifestIcons: false,
         manifest: {
           name: 'Grinder Shop',
@@ -41,7 +42,7 @@ export default defineConfig(({ mode }) => {
             { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
           ],
         },
-        workbox: { globPatterns: ['**/*.{js,css,html,svg,png,woff2}'], navigateFallbackDenylist: [/^\/rest\//, /^\/auth\//] },
+        workbox: { skipWaiting: true, clientsClaim: true, cleanupOutdatedCaches: true, globPatterns: ['**/*.{js,css,html,svg,png,woff2}'], navigateFallbackDenylist: [/^\/rest\//, /^\/auth\//] },
       }),
     ],
   }
