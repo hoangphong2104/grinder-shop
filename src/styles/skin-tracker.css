@@ -1,0 +1,99 @@
+/* Lớp áo thử "Coffee Shot Tracker" (hướng F - trắng kiểu Nhật): Be Vietnam Pro, đơn sắc đen / trắng, chữ mảnh,
+   nhãn chữ hoa giãn chữ, phân nhóm bằng khoảng trắng + kẻ 1px thay cho khung / bóng. Bật: <html data-skin="tracker">.
+   Màu trạng thái giữ nhưng nhạt (chữ màu, không nền đặc) để vẫn nhìn ra việc cần xử lý. */
+:root[data-skin="tracker"] {
+  --font: "Be Vietnam Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+  --mono: "Be Vietnam Pro", ui-monospace, monospace;
+  --bg: #FFFFFF; --surface: #FFFFFF; --surface-2: #F5F5F5;
+  --fg: #1A1A1A; --muted: #707070; --faint: #949494; --line: #E6E6E6; --line-2: #EFEFEF;
+  --accent: #1A1A1A; --accent-soft: #F2F2F2; --on-accent: #FFFFFF; --fill: #1A1A1A; --on-fill: #FFFFFF;
+  --shadow: none;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-skin="tracker"]:not([data-theme="light"]) {
+    --bg: #0E0E0E; --surface: #0E0E0E; --surface-2: #1A1A1A; --fg: #EDEDED; --muted: #9E9E9E; --faint: #6E6E6E; --line: #2A2A2A; --line-2: #222;
+    --accent: #EDEDED; --accent-soft: #1F1F1F; --on-accent: #0E0E0E; --fill: #EDEDED; --on-fill: #0E0E0E;
+  }
+}
+:root[data-skin="tracker"][data-theme="dark"] {
+  --bg: #0E0E0E; --surface: #0E0E0E; --surface-2: #1A1A1A; --fg: #EDEDED; --muted: #9E9E9E; --faint: #6E6E6E; --line: #2A2A2A; --line-2: #222;
+  --accent: #EDEDED; --accent-soft: #1F1F1F; --on-accent: #0E0E0E; --fill: #EDEDED; --on-fill: #0E0E0E;
+}
+
+/* Chữ: mảnh, số mảnh to */
+[data-skin="tracker"] body { font-weight: 300; }
+[data-skin="tracker"] b, [data-skin="tracker"] strong { font-weight: 500; }
+[data-skin="tracker"] .num, [data-skin="tracker"] .money { font-variant-numeric: tabular-nums; }
+
+/* Header: tiêu đề chữ hoa giãn chữ, căn giữa trên điện thoại */
+[data-skin="tracker"] .hdr { border-bottom: 0; }
+[data-skin="tracker"] .hdr h1 { font-size: 12px; font-weight: 400; letter-spacing: .24em; text-transform: uppercase; }
+@media (max-width: 959px) { [data-skin="tracker"] .hdr h1 { text-align: center; } }
+
+/* Nhãn mục: chữ hoa nhỏ giãn chữ */
+[data-skin="tracker"] .section-title, [data-skin="tracker"] .nk-sec { font-size: 11px; font-weight: 400; letter-spacing: .24em; text-transform: uppercase; color: var(--muted); }
+
+/* Bỏ khung / bóng → kẻ mảnh */
+[data-skin="tracker"] .card, [data-skin="tracker"] .list, [data-skin="tracker"] .tbl-wrap, [data-skin="tracker"] .ulist,
+[data-skin="tracker"] .calc, [data-skin="tracker"] .kv, [data-skin="tracker"] .stepper {
+  border: 0; border-top: 1px solid var(--line); border-radius: 0; box-shadow: none; background: transparent;
+}
+[data-skin="tracker"] .shot { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; background: transparent; padding: 14px 0; }
+[data-skin="tracker"] .stack { gap: 0; }
+[data-skin="tracker"] .urow, [data-skin="tracker"] .li { padding-left: 0; padding-right: 0; }
+
+/* Ô số tổng quan: không khung, số mảnh to, nhãn chữ hoa */
+[data-skin="tracker"] .kpis { gap: 0; border-top: 1px solid var(--line); }
+[data-skin="tracker"] .kpi { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; background: transparent; text-align: center; padding: 16px 8px; }
+[data-skin="tracker"] .kpi:nth-child(odd) { border-right: 1px solid var(--line); }
+[data-skin="tracker"] .kpi .k { font-size: 10.5px; letter-spacing: .2em; text-transform: uppercase; }
+[data-skin="tracker"] .kpi .v { font-weight: 200; font-size: 26px; }
+[data-skin="tracker"] .kpi.hero { background: transparent; color: var(--fg); }
+[data-skin="tracker"] .kpi.hero .k, [data-skin="tracker"] .kpi.hero .s { color: var(--muted); opacity: 1; }
+
+/* Nút: viên thuốc, chữ giãn */
+[data-skin="tracker"] .btn { border-radius: 999px; font-weight: 400; letter-spacing: .06em; }
+[data-skin="tracker"] .btn-ghost { background: transparent; }
+[data-skin="tracker"] .fab, [data-skin="tracker"] .nk-fab { border-radius: 50%; background: var(--bg); color: var(--fg); border: 1px solid var(--fg); box-shadow: none; }
+[data-skin="tracker"] .tabs { border-top: 0; background: var(--bg); }
+[data-skin="tracker"] .tab { text-transform: uppercase; letter-spacing: .08em; font-size: 10px; font-weight: 300; }
+[data-skin="tracker"] .tab svg { display: none; }
+[data-skin="tracker"] .tab[aria-current="page"] { color: var(--fg); font-weight: 500; text-decoration: underline; text-underline-offset: 6px; }
+
+/* Ô nhập: chỉ gạch dưới */
+[data-skin="tracker"] .input, [data-skin="tracker"] textarea.input, [data-skin="tracker"] select.input {
+  border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; padding-left: 0; padding-right: 0; font-weight: 300;
+}
+[data-skin="tracker"] .input:focus { box-shadow: none; border-bottom-color: var(--fg); }
+[data-skin="tracker"] .nk-search { border-radius: 0; padding-left: 0; }
+
+/* Chip & segmented: viền mảnh, chọn = viền đen */
+[data-skin="tracker"] .chip { background: transparent; font-weight: 300; }
+[data-skin="tracker"] .chip[aria-pressed="true"] { background: transparent; color: var(--fg); border-color: var(--fg); }
+[data-skin="tracker"] .seg { background: transparent; }
+[data-skin="tracker"] .seg button { text-transform: uppercase; letter-spacing: .14em; font-size: 11px; }
+[data-skin="tracker"] .seg button[aria-pressed="true"] { background: transparent; box-shadow: none; border: 1px solid var(--fg); }
+
+/* Chip trạng thái: không nền, chữ màu nhạt */
+[data-skin="tracker"] .pill { background: transparent !important; padding: 0; font-weight: 400; font-size: 12px; }
+[data-skin="tracker"] .pill.neu, [data-skin="tracker"] .pill.ok { color: var(--muted); }
+
+/* Ghi chú: thẻ màu giữ, bỏ bóng */
+[data-skin="tracker"] .nk-card { box-shadow: none; border-radius: 4px; }
+[data-skin="tracker"] .nk-title { font-weight: 500; }
+
+/* Máy tính: menu trái không nền */
+@media (min-width: 960px) {
+  [data-skin="tracker"] .side { background: var(--bg); }
+  [data-skin="tracker"] .side a[aria-current="page"] { background: transparent; color: var(--fg); font-weight: 500; text-decoration: underline; text-underline-offset: 5px; }
+  [data-skin="tracker"] .kpi { border-right: 1px solid var(--line); }
+}
+
+/* Khung riêng của từng nhóm màn → kẻ mảnh */
+[data-skin="tracker"] .ov-list, [data-skin="tracker"] .olist, [data-skin="tracker"] .o-profit, [data-skin="tracker"] .rc-units,
+[data-skin="tracker"] .lrow-list, [data-skin="tracker"] .llist, [data-skin="tracker"] .kcard, [data-skin="tracker"] .bcol, [data-skin="tracker"] .mcard {
+  border: 0; border-top: 1px solid var(--line); border-radius: 0; box-shadow: none; background: transparent;
+}
+[data-skin="tracker"] .ov-list > *, [data-skin="tracker"] .olist > * { padding-left: 0; padding-right: 0; }
+/* Tracker không dùng chữ đậm hơn 500 */
+[data-skin="tracker"] :is(b, strong, h2, h3, h4, th, .nk-title) { font-weight: 500; }

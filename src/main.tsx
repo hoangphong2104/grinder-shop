@@ -5,8 +5,13 @@ import '@fontsource/ibm-plex-sans/500.css'
 import '@fontsource/ibm-plex-sans/600.css'
 import '@fontsource/ibm-plex-mono/400.css'
 import '@fontsource/ibm-plex-mono/500.css'
+import '@fontsource/be-vietnam-pro/200.css'
+import '@fontsource/be-vietnam-pro/300.css'
+import '@fontsource/be-vietnam-pro/400.css'
+import '@fontsource/be-vietnam-pro/500.css'
 import './styles/tokens.css'
 import './styles/app.css'
+import './styles/skin-tracker.css'
 import App from './app/App.tsx'
 import { DataProvider } from './data/store.tsx'
 import { ToastProvider } from './ui/feedback.tsx'
@@ -24,6 +29,14 @@ const updateSW = registerSW({
   },
 })
 void updateSW
+
+// Lớp áo thử: ?skin=tracker (kiểu Coffee Shot Tracker) / ?skin=default - nhớ trong máy này.
+try {
+  const p = new URLSearchParams(location.search).get('skin')
+  if (p) localStorage.setItem('skin', p)
+  const skin = localStorage.getItem('skin')
+  if (skin === 'tracker') document.documentElement.dataset.skin = 'tracker'
+} catch { /* localStorage bị chặn: dùng giao diện mặc định */ }
 
 applyStoredTheme() // giao diện Sáng / Tối / Theo máy đã chọn (CSP chặn script inline nên đặt ở đây)
 
