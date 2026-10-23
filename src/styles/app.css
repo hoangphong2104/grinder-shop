@@ -226,3 +226,14 @@ label.f > .ai-flag { display: inline-flex; width: auto; }
   .kv dd { text-align: left; font-size: 15px; }
   .kv dd a, .kv dd .link-btn { overflow-wrap: anywhere; justify-content: flex-start; text-align: left; }
 }
+
+/* ---------- CR-004 UI-M2 / UI-M3 (Apple HIG 44pt, WCAG 2.5.5): chỗ bấm ≥ 44px; ô nhập 16px để iOS không tự phóng to ---------- */
+@media (max-width: 959px) {
+  .btn, .btn-sm { min-height: 44px; }
+  .chip { min-height: 40px; padding: 6px 14px; }
+  .seg button { min-height: 40px; padding: 4px 14px; }
+  .icon-btn { width: 44px; height: 44px; }
+  .input, textarea.input, select.input { font-size: 16px; min-height: 44px; }
+  .link-btn { min-height: 44px; }
+  .kv dd .link-btn { min-height: 0; }
+}

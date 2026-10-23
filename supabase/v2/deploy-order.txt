@@ -1,0 +1,4 @@
+# Thứ tự migration cho database ĐANG CHẠY (CI tự áp các file chưa áp — scripts/apply-migrations.sh).
+# Chỉ thêm dòng mới ở CUỐI. Mỗi file phải tự gói trong 1 transaction và chạy lại được (idempotent).
+# Mốc ban đầu (đã chạy tay trên Supabase trước khi có CI): setup-v2 (bản pre-003) + 002 — xem deploy-baseline.txt.
+002_buying_fee.sql

@@ -1,4 +1,6 @@
-# test (domain) → typecheck + build → deploy GitHub Pages (chỉ nhánh main).
+# test (domain) → build → [main] cập nhật database Supabase (migration chưa áp) → đưa Edge Function lên → publish GitHub Pages.
+# Khoá nằm trong GitHub Secrets (Chủ dự án tự dán, không qua chat): SUPABASE_DB_URL, SUPABASE_ACCESS_TOKEN.
+# Thiếu khoá → bước tương ứng tự bỏ qua (không lỗi). Migration lỗi → KHÔNG publish app.
 name: ci
 on:
   push:
@@ -8,7 +10,9 @@ permissions:
   contents: read
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false   # không huỷ giữa chừng khi đang cập nhật database
+env:
+  SUPABASE_PROJECT_REF: vhbsjgkeoqtrvwnsfyic
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -25,8 +29,41 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         with:
           path: dist
-  deploy:
+
+  migrate:
     needs: check
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cập nhật database (migration chưa áp)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then echo "::notice::Chưa có secret SUPABASE_DB_URL — bỏ qua cập nhật database."; exit 0; fi
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client > /dev/null
+          bash scripts/apply-migrations.sh
+
+  functions:
+    needs: migrate
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Đưa Edge Function scan-goofish lên
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then echo "::notice::Chưa có secret SUPABASE_ACCESS_TOKEN — bỏ qua Edge Function."; exit 0; fi
+          supabase functions deploy scan-goofish --project-ref "$SUPABASE_PROJECT_REF" --use-api
+
+  deploy:
+    needs: [check, migrate]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:

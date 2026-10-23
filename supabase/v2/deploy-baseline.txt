@@ -1,0 +1,3 @@
+# Migration đã chạy tay trên database thật trước khi bật CI (2026-10-23). Lần đầu CI chạy sẽ ghi các tên này là "đã áp".
+setup-v2.sql
+002_buying_fee.sql
