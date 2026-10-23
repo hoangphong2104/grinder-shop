@@ -23,20 +23,17 @@ test('formatVnd', () => {
   assert.equal(formatVnd(null), '—');
 });
 
-test('formatTr', () => {
-  assert.equal(formatTr(5400000), '5,4tr');
-  assert.equal(formatTr(3000000), '3tr');
-  assert.equal(formatTr(3200000), '3,2tr');
-  assert.equal(formatTr(4649800), '4,6tr');
-  assert.equal(formatTr(5350000), '5,4tr');
-  assert.equal(formatTr(15290000), '15,3tr');
-  assert.equal(formatTr(99960000), '100tr');
-  assert.equal(formatTr(150400000), '150tr');
-  assert.equal(formatTr(1234000000), '1.234tr');
+test('formatTr — làm tròn tới nghìn đồng, hiện "4.038k"', () => {
+  assert.equal(formatTr(4038000), '4.038k');
+  assert.equal(formatTr(4037600), '4.038k');
+  assert.equal(formatTr(5400000), '5.400k');
+  assert.equal(formatTr(4649800), '4.650k');
+  assert.equal(formatTr(31433592), '31.434k');
+  assert.equal(formatTr(1234000000), '1.234.000k');
   assert.equal(formatTr(120000), '120k');
-  assert.equal(formatTr(999600), '1tr');
+  assert.equal(formatTr(999600), '1.000k');
   assert.equal(formatTr(500), '500');
-  assert.equal(formatTr(-2872000), '−2,9tr');
+  assert.equal(formatTr(-2872000), '−2.872k');
   assert.equal(formatTr(undefined), '—');
 });
 

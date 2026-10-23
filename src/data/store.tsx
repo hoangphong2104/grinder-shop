@@ -5,6 +5,11 @@ import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase.ts'
 import { errorMessage } from './errors.ts'
 import type { DbData } from './types.ts'
+import { buildDemoData, demoSession } from './demo.ts'
+
+// Chế độ xem thử (CHỈ khi dev): URL có `?demo` ⇒ dữ liệu mẫu, không đăng nhập, không gọi Supabase.
+// `import.meta.env.DEV` = false khi build ⇒ DEMO là hằng false, Vite/Rollup loại bỏ cả nhánh demo lẫn file demo.ts.
+const DEMO = import.meta.env.DEV && new URLSearchParams(location.search).has('demo')
 
 const EMPTY_BAL = { total_payable_vnd: 0, total_transferred_vnd: 0, total_adjustment_vnd: 0, balance_vnd: 0 }
 
@@ -54,28 +59,31 @@ interface Store {
 const Ctx = createContext<Store | null>(null)
 
 export function DataProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null)
-  const [authReady, setAuthReady] = useState(false)
-  const [data, setData] = useState<DbData | null>(null)
+  const [session, setSession] = useState<Session | null>(() => (DEMO ? demoSession() : null))
+  const [authReady, setAuthReady] = useState(DEMO)
+  const [data, setData] = useState<DbData | null>(() => (DEMO ? buildDemoData() : null))
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [online, setOnline] = useState(navigator.onLine)
   const timer = useRef<number | undefined>(undefined)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: d }) => { setSession(d.session); setAuthReady(true) })
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
+    // Demo: giữ phiên giả, không nghe đăng nhập Supabase
+    const sub = DEMO ? null : supabase.auth.onAuthStateChange((_e, s) => setSession(s)).data
+    if (!DEMO) supabase.auth.getSession().then(({ data: d }) => { setSession(d.session); setAuthReady(true) })
     const on = () => setOnline(true), off = () => setOnline(false)
     addEventListener('online', on); addEventListener('offline', off)
-    return () => { sub.subscription.unsubscribe(); removeEventListener('online', on); removeEventListener('offline', off) }
+    return () => { sub?.subscription.unsubscribe(); removeEventListener('online', on); removeEventListener('offline', off) }
   }, [])
 
   const reload = useCallback(async () => {
+    if (DEMO) return // demo: dữ liệu cố định
     try { setData(await fetchAll()); setError(null) } catch (e) { setError(errorMessage(e)) }
   }, [])
 
   // Đăng nhập xong: khởi tạo (settings + 3 model mặc định) → tải → nghe realtime.
   useEffect(() => {
+    if (DEMO) return // demo: không bootstrap, không mở kênh realtime
     if (!session) { setData(null); return }
     let alive = true
     setLoading(true)
@@ -93,6 +101,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [session, reload])
 
   const rpc = useCallback(async <T,>(fn: string, args?: Record<string, unknown>) => {
+    if (DEMO) throw new Error('Chế độ xem thử: không lưu được')
     const { data: res, error: e } = await supabase.rpc(fn, args)
     if (e) {
       if (String(e.message).includes('VERSION_CONFLICT')) await reload()
@@ -102,7 +111,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return res as T
   }, [reload])
 
-  const signOut = useCallback(async () => { await supabase.auth.signOut(); setData(null) }, [])
+  const signOut = useCallback(async () => {
+    if (DEMO) { location.href = location.pathname; return } // demo: thoát về màn đăng nhập thường
+    await supabase.auth.signOut(); setData(null)
+  }, [])
 
   const value = useMemo(() => ({ session, data, loading: !authReady || loading, error, online, reload, rpc, signOut }),
     [session, data, authReady, loading, error, online, reload, rpc, signOut])

@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useData } from '../data/store.tsx'
 import type { UnitStatusDb, UnitViewRow } from '../data/types.ts'
 import { Shell } from '../ui/Shell.tsx'
-import { GrinderArt, Icon, shapeOf } from '../ui/icons.tsx'
+import { Icon } from '../ui/icons.tsx'
 import { ModelStockChip, UnitChip } from '../ui/status.tsx'
 import { cny, tr, vnd } from '../ui/format.ts'
 import { CostCell, GoRow, fold, holderCode, sortUnits, sortedModelStock, unitProfit, useDesk } from './overview/common.tsx'
@@ -25,7 +25,6 @@ export default function Kho() {
   const ttRaw = params.get('tt')
   const statusF: StatusFilter = isStatus(ttRaw) ? ttRaw : 'avail'
   const [q, setQ] = useState('')
-  const [open, setOpen] = useState<Set<string>>(new Set())
 
   const setParam = (k: string, v: string, def: string) => {
     const p = new URLSearchParams(params)
@@ -114,47 +113,25 @@ export default function Kho() {
       </table></div>
     )
   } else {
-    const toggle = (id: string) => setOpen((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
-    const cards = ms.map((m) => {
-      const mu = units.filter((u) => u.model_id === m.model_id)
-      // Model đã ẩn: chỉ hiện khi có chiếc khớp bộ lọc
-      if (!m.is_active && mu.length === 0) return null
-      const expanded = open.has(m.model_id) || qq.length > 0 || modelF === m.model_id
-      return (
-        <div key={m.model_id} className="mcard">
-          <span className="pic"><GrinderArt shape={shapeOf(m.model_name)} /></span>
-          <div className="nm">{m.model_name}<small>{m.brand} · {m.in_stock_count} trong kho · {m.incoming_count} đang về · {m.reserved_count} giữ</small></div>
-          <div className="big">{m.sellable_count}<small>bán được</small></div>
-          <div className="vars"><ModelStockChip m={m} />{!m.is_active && <span className="pill">Đã ẩn</span>}</div>
-          <div className="vrow">
-            <button onClick={() => toggle(m.model_id)} aria-expanded={expanded}>
-              <span>{mu.length} chiếc {STATUS_TABS.find(([k]) => k === statusF)?.[1].toLowerCase()}</span>
-              <span className="n">{expanded ? 'Thu gọn' : 'Xem chiếc'}</span>
-            </button>
-            {expanded && mu.length === 0 && <p className="muted small" style={{ margin: '8px 2px' }}>Không có chiếc nào khớp bộ lọc.</p>}
-            {expanded && mu.map((u) => (
-              <Link key={u.unit_id} to={`/kho/${u.unit_id}`}>
-                <span className="row-wrap"><b className="num">{u.code}</b> <UnitChip s={u.status} holder={holderCode(d, u)} /></span>
-                <span className="n">nhập {tr(u.cost_vnd)}{u.cost_is_overridden ? '*' : u.cost_is_provisional ? '~' : ''} · bán {tr(u.status === 'sold' ? u.sold_price_vnd : u.list_price_vnd)}</span>
+    // Điện thoại (CR-004 U5): danh sách phẳng TỪNG CHIẾC — mỗi chiếc 1 dòng, tối đa 2 dòng chữ, không gộp theo model.
+    list = units.length === 0 ? emptyText : (
+      <>
+        <p className="muted small" style={{ margin: 0 }}>{units.length} chiếc · vốn trong kho {vnd(stockValue)}</p>
+        <div className="ulist">
+          {units.map((u) => {
+            const price = u.status === 'sold' ? u.sold_price_vnd : u.list_price_vnd
+            return (
+              <Link key={u.unit_id} className="urow" to={`/kho/${u.unit_id}`}>
+                <span className="l1"><b className="num">{u.code}</b><span className="nm">{u.model_name}</span></span>
+                <span className="r1 num">{price != null ? tr(price) : '—'}</span>
+                <span className="l2"><UnitChip s={u.status} holder={holderCode(d, u)} /><span className="meta">nhập {tr(u.cost_vnd)}{u.cost_is_overridden ? '*' : u.cost_is_provisional ? '~' : ''} · {d.lotCode[u.lot_id] ?? 'lô'}{u.days_in_stock != null && u.status !== 'sold' ? ` · ${u.days_in_stock} ngày` : ''}</span></span>
               </Link>
-            ))}
-          </div>
-          <div className="qa">
-            <Link className="btn btn-ghost btn-sm" to={`/lo/new?model=${m.model_id}`}><Icon name="plus" /> Nhập</Link>
-            <Link className="btn btn-primary btn-sm" to="/don/new">Bán</Link>
-          </div>
+            )
+          })}
         </div>
-      )
-    })
-    list = noUnits && ms.length === 0
-      ? <div className="empty">Chưa có model nào — vào <Link to="/danhmuc">Model</Link> để thêm.</div>
-      : (
-        <>
-          {noUnits && emptyText}
-          <div className="mcards">{cards}</div>
-          <p className="hint" style={{ textAlign: 'center' }}>Vốn trong kho {vnd(stockValue)} · bán được = trong kho + đang về chưa giữ. Giá nhập: * sửa tay, ~ tạm tính (lô chưa có phí ship).</p>
-        </>
-      )
+        <p className="hint">Giá bên phải: giá bán dự kiến (chiếc đã bán: giá chốt). Giá nhập: * sửa tay, ~ tạm tính (lô chưa có phí ship).</p>
+      </>
+    )
   }
 
   return (

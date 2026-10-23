@@ -35,21 +35,13 @@ export function formatVnd(n: Vnd | null | undefined): string {
  * Under 100tr one decimal is shown (dropped when it is 0); from 100tr whole millions.
  */
 export function formatTr(n: Vnd | null | undefined): string {
+  // Gọn nhưng đủ chính xác (Chủ dự án 2026-10-23: "ít nhất phải hiện là 4.038k"): làm tròn tới nghìn đồng, nhóm nghìn kiểu vi-VN.
   if (n == null) return '—';
   const r = roundVnd(n);
   const sign = r < 0 ? MINUS : '';
   const a = Math.abs(r);
-  const thousands = Math.round(a / 1e3);
-  if (thousands < 1000) {
-    return sign + (a >= 1e3 ? `${thousands}k` : String(a));
-  }
-  if (a < 1e8) {
-    const tenths = Math.round(a / 1e5);
-    const whole = Math.floor(tenths / 10);
-    const dec = tenths % 10;
-    return sign + groupThousands(whole) + (dec ? `,${dec}` : '') + 'tr';
-  }
-  return sign + groupThousands(Math.round(a / 1e6)) + 'tr';
+  if (a < 1e3) return sign + String(a);
+  return sign + groupThousands(Math.round(a / 1e3)) + 'k';
 }
 
 /** `1010` → `"¥1.010"`; decimals use a comma (`99.5` → `"¥99,5"`). */

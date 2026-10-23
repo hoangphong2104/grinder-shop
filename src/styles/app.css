@@ -190,3 +190,39 @@ a.btn-primary { color: var(--on-fill); }
 .note-body:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .note-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 @media (min-width: 960px) { .notes-grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); align-items: start; } }
+
+/* ---------- CR-004: chống xuống dòng trên điện thoại (audit U1–U9) ---------- */
+/* Dòng danh sách: tối đa 2 dòng chữ, phần dài cắt "…" */
+.shot { grid-template-columns: minmax(0, 1fr) auto; }
+.shot .b, .shot .t, .shot .f, .li .main b, .li .main .s, .kpi .s, .kcard .t, .kcard .s { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.li .main b { display: block; }
+.shot .r { max-width: 48vw; }
+.shot .r .pill { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+/* Kho trên điện thoại: mỗi chiếc 1 dòng (U5) */
+.ulist { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
+.urow { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "l1 r1" "l2 l2"; gap: 4px 10px; padding: 10px 14px; border-bottom: 1px solid var(--line-2); text-decoration: none; color: var(--fg); min-height: 56px; }
+.urow:last-child { border-bottom: 0; }
+.urow:active { background: var(--surface-2); }
+.urow .l1 { grid-area: l1; display: flex; gap: 8px; align-items: baseline; min-width: 0; }
+.urow .l1 b { font-size: 15px; flex: none; }
+.urow .l1 .nm { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.urow .r1 { grid-area: r1; font-weight: 500; font-size: 14px; text-align: right; }
+.urow .l2 { grid-area: l2; display: flex; gap: 8px; align-items: center; min-width: 0; }
+.urow .l2 .pill { flex: none; }
+.urow .l2 .meta { color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; font-family: var(--mono); }
+/* Form: nhãn + dấu * cùng 1 dòng, 2 ô cạnh nhau thẳng hàng (U6) */
+label.f { display: block; }
+label.f > .input, label.f > select, label.f > textarea, label.f > .hint, label.f > .err-text, label.f > .ai-flag { display: block; width: 100%; margin-top: 5px; }
+label.f > .lrow { display: flex; margin-top: 0; }
+label.f > .ai-flag { display: inline-flex; width: auto; }
+.two { align-items: start; }
+/* Chip cuộn ngang: mờ mép phải để biết còn chip (U9) */
+.chips { -webkit-mask-image: linear-gradient(to right, #000 88%, transparent); mask-image: linear-gradient(to right, #000 88%, transparent); padding-right: 24px; }
+/* Thông tin nhãn – giá trị: điện thoại xếp chồng, canh trái (U7) */
+@media (max-width: 959px) {
+  .kv { grid-template-columns: 1fr; gap: 0; }
+  .kv dt { font-size: 12px; margin-top: 8px; }
+  .kv dt:first-child { margin-top: 0; }
+  .kv dd { text-align: left; font-size: 15px; }
+  .kv dd a, .kv dd .link-btn { overflow-wrap: anywhere; justify-content: flex-start; text-align: left; }
+}
