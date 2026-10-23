@@ -1,24 +1,25 @@
-// Sinh icon PNG (nền xanh rêu, hình cối tay trắng) — không cần thư viện ngoài. Chạy: node scripts/gen-icons.mjs
+// Sinh icon PNG (nền trắng, hình cối tay đen - kiểu Coffee Shot Tracker) — không cần thư viện ngoài. Chạy: node scripts/gen-icons.mjs
 // Mọi hình nằm trong vùng an toàn maskable (bán kính ≤ 0.4 × 512 quanh tâm) → dùng chung cho any + maskable.
 import fs from 'node:fs'
 import zlib from 'node:zlib'
 
-const BG = [0x0e, 0x6e, 0x66]
-const FG = [0xff, 0xff, 0xff]
-// Hình theo viewBox 512: [loại, ...tham số]
-const SHAPES = [
-  ['rect', 206, 196, 300, 404, 18], // thân cối (bo góc)
-  ['rect', 220, 404, 286, 426, 6],  // đế
-  ['rect', 247, 140, 259, 200, 0],  // trục
-  ['rect', 247, 136, 352, 148, 6],  // tay quay
-  ['circle', 356, 122, 22],         // núm
-]
-const inRect = (x, y, [, x0, y0, x1, y1, r]) => {
+const BG = [0xff, 0xff, 0xff]
+const FG = [0x1a, 0x1a, 0x1a]
+// Hình nét (viewBox 512): thân + đế là khung viền, trục + tay quay là nét đơn, núm là vòng tròn. SW = độ dày nét.
+const SW = 16
+const inRR = (x, y, x0, y0, x1, y1, r) => {
   if (x < x0 || x > x1 || y < y0 || y > y1) return false
   const cx = Math.min(Math.max(x, x0 + r), x1 - r), cy = Math.min(Math.max(y, y0 + r), y1 - r)
   return Math.hypot(x - cx, y - cy) <= r
 }
-const hit = (x, y) => SHAPES.some((s) => (s[0] === 'rect' ? inRect(x, y, s) : Math.hypot(x - s[1], y - s[2]) <= s[3]))
+const frame = (x, y, x0, y0, x1, y1, r) => inRR(x, y, x0, y0, x1, y1, r) && !inRR(x, y, x0 + SW, y0 + SW, x1 - SW, y1 - SW, Math.max(r - SW, 0))
+const hit = (x, y) =>
+  frame(x, y, 200, 196, 306, 404, 22) ||                 // thân cối
+  inRR(x, y, 200, 300, 306, 300 + SW, 0) ||              // vạch vòng chỉnh cỡ xay
+  frame(x, y, 214, 396, 292, 432, 8) ||                  // đế
+  inRR(x, y, 253 - SW / 2, 140, 253 + SW / 2, 200, 0) || // trục
+  inRR(x, y, 253 - SW / 2, 134, 340, 134 + SW, SW / 2) || // tay quay
+  (Math.hypot(x - 356, y - 122) <= 26 && Math.hypot(x - 356, y - 122) >= 26 - SW) // núm
 
 function render(size) {
   const ss = 4, k = size / 512, px = Buffer.alloc(size * size * 3)
@@ -41,5 +42,5 @@ function png(size, rgb) {
   return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))])
 }
 for (const [f, s] of [['icon-192.png', 192], ['icon-512.png', 512], ['apple-touch-icon.png', 180]]) fs.writeFileSync(new URL(`../public/${f}`, import.meta.url), render(s))
-fs.writeFileSync(new URL('../public/icon.svg', import.meta.url), `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="96" fill="#0E6E66"/><g fill="#fff"><rect x="206" y="196" width="94" height="208" rx="18"/><rect x="220" y="404" width="66" height="22" rx="6"/><rect x="247" y="140" width="12" height="60"/><rect x="247" y="136" width="105" height="12" rx="6"/><circle cx="356" cy="122" r="22"/></g></svg>`)
+fs.writeFileSync(new URL('../public/icon.svg', import.meta.url), `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="96" fill="#FFFFFF"/><g fill="none" stroke="#1A1A1A" stroke-width="16" stroke-linecap="round"><rect x="208" y="204" width="90" height="192" rx="14"/><path d="M200 308h106"/><rect x="222" y="404" width="62" height="20" rx="4"/><path d="M253 140v56M253 142h80"/><circle cx="356" cy="122" r="18"/></g></svg>`)
 console.log('icons ok')

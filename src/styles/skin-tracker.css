@@ -97,3 +97,6 @@
 [data-skin="tracker"] .ov-list > *, [data-skin="tracker"] .olist > * { padding-left: 0; padding-right: 0; }
 /* Tracker không dùng chữ đậm hơn 500 */
 [data-skin="tracker"] :is(b, strong, h2, h3, h4, th, .nk-title) { font-weight: 500; }
+/* Logo trong app: nền trắng, nét cối đen (khớp icon app) */
+[data-skin="tracker"] .brandmark { background: var(--bg); color: var(--fg); border: 1px solid var(--fg); }
+[data-skin="tracker"] .gpic, [data-skin="tracker"] .hero-g .gpic { background: transparent; color: var(--fg); border: 1px solid var(--line); }

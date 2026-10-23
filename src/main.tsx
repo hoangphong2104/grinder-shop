@@ -30,13 +30,12 @@ const updateSW = registerSW({
 })
 void updateSW
 
-// Lớp áo thử: ?skin=tracker (kiểu Coffee Shot Tracker) / ?skin=default - nhớ trong máy này.
+// Giao diện kiểu Coffee Shot Tracker là MẶC ĐỊNH (Chủ dự án 2026-10-23). ?skin=classic để dùng lại giao diện xanh rêu cũ, ?skin=tracker để quay về.
 try {
   const p = new URLSearchParams(location.search).get('skin')
   if (p) localStorage.setItem('skin', p)
-  const skin = localStorage.getItem('skin')
-  if (skin === 'tracker') document.documentElement.dataset.skin = 'tracker'
-} catch { /* localStorage bị chặn: dùng giao diện mặc định */ }
+  if (localStorage.getItem('skin') !== 'classic') document.documentElement.dataset.skin = 'tracker'
+} catch { document.documentElement.dataset.skin = 'tracker' }
 
 applyStoredTheme() // giao diện Sáng / Tối / Theo máy đã chọn (CSP chặn script inline nên đặt ở đây)
 
