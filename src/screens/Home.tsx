@@ -323,17 +323,15 @@ export default function Home() {
   return (
     <Shell section="home" title="Tổng quan" actions={<span className="muted small only-desk">Tháng {mNo}/{month.slice(0, 4)}</span>}>
       {desk
-        // CR-008: máy tính xem gọn trong 1 màn - 6 ô số 1 hàng + lưới 2 cột, Việc cần làm ở dưới cùng; mỗi ô tự cuộn bên trong
+        // CR-008: máy tính - 6 ô số 1 hàng + 2 cột (hiện đủ, không cuộn trong); Việc cần làm ở dưới cùng, lấp phần màn còn lại và tự cuộn
         ? (
           <div className="ov-desk">
             {kpis}
             <div className="ov-dash">
-              <section className="ov-panel">{compareBlock}{arriveBlock}</section>
-              <section className="ov-panel">{marginBlock}</section>
-              <section className="ov-panel">{priceBlock}</section>
-              <section className="ov-panel">{sellerBlock}</section>
-              <section className="ov-panel todo">{todo}</section>
+              <div className="stack">{compareBlock}{arriveBlock}</div>
+              <div className="stack">{marginBlock}{sellerBlock}{priceBlock}</div>
             </div>
+            <section className="ov-panel todo">{todo}</section>
           </div>
         )
         : <>{kpis}{compareBlock}{todo}{arriveBlock}{marginBlock}{priceBlock}{sellerBlock}</>}

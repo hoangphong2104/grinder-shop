@@ -172,21 +172,20 @@ a.link-btn, a.btn { text-decoration: none; }
 .ar-stat { display: flex; flex-direction: column; gap: 2px; }
 .ar-stat .v { font: 300 28px/34px var(--mono); font-variant-numeric: tabular-nums; }
 .ar-stat .s { font-size: 13px; color: var(--muted); }
-/* CR-008: Tổng quan máy tính gọn trong 1 màn hình */
+/* CR-008: Tổng quan máy tính - 2 cột hiện đủ; chỉ Việc cần làm (dưới cùng) lấp phần màn còn lại và tự cuộn */
 @media (min-width: 960px) {
   main.view:has(.ov-desk) { padding-bottom: 16px; max-width: none; }
-  .ov-desk { display: flex; flex-direction: column; gap: 14px; height: calc(100dvh - 56px - 48px); min-height: 560px; }
+  .ov-desk { display: flex; flex-direction: column; gap: 18px; min-height: calc(100dvh - 56px - 48px); }
   .ov-desk .kpis.ov-k6 { grid-template-columns: repeat(6, minmax(0, 1fr)); flex: none; }
   .ov-desk .kpi { padding: 10px 8px; }
   .ov-desk .kpi .v { font-size: 22px; }
-  .ov-dash { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.1fr); gap: 14px 28px; }
-  .ov-panel { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 14px; padding-right: 4px; scrollbar-width: thin; }
-  .ov-panel.todo { grid-column: 1 / -1; }
+  .ov-desk .kpi .k { letter-spacing: .1em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ov-dash { flex: none; display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; align-items: start; }
+  .ov-dash > .stack { gap: 22px; }
+  .ov-panel.todo { flex: 1 1 0; min-height: 280px; overflow: auto; scrollbar-width: thin; padding: 0 4px 28px 0;
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); }
+  .ov-panel.todo .ov-todo > .section-title:first-child { position: sticky; top: 0; z-index: 1; background: var(--bg); padding-bottom: 4px; margin: 0; }
   /* Việc cần làm: các nhóm xếp 2 cột thẳng với 2 cột phía trên */
   .ov-panel.todo > .ov-todo { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 28px; align-items: start; }
   .ov-panel.todo > .ov-todo > .section-title, .ov-panel.todo > .ov-todo > .empty { grid-column: 1 / -1; }
-  /* mờ dần ở đáy ô ⇒ biết còn cuộn được; đệm đáy để dòng cuối không bị mờ */
-  .ov-panel { padding-bottom: 28px; -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); }
-  .ov-desk .kpi .k { letter-spacing: .1em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .ov-panel .section-title:first-child, .ov-panel > .stack:first-child > .section-title:first-child { position: sticky; top: 0; z-index: 1; background: var(--bg); padding-bottom: 4px; margin: 0; }
 }
