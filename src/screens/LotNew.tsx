@@ -204,31 +204,36 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
     const th = Number(d.settings?.ai_confidence_threshold ?? 0.7)
     const flags = new Set(r.flags ?? [])
     const f = r.fields ?? {}
-    const good = <T,>(k: string, x: { value: T | null; confidence: number } | undefined): x is { value: T; confidence: number } =>
-      !!x && x.value != null && x.value !== '' && Number(x.confidence) >= th && !flags.has(k)
+    // CR-008: AI chưa chắc (dưới ngưỡng / bị flag) vẫn điền sẵn, đánh dấu "AI không chắc - kiểm tra" thay vì để trống.
+    const has = <T,>(x: { value: T | null; confidence: number } | undefined): x is { value: T; confidence: number } =>
+      !!x && x.value != null && x.value !== ''
+    const sure = (k: string, x: { confidence: number } | undefined) => !!x && Number(x.confidence) >= th && !flags.has(k)
 
-    // Model: chỉ chọn khi AI đủ chắc (≥ ngưỡng, không bị flag) và là model đang bán; không thì để trống + gợi ý theo tên gọi khác.
+    // Model: model AI chọn (đang bán); không có thì đoán theo tên gọi khác trong tiêu đề (đánh dấu chưa chắc).
     const fm = f.model_id
-    const aiModelId = good('model_id', fm) ? fm.value : null
-    const aiModel = aiModelId ? activeModels.find((m) => m.id === aiModelId) ?? null : null
-    const hint = aiModel ? null : matchModelByAlias(d.models, [f.model_id?.matched_text, f.listing_title?.value])
+    const aiPick = has(fm) ? activeModels.find((x) => x.id === fm.value) ?? null : null
+    const hint = aiPick ? null : matchModelByAlias(d.models, [f.model_id?.matched_text, f.listing_title?.value])
+    const hintActive = hint ? activeModels.find((x) => x.id === hint.id) ?? null : null
+    const aiModel = aiPick ?? hintActive
+    const modelSure = !!aiPick && sure('model_id', fm)
 
     const cur = draftRef.current
     const next: Draft = { ...cur, groups: cur.groups.map((g) => ({ ...g })) }
     const g0 = next.groups[0]
     const m: Marks = {}
-    const fill = (key: MarkKey, empty: boolean, ok: boolean, apply: () => void) => {
+    const fill = (key: MarkKey, empty: boolean, present: boolean, ok: boolean, apply: () => void) => {
       if (!empty) return // chỉ điền ô người dùng chưa gõ
-      if (ok) { apply(); m[key] = 'ai' } else m[key] = 'low'
+      if (present) apply()
+      m[key] = present && ok ? 'ai' : 'low'
     }
-    const sellerNick = r.seller_match?.nickname ?? (good('seller_nickname', f.seller_nickname) ? f.seller_nickname.value : null)
-    fill('title', !cur.title.trim(), good('listing_title', f.listing_title), () => { next.title = String(f.listing_title!.value).slice(0, 300) })
-    fill('seller', !cur.sellerNick.trim(), good('seller_nickname', f.seller_nickname) && !!sellerNick, () => { next.sellerNick = String(sellerNick).slice(0, 100) })
-    fill('region', !cur.region.trim(), good('seller_region', f.seller_region), () => { next.region = String(f.seller_region!.value).slice(0, 100) })
+    const sellerNick = r.seller_match?.nickname ?? (has(f.seller_nickname) ? f.seller_nickname.value : null)
+    fill('title', !cur.title.trim(), has(f.listing_title), sure('listing_title', f.listing_title), () => { next.title = String(f.listing_title!.value).slice(0, 300) })
+    fill('seller', !cur.sellerNick.trim(), !!sellerNick, !!r.seller_match || sure('seller_nickname', f.seller_nickname), () => { next.sellerNick = String(sellerNick).slice(0, 100) })
+    fill('region', !cur.region.trim(), has(f.seller_region), sure('seller_region', f.seller_region), () => { next.region = String(f.seller_region!.value).slice(0, 100) })
     if (g0) {
-      fill('cny', !g0.cny.trim(), good('price_cny', f.price_cny) && Number(f.price_cny!.value) > 0, () => { g0.cny = numStr(Number(f.price_cny!.value)) })
+      fill('cny', !g0.cny.trim(), has(f.price_cny) && Number(f.price_cny.value) > 0, sure('price_cny', f.price_cny), () => { g0.cny = numStr(Number(f.price_cny!.value)) })
       // CR-006: 1 lô = 1 cối ⇒ không dùng số lượng AI đoán (qty_guess)
-      fill('model', !g0.modelId, aiModel != null, () => {
+      fill('model', !g0.modelId, aiModel != null, modelSure, () => {
         g0.modelId = aiModel!.id
         if (g0.listAuto || !g0.list.trim()) { g0.list = defaultList(d, aiModel!.id); g0.listAuto = true }
       })
@@ -236,7 +241,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
 
     setDraft(next)
     setMarks((p) => ({ ...p, ...m }))
-    setAi({ notes: r.notes ?? null, condition: r.condition_text ?? null, usage: r.usage ?? null, modelHint: m.model === 'low' ? hint : null })
+    setAi({ notes: r.notes ?? null, condition: r.condition_text ?? null, usage: r.usage ?? null, modelHint: m.model === 'low' && !aiModel ? hint : null })
   }
 
   const scan = async () => {

@@ -214,6 +214,82 @@ export default function Home() {
     </div>
   )
 
+  // ---------- CR-008: So với tháng trước - lãi, doanh thu, số cối bán (cùng cách tính ô số)
+  const prevMonth = addMonths(month, -1)
+  const monthStats = (ym: string) => {
+    const os = d.orderSummary.filter((o) => profitMonth(o) === ym)
+    return {
+      profit: os.reduce((a, o) => a + (o.profit_vnd ?? 0), 0),
+      rev: os.filter((o) => o.status !== 'returned').reduce((a, o) => a + o.goods_vnd, 0),
+      units: d.unitView.filter((u) => u.status === 'sold' && u.sold_at?.slice(0, 7) === ym).length,
+    }
+  }
+  const cur = monthStats(month), prev = monthStats(prevMonth)
+  const delta = (a: number, b: number) => {
+    if (b === 0) return a === 0 ? <span className="muted">bằng</span> : <span className="muted">mới</span>
+    const p = Math.round(((a - b) / Math.abs(b)) * 100)
+    return <span className={p > 0 ? 'pos' : p < 0 ? 'neg' : 'muted'}>{p > 0 ? '▲' : p < 0 ? '▼' : ''} {Math.abs(p)}%</span>
+  }
+  const cmpRows: [string, number, number, (n: number) => string][] = [
+    ['Lãi', cur.profit, prev.profit, signed], ['Doanh thu', cur.rev, prev.rev, tr], ['Cối bán', cur.units, prev.units, (n) => `${n} cối`],
+  ]
+  const compareBlock = (
+    <div className="stack" id="home-compare">
+      <p className="section-title">Tháng {mNo} so với tháng {Number(prevMonth.slice(5))}</p>
+      <div className="ov-list">
+        {cmpRows.map(([k, a, b, f]) => (
+          <Row2 key={k} a={<b>{k}</b>} b={f(a)} c={<Tx>tháng trước {f(b)}</Tx>} d={delta(a, b)} />
+        ))}
+      </div>
+    </div>
+  )
+
+  // ---------- CR-008: Giá Goofish theo model - giá ¥ các lần mua (lần mới nhất so với lần trước, thấp / cao nhất)
+  const priceRows = d.models.map((m) => {
+    const buys = d.unitView.filter((u) => u.model_id === m.id && u.status !== 'cancelled')
+      .sort((a, b) => a.ordered_at.localeCompare(b.ordered_at) || a.code.localeCompare(b.code))
+    const ps = buys.map((u) => Number(u.price_cny))
+    return { m, n: ps.length, last: ps[ps.length - 1], before: ps.length > 1 ? ps[ps.length - 2] : null, lo: Math.min(...ps), hi: Math.max(...ps), when: buys[buys.length - 1]?.ordered_at }
+  }).filter((x) => x.n > 0)
+  const cnyT = (n: number) => `¥${n.toLocaleString('vi-VN')}`
+  const priceBlock = (
+    <div className="stack" id="home-price">
+      <p className="section-title">Giá Goofish theo model <span className="muted">lần mua gần nhất</span></p>
+      {priceRows.length === 0 ? <p className="muted small" style={{ margin: 0 }}>Chưa nhập cối nào.</p> : (
+        <div className="ov-list">
+          {priceRows.map((x) => (
+            <Row2 key={x.m.id} to={`/kho?model=${x.m.id}&tt=all`} a={<Ident id={x.m.name} />} b={cnyT(x.last)}
+              c={<Tx>{x.n > 1 ? `${x.n} lần mua · ${x.lo === x.hi ? cnyT(x.lo) : `${cnyT(x.lo)} - ${cnyT(x.hi)}`}` : `mua 1 lần · ${dmy(x.when)}`}</Tx>}
+              d={x.before == null || x.last === x.before ? undefined
+                : <span className={x.last > x.before ? 'neg' : 'pos'} title="so với lần mua trước">{x.last > x.before ? '▲' : '▼'} {cnyT(Math.abs(x.last - x.before))}</span>} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
+  // ---------- CR-008: Người bán Goofish - số cối đã mua, thời gian về TB, số cối có lỗi / đã dùng khi nhận
+  const sellerRows = d.sellers.map((sl) => {
+    const us = d.unitView.filter((u) => u.seller_id === sl.id && u.status !== 'cancelled')
+    const days = us.filter((u) => u.received_at).map((u) => dayDiff(u.ordered_at, u.received_at!)).filter((n) => n >= 0)
+    const bad = us.filter((u) => u.is_received && (u.condition === 'defect' || u.condition === 'used')).length
+    return { sl, n: us.length, avg: days.length ? Math.round(days.reduce((a, n) => a + n, 0) / days.length) : null, bad }
+  }).filter((x) => x.n > 0).sort((a, b) => Number(a.sl.is_avoided) - Number(b.sl.is_avoided) || a.bad - b.bad || b.n - a.n)
+  const sellerBlock = (
+    <div className="stack" id="home-sellers">
+      <p className="section-title">Người bán Goofish</p>
+      {sellerRows.length === 0 ? <p className="muted small" style={{ margin: 0 }}>Chưa có người bán nào - nhập cối kèm tên người bán để theo dõi.</p> : (
+        <div className="ov-list">
+          {sellerRows.slice(0, 6).map((x) => (
+            <Row2 key={x.sl.id} a={<Ident id={x.sl.nickname} text={x.sl.region ?? undefined} />} b={`${x.n} cối`}
+              c={<Tx>{x.avg != null ? `về TB ${x.avg} ngày` : 'chưa có cối về'}{x.sl.is_avoided ? ' · đang đánh dấu tránh' : ''}</Tx>}
+              d={x.bad > 0 ? <span className="neg">{x.bad} cối lỗi / đã dùng</span> : x.avg != null ? <span className="pos">hàng ổn</span> : undefined} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
   const marginBlock = (
     <div className="stack" id="home-margin">
       <p className="section-title">Lãi theo model</p>
@@ -247,8 +323,8 @@ export default function Home() {
   return (
     <Shell section="home" title="Tổng quan" actions={<span className="muted small only-desk">Tháng {mNo}/{month.slice(0, 4)}</span>}>
       {desk
-        ? <>{kpis}<div className="cols">{todo}<div className="stack">{arriveBlock}{marginBlock}</div></div></>
-        : <>{kpis}{todo}{arriveBlock}{marginBlock}</>}
+        ? <>{kpis}<div className="cols">{todo}<div className="stack">{compareBlock}{arriveBlock}{marginBlock}{priceBlock}{sellerBlock}</div></div></>
+        : <>{kpis}{compareBlock}{todo}{arriveBlock}{marginBlock}{priceBlock}{sellerBlock}</>}
     </Shell>
   )
 }

@@ -40,13 +40,13 @@ function aiOut(over: Record<string, unknown> = {}) {
 
 // ---------------------------------------------------------------- tiện ích thuần
 
-Deno.test("cleanAiOutput: map mã → uuid, trim, ngưỡng tin cậy ⇒ null + flag", () => {
+Deno.test("cleanAiOutput: map mã → uuid, trim, dưới ngưỡng ⇒ vẫn điền + flag", () => {
   const r = m.cleanAiOutput(aiOut(), catalog, 0.7);
   assertEquals(r.fields.listing_title.value, "1Zpresso K-Ultra 手摇磨豆机 全新");
   assertEquals(r.fields.price_cny.value, 1010);
   assertEquals(r.fields.model_id.value, KU);
   assertEquals(r.fields.model_id.matched_text, "K-Ultra");
-  assertEquals(r.fields.seller_region.value, null); // 0.6 < 0.7
+  assertEquals(r.fields.seller_region.value, "浙江"); // 0.6 < 0.7 nhưng ≥ MIN_KEEP ⇒ giữ + flag
   assertEquals(r.fields.seller_region.confidence, 0.6);
   assertEquals(r.flags, ["seller_region"]);
   assertEquals(r.qty_guess, null);
@@ -94,10 +94,21 @@ Deno.test("cleanAiOutput: giá sai / mã ngoài danh mục / confidence ngoài [
   assert(r.flags.includes("seller_region"));
 });
 
-Deno.test("cleanAiOutput: không phải tin Goofish ⇒ AI_UNREADABLE", () => {
+Deno.test("cleanAiOutput: quá thấp (< MIN_KEEP) ⇒ null + flag", () => {
+  const r = m.cleanAiOutput(aiOut({ seller_region: { value: "浙江", confidence: 0.2 } }), catalog, 0.7);
+  assertEquals(r.fields.seller_region.value, null);
+  assertEquals(r.flags, ["seller_region"]);
+});
+
+Deno.test("cleanAiOutput: AI nói không phải tin Goofish nhưng đọc được giá / tiêu đề ⇒ vẫn trả", () => {
+  const r = m.cleanAiOutput(aiOut({ is_goofish_listing: false }), catalog, 0.7);
+  assertEquals(r.fields.price_cny.value, 1010);
+});
+
+Deno.test("cleanAiOutput: không phải tin Goofish, không có giá lẫn tiêu đề ⇒ AI_UNREADABLE", () => {
   let code = "";
   try {
-    m.cleanAiOutput(aiOut({ is_goofish_listing: false }), catalog, 0.7);
+    m.cleanAiOutput(aiOut({ is_goofish_listing: false, price_cny: { value: null, confidence: 0 }, listing_title: { value: null, confidence: 0 } }), catalog, 0.7);
   } catch (e) {
     code = (e as InstanceType<typeof m.ScanError>).code;
   }
@@ -337,7 +348,7 @@ Deno.test("handler: ảnh - tải từ Storage, gửi inlineData base64", async 
   assert(!calls.some((c) => c.url.includes("/rest/v1/lots")));
 });
 
-Deno.test("handler: Gemini 429 ⇒ thử fallback 1 lần ⇒ AI_QUOTA_EXHAUSTED, finish error 0 token", async () => {
+Deno.test("handler: Gemini 429 mọi model ⇒ thử hết chuỗi model ⇒ AI_QUOTA_EXHAUSTED, finish error 0 token", async () => {
   const seen: string[] = [];
   const { fetch, calls } = makeFetch({
     gemini: (model) => {
@@ -351,7 +362,7 @@ Deno.test("handler: Gemini 429 ⇒ thử fallback 1 lần ⇒ AI_QUOTA_EXHAUSTED
   const b = await res.json();
   assertEquals(b.ok, false);
   assertEquals(b.error.code, "AI_QUOTA_EXHAUSTED");
-  assertEquals(seen, ["gemini-test-primary", "gemini-test-fallback"]);
+  assertEquals(seen, ["gemini-test-primary", "gemini-test-fallback", ...m.LAST_RESORT_MODELS]);
   const fin = calls.find((c) => c.url.endsWith("/rpc/ai_scan_finish"))!.body as Record<string, unknown>;
   assertEquals(fin.p_status, "error");
   assertEquals(fin.p_error_code, "AI_QUOTA_EXHAUSTED");
@@ -368,7 +379,28 @@ Deno.test("handler: fallback thành công sau 429", async () => {
   assertEquals(b.model, "gemini-test-fallback");
 });
 
-Deno.test("handler: finishReason ≠ STOP ⇒ 422 AI_UNREADABLE (token vẫn ghi)", async () => {
+Deno.test("handler: model chính 404 (sai tên) ⇒ thử model kế, thành công", async () => {
+  const seen: string[] = [];
+  const { fetch } = makeFetch({
+    gemini: (model) => { seen.push(model); return model === "gemini-test-primary" ? new Response("{}", { status: 404 }) : geminiOk(aiOut()); },
+  });
+  const h = m.createHandler({ env: makeEnv(), fetch, log: silent });
+  const b = await (await h(post(textBody))).json();
+  assertEquals(b.ok, true);
+  assertEquals(b.model, m.LAST_RESORT_MODELS[0]);
+  assertEquals(seen, ["gemini-test-primary", m.LAST_RESORT_MODELS[0]]);
+});
+
+Deno.test("handler: key sai (403) ⇒ không thử model khác", async () => {
+  const seen: string[] = [];
+  const { fetch } = makeFetch({ gemini: (model) => { seen.push(model); return new Response("{}", { status: 403 }); } });
+  const h = m.createHandler({ env: makeEnv({ SCAN_MODEL_FALLBACK: "gemini-test-fallback" }), fetch, log: silent });
+  const res = await h(post(textBody));
+  assertEquals(res.status, 502);
+  assertEquals(seen, ["gemini-test-primary"]);
+});
+
+Deno.test("handler: finishReason ≠ STOP ở mọi model ⇒ 422 AI_UNREADABLE (token cộng dồn)", async () => {
   const { fetch, calls } = makeFetch({
     gemini: () =>
       new Response(
@@ -384,7 +416,7 @@ Deno.test("handler: finishReason ≠ STOP ⇒ 422 AI_UNREADABLE (token vẫn ghi
   assertEquals(res.status, 422);
   assertEquals((await res.json()).error.code, "AI_UNREADABLE");
   const fin = calls.find((c) => c.url.endsWith("/rpc/ai_scan_finish"))!.body as Record<string, unknown>;
-  assertEquals(fin.p_input_tokens, 900);
+  assertEquals(fin.p_input_tokens, 900 * (1 + m.LAST_RESORT_MODELS.length));
 });
 
 Deno.test("handler: Gemini 500 ⇒ 502 AI_UPSTREAM_ERROR", async () => {

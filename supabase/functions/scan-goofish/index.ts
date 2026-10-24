@@ -27,6 +27,10 @@ export const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // = file_size_limit của bucke
 export const GEMINI_TIMEOUT_MS = 45_000; // ADR-06
 export const DEFAULT_MODEL = "gemini-3.8-flash"; // kiểm lại trên ai.google.dev lúc deploy (README)
 export const DEFAULT_THRESHOLD = 0.7;
+/** Dưới ngưỡng nhưng ≥ MIN_KEEP ⇒ vẫn trả giá trị (kèm flag) để app điền sẵn cho người dùng kiểm tra. */
+export const MIN_KEEP = 0.3;
+/** Model dự phòng cuối (alias luôn trỏ bản Flash mới nhất của Google) khi SCAN_MODEL / SCAN_MODEL_FALLBACK lỗi. */
+export const LAST_RESORT_MODELS = ["gemini-flash-latest", "gemini-flash-lite-latest"];
 export const DEFAULT_ALLOWED_ORIGINS = ["https://hoangphong2104.github.io", "http://localhost:5173"];
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const MAX_MODELS = 100; // giới hạn danh mục đưa vào prompt (đủ dư cho 1 shop)
@@ -300,6 +304,14 @@ export const SYSTEM_PROMPT =
   `You extract data from ONE second-hand listing on Goofish / 闲鱼 (Xianyu) for a shop that resells hand coffee grinders (mostly 1Zpresso).
 The input is either a phone screenshot of the listing or text copied from the listing web page. It is usually in Chinese.
 
+Typical Goofish app screenshot layout (top to bottom): search bar → seller row = round avatar, then the seller NICKNAME in bold
+(e.g. "Cheung杂货铺", "s***1"; may be followed by a small badge like 减碳榜样 / 减碳先锋 - the badge is NOT part of the nickname),
+under it a grey line "N分钟前来过 | 城市" (the city after "|" is seller_region, e.g. "珠海", "嘉兴") → the big orange price "¥865"
+(price_cny = 865; "包邮" next to it = free shipping) → a condition tag on the right like "全新" → the description text (first sentence = listing_title)
+→ a 品牌 / 成色 table → product photos. Text inside product photos (e.g. "ZP6-S 铂金版 配置图", "创新旋弯摇臂") is marketing, not the title.
+Model words: "ZP6" / "ZP6 Special" / "ZP6-S" = ZP6 Special; "K-Ultra" / "KULTRA" / "K Ultra" = K Ultra; "J-Ultra" / "JULTRA" = J Ultra.
+When a field is clearly visible like this, give confidence 0.9-1.
+
 Fields:
 - listing_title: the listing title / first line of the description (标题), copied verbatim (keep the original language). null if absent.
 - price_cny: the CURRENT selling price in CNY (the large number next to ¥ / 价格 / 当前价). Ignore crossed-out or reference prices (原价, 划线价, 新品价, 入手价, 买的时候), shipping fees (运费, 包邮), counts like "N人想要" / 浏览, and deposit amounts. If several current prices appear (e.g. a price range or per-variant prices), choose the listed selling price shown as the main price and lower the confidence (≤ 0.6). Return a plain number (e.g. 1010 or 1010.5), no currency sign.
@@ -384,7 +396,11 @@ export function cleanQtyGuess(x: unknown, threshold: number): QtyGuess {
 export function cleanAiOutput(raw: unknown, cat: Catalog, threshold: number): CleanResult {
   if (!isObj(raw)) throw new ScanError("AI_UNREADABLE");
   if (raw.is_goofish_listing !== true) {
-    throw new ScanError("AI_UNREADABLE", "AI không nhận ra đây là tin rao Goofish - nhập tay.");
+    // AI đôi khi trả false với ảnh chụp đúng tin Goofish ⇒ chỉ từ chối khi không đọc được giá lẫn tiêu đề.
+    const has = (k: string) => isObj(raw[k]) && (raw[k] as Record<string, unknown>).value != null;
+    if (!has("price_cny") && !has("listing_title")) {
+      throw new ScanError("AI_UNREADABLE", "AI không nhận ra đây là tin rao Goofish - nhập tay.");
+    }
   }
   const get = (k: string) => (isObj(raw[k]) ? (raw[k] as Record<string, unknown>) : null);
   const rejected = new Set<keyof ScanFields>();
@@ -422,12 +438,12 @@ export function cleanAiOutput(raw: unknown, cat: Catalog, threshold: number): Cl
 
   const fields: ScanFields = { listing_title, price_cny, seller_nickname, seller_region, model_id };
 
-  // Bước 9: ngưỡng tin cậy ⇒ null + flag.
+  // Bước 9: ngưỡng tin cậy ⇒ flag (app điền sẵn + đánh dấu "AI không chắc"); quá thấp (< MIN_KEEP) hoặc sai ⇒ null.
   const flags: (keyof ScanFields)[] = [];
   for (const k of FIELD_KEYS) {
     const f = fields[k];
     if (rejected.has(k) || f.confidence < threshold) {
-      f.value = null;
+      if (rejected.has(k) || f.confidence < MIN_KEEP) f.value = null;
       flags.push(k);
     }
   }
@@ -532,8 +548,8 @@ export async function callGemini(opts: {
     // 400 / 403 / 404 thường do sai key hoặc sai SCAN_MODEL - thông báo an toàn, không lộ chi tiết.
     await res.body?.cancel();
     const hint = res.status >= 400 && res.status < 500
-      ? "Dịch vụ AI từ chối yêu cầu (kiểm tra GEMINI_API_KEY / SCAN_MODEL) - nhập tay."
-      : undefined;
+      ? `Dịch vụ AI từ chối yêu cầu (mã ${res.status} - kiểm tra GEMINI_API_KEY / SCAN_MODEL) - nhập tay.`
+      : `Dịch vụ AI đang lỗi (mã ${res.status}) - thử lại hoặc nhập tay.`;
     throw new ScanError("AI_UPSTREAM_ERROR", hint, { upstream_status: res.status });
   }
 
@@ -760,21 +776,39 @@ export function createHandler(deps: Deps): (req: Request) => Promise<Response> {
       const threshold = Number.isFinite(thresholdRaw) ? clamp01(thresholdRaw) : DEFAULT_THRESHOLD;
       const capRaw = Number(sRes.data?.ai_scan_monthly_cap);
 
-      // ---- Bước 6–7: gọi Gemini; 429 ⇒ thử model dự phòng đúng 1 lần
-      let result: GeminiResult;
-      try {
-        result = await callGemini({ fetch: deps.fetch, apiKey, model: primaryModel, catalog, content });
-      } catch (e) {
-        if (
-          e instanceof ScanError && e.code === "AI_QUOTA_EXHAUSTED" && fallbackModel && fallbackModel !== primaryModel
-        ) {
-          usedModel = fallbackModel;
-          result = await callGemini({ fetch: deps.fetch, apiKey, model: fallbackModel, catalog, content });
-        } else throw e;
+      // ---- Bước 6–7: gọi Gemini theo chuỗi model: SCAN_MODEL → SCAN_MODEL_FALLBACK → alias Flash mới nhất.
+      // Chuyển model kế khi: hết lượt (429), model không có / bị đổi tên (400 / 404), Google lỗi (5xx) / quá thời gian,
+      // hoặc trả JSON hỏng. KHÔNG chuyển khi key sai (401 / 403) - model nào cũng sẽ lỗi như nhau.
+      const chain = [...new Set([primaryModel, ...(fallbackModel ? [fallbackModel] : []), ...LAST_RESORT_MODELS])];
+      let result: GeminiResult | null = null;
+      let lastErr: unknown = null;
+      const t0 = Date.now();
+      for (const model of chain) {
+        if (Date.now() - t0 > 60_000) break; // đủ lâu rồi - không thử thêm (giới hạn thời gian chạy của Edge Function)
+        usedModel = model;
+        try {
+          const r = await callGemini({ fetch: deps.fetch, apiKey, model, catalog, content });
+          inTok += r.inputTokens;
+          outTok += r.outputTokens;
+          if (r.kind === "unreadable" && /^(bad_json|no_candidate|finish:)/.test(r.reason) && model !== chain[chain.length - 1]) {
+            log({ event: "retry_unreadable", scan_id: scanId, model, reason: r.reason });
+            result = r;
+            continue;
+          }
+          result = r;
+          lastErr = null;
+          break;
+        } catch (e) {
+          lastErr = e;
+          const st = e instanceof ScanError ? Number(e.extra.upstream_status ?? 0) : 0;
+          const retry = e instanceof ScanError &&
+            (e.code === "AI_QUOTA_EXHAUSTED" || (e.code === "AI_UPSTREAM_ERROR" && st !== 401 && st !== 403));
+          log({ event: "model_failed", scan_id: scanId, model, code: e instanceof ScanError ? e.code : "INTERNAL", status: st });
+          if (!retry) throw e;
+        }
       }
+      if (!result) throw lastErr ?? new ScanError("AI_UPSTREAM_ERROR");
       usedModel = result.model;
-      inTok = result.inputTokens;
-      outTok = result.outputTokens;
       if (result.kind === "unreadable") {
         log({ event: "unreadable", scan_id: scanId, model: usedModel, reason: result.reason, in: inTok, out: outTok });
         throw new ScanError("AI_UNREADABLE");

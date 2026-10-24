@@ -84,7 +84,9 @@ function scanMessage(e: ScanErr | undefined, status: number | undefined): string
   const code = e?.code
   if (code === 'SCAN_CAP_REACHED' && e?.used != null && e?.cap != null) return `Đã dùng hết ${e.used}/${e.cap} lượt quét AI tháng này - nhập tay.`
   if (code && LOCAL[code]) return LOCAL[code]
-  if (code && SHARED.includes(code)) return errorMessage({ message: code })
+  // CR-008: lỗi phía AI dùng câu chi tiết của function (có mã HTTP của Google) + mã lỗi để báo lại khi cần sửa
+  if (code === 'AI_UPSTREAM_ERROR' && e?.message) return `${e.message} (mã lỗi ${code})`
+  if (code && SHARED.includes(code)) return `${errorMessage({ message: code })} (mã lỗi ${code})`
   if (status === 401) return errorMessage({ message: 'NOT_AUTHENTICATED' }) // 401 của gateway không có thân JSON
   if (status === 429) return errorMessage({ message: 'AI_QUOTA_EXHAUSTED' })
   if (status === 404) return 'Chức năng AI quét chưa được triển khai - nhập tay.'
