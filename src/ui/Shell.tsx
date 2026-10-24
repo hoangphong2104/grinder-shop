@@ -38,7 +38,7 @@ export function Shell({ section, title, back, actions, savebar, children }: {
       <nav className="side" aria-label="Điều hướng">
         <div className="brand"><Brandmark />Grinder Shop</div>
         <div className="acts">
-          <Link className="btn btn-primary" to="/lo/new"><Icon name="plus" /> Nhập lô Goofish</Link>
+          <Link className="btn btn-primary" to="/lo/new"><Icon name="plus" /> Nhập cối</Link>
           <Link className="btn btn-ghost" to="/don/new"><Icon name="plus" /> Đơn bán</Link>
         </div>
         {NAV.map((n, i) => (
@@ -74,7 +74,7 @@ export function Shell({ section, title, back, actions, savebar, children }: {
       {fab && (
         <Sheet title="Thêm mới" onClose={() => setFab(false)}>
           <div className="list">
-            <Link className="li" to="/lo/new"><div className="main"><b>Nhập lô Goofish</b><div className="s">Dán link + ảnh chụp, AI điền sẵn</div></div><Icon name="chev" size={16} /></Link>
+            <Link className="li" to="/lo/new"><div className="main"><b>Nhập cối</b><div className="s">Dán link + ảnh chụp, AI điền sẵn</div></div><Icon name="chev" size={16} /></Link>
             <Link className="li" to="/don/new"><div className="main"><b>Đơn bán</b><div className="s">Khách Facebook, cọc, đặt trước</div></div><Icon name="chev" size={16} /></Link>
             <Link className="li" to="/congno?chuyen=1"><div className="main"><b>Ghi chuyển tiền trung gian</b><div className="s">Giảm công nợ</div></div><Icon name="chev" size={16} /></Link>
           </div>

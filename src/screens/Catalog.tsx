@@ -42,7 +42,7 @@ export default function Catalog() {
         </div>
       )}
       <button className="btn btn-ghost btn-block" onClick={() => setEdit({})}>+ Thêm model</button>
-      <HowTo title="Mã chiếc & ẩn model">Mỗi chiếc cối nhập về được cấp mã = tiền tố + số thứ tự (VD: KU-007). Model đã có chiếc chỉ ẩn được, không xoá (BR-14). Ẩn = không hiện ở ô chọn model khi nhập lô; chiếc cũ giữ nguyên. Tên gọi khác giúp AI nhận model khi đọc tin Goofish.</HowTo>
+      <HowTo title="Mã chiếc & ẩn model">Mỗi chiếc cối nhập về được cấp mã = tiền tố + số thứ tự (VD: KU-007). Model đã có chiếc chỉ ẩn được, không xoá (BR-14). Ẩn = không hiện ở ô chọn model khi nhập cối; chiếc cũ giữ nguyên. Tên gọi khác giúp AI nhận model khi đọc tin Goofish.</HowTo>
       {edit && <ModelSheet m={edit.m} onClose={close} />}
     </Shell>
   )

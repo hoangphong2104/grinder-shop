@@ -6,7 +6,7 @@ import { Shell } from '../ui/Shell.tsx'
 import { Icon } from '../ui/icons.tsx'
 import { todayVn, tr } from '../ui/format.ts'
 import {
-  Ident, unitPrice, LotRow, OrderRow, Row2, Tx, UnitRow, codesText, daysSince, kpiAmount, lotModelsText, profitMonth, signed, sortedModelStock, thresholds, useDesk,
+  Ident, unitPrice, OrderRow, Row2, Tx, UnitRow, codesText, daysSince, kpiAmount, lotModelsText, profitMonth, signed, sortedModelStock, thresholds, useDesk,
 } from './overview/common.tsx'
 import { PayLotButton } from './lots/PayLot.tsx'
 
@@ -86,11 +86,15 @@ export default function Home() {
   add({ key: 'lateship', title: `Đã gửi > ${SHIP_LATE_DAYS} ngày chưa hoàn tất`, tone: 'way', count: lateShip.length, more: '/don?f=sent', rows: orderRows(lateShip, sentAgo) })
 
   const noShip = d.lots.filter((l) => l.status === 'vn_warehouse' && l.ship_fee_vnd == null)
-  add({ key: 'noship', title: 'Thiếu phí ship lô', tone: 'bad', count: noShip.length, more: '/kho?tt=tq', rows: noShip.slice(0, PER_GROUP).map((l) => <LotRow key={l.id} d={d} l={l} />) })
+  // CR-006: 1 lô = 1 cối ⇒ việc của lô hiện theo cối
+  const unitsOf = (ids: string[]) => d.unitView.filter((u) => ids.includes(u.lot_id))
+  const noShipU = unitsOf(noShip.map((l) => l.id))
+  add({ key: 'noship', title: 'Thiếu phí ship về VN', tone: 'bad', count: noShipU.length, more: '/kho?tt=vn', rows: noShipU.slice(0, PER_GROUP).map((u) => <UnitRow key={u.unit_id} d={d} u={u} />) })
 
   const lateLotIds = new Set(d.lotSummary.filter((s) => s.is_lot_late).map((s) => s.lot_id))
   const lateLots = d.lots.filter((l) => lateLotIds.has(l.id)).sort((a, b) => a.ordered_at.localeCompare(b.ordered_at))
-  add({ key: 'latelot', title: `Lô về trễ (> ${th.lotLate} ngày)`, tone: 'way', count: lateLots.length, more: '/kho?tt=tq', rows: lateLots.slice(0, PER_GROUP).map((l) => <LotRow key={l.id} d={d} l={l} />) })
+  const lateU = unitsOf(lateLots.map((l) => l.id)).filter((u) => !u.is_received)
+  add({ key: 'latelot', title: `Về trễ (> ${th.lotLate} ngày)`, tone: 'way', count: lateU.length, more: '/kho?tt=tq', rows: lateU.slice(0, PER_GROUP).map((u) => <UnitRow key={u.unit_id} d={d} u={u} />) })
 
   const waiting = byDate.filter((o) => o.status === 'preorder' && !o.all_units_received)
   const waitSub = (o: OrderSummaryRow) => {
@@ -103,7 +107,7 @@ export default function Home() {
   const owing = d.lotSummary.filter((x) => x.status !== 'cancelled' && x.outstanding_vnd > 0).sort((a, b) => a.ordered_at.localeCompare(b.ordered_at))
   add({ key: 'pay', title: 'Trả trung gian', tone: 'bad', count: owing.length, sum: owing.reduce((a, x) => a + x.outstanding_vnd, 0), more: '/congno',
     rows: owing.slice(0, PER_GROUP).map((x) => (
-      <Row2 key={x.lot_id} a={<Link className="row" style={{ gap: 8, minWidth: 0, color: 'inherit', textDecoration: 'none' }} to={`/lo/${x.lot_id}`}><Ident id={d.lotCode[x.lot_id] ?? 'Lô'} text={lotModelsText(d, x.lot_id, 'short')} /></Link>}
+      <Row2 key={x.lot_id} a={<Link className="row" style={{ gap: 8, minWidth: 0, color: 'inherit', textDecoration: 'none' }} to={`/lo/${x.lot_id}`}><Ident id={codesText(d.unitView.filter((u) => u.lot_id === x.lot_id).map((u) => u.code), 2) || (d.lotCode[x.lot_id] ?? 'Lô')} text={lotModelsText(d, x.lot_id, 'short')} /></Link>}
         b={<span className="neg">{tr(x.outstanding_vnd)}</span>} c={<Tx>{x.paid_vnd > 0 ? `đã trả ${tr(x.paid_vnd)} / ${tr(x.payable_vnd)}` : `phải trả ${tr(x.payable_vnd)}`}</Tx>}
         d={<PayLotButton lotId={x.lot_id} id={`home-pay-${x.lot_id}`} />} />
     )) })
@@ -181,7 +185,7 @@ export default function Home() {
         {PERIODS.map(([k, t]) => <button key={k} className="chip" id={`home-ky-${k}`} aria-pressed={period === k} onClick={() => setPeriod(k)}>{t}</button>)}
       </div>
       {margins.length === 0
-        ? <p className="muted small" style={{ margin: 0 }}>Chưa có chiếc nào - nhập lô để xem lãi theo model.</p>
+        ? <p className="muted small" style={{ margin: 0 }}>Chưa có chiếc nào - nhập cối để xem lãi theo model.</p>
         : (
           <div className="mg-list">
             {margins.map((x) => {

@@ -344,7 +344,7 @@ function UnitPicker({ d, editId, chosen, full, onToggle, onClose }: {
       )}
       {full && <p className="hint">Đơn đã đủ {MAX_LINES} chiếc - tối đa {MAX_LINES} chiếc / đơn.</p>}
       {avail.length === 0
-        ? <div className="empty">Không còn chiếc nào ở Kho Lumi / Kho TQ / Kho VN chưa giữ. <Link to="/lo/new">Nhập lô Goofish</Link> trước.</div>
+        ? <div className="empty">Không còn chiếc nào ở Kho Lumi / Kho TQ / Kho VN chưa giữ. <Link to="/lo/new">Nhập cối</Link> trước.</div>
         : list.length === 0
           ? <div className="empty">Không có chiếc khớp - đổi model hoặc từ khoá.</div>
           : (

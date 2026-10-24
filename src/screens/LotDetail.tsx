@@ -1,10 +1,10 @@
-// SC_05 Chi tiết lô: bước trạng thái, chuyển bước / nhận vào kho, khối tiền (v_lot_summary - số do DB tính), phí ship,
+// SC_05 Chi tiết lô (CR-006: chỉ còn cho lô cũ nhiều chiếc; lô 1 chiếc chuyển sang trang cối): bước trạng thái, chuyển bước / nhận vào kho, khối tiền (v_lot_summary - số do DB tính), phí ship,
 // danh sách chiếc của lô (v_units, CR-001), thông tin tin Goofish, huỷ.
 // CR-004: thanh dính đáy (chuyển bước + phí ship), menu ⋯ (Sửa / Ghi chú / Nhận ngay / Huỷ), chip Về trễ + đặt N ngày,
 // dòng chiếc 2 dòng có tình trạng, khối "Giá nhập từng chiếc" (LOT-M4, LOT-S2, LOT-S3, KHO-S3).
 // CR-005: Kho TQ → Kho VN → Kho Lumi; đã trả / còn nợ trung gian + nút "Đã thanh toán" (pay_lot); người bán hiện ngay ở đây (bỏ màn Người bán).
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useData, useStore } from '../data/store.tsx'
 import { supabase } from '../lib/supabase.ts'
 import { Shell } from '../ui/Shell.tsx'
@@ -21,13 +21,13 @@ import { PayLotButton } from './lots/PayLot.tsx'
 import '../styles/lots.css'
 
 /** Link tin Goofish an toàn (chỉ http/https); không có link thì dựng từ item id. */
-function goofishHref(url: string | null, itemId: string | null): string | null {
+export function goofishHref(url: string | null, itemId: string | null): string | null {
   if (url && /^https?:\/\//i.test(url.trim())) return url.trim()
   return itemId ? `https://www.goofish.com/item?id=${itemId}` : null
 }
 
 /** Ảnh chụp tin (bucket private-images) - xem bằng signed URL 1 giờ (ADR-08). */
-function Screenshot({ path }: { path: string }) {
+export function Screenshot({ path }: { path: string }) {
   const [url, setUrl] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
   useEffect(() => {
@@ -68,6 +68,8 @@ export default function LotDetail() {
   }
 
   const s = sellerOf(d, l), sum = summaryOf(d, l.id), units = unitsOfLot(d, l.id)
+  // CR-006: 1 lô = 1 cối ⇒ trang lô là trang cối
+  if (units.length === 1) return <Navigate to={`/kho/${units[0].unit_id}`} replace />
   const open = isOpen(l.status), next = nextStatus(l.status)
   const idx = LOT_FLOW.indexOf(l.status)
   const totalQty = sum?.total_qty ?? units.length
