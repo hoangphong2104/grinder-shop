@@ -99,8 +99,8 @@ export default function LotNew() {
   const lot = id ? d.lots.find((x) => x.id === id) : undefined
   if (id && !lot) {
     return (
-      <Shell section="kho" title="Sửa lô" back="/kho?xem=lo">
-        <div className="empty">Không tìm thấy lô. <Link className="link-btn" to="/kho?xem=lo">Về danh sách lô</Link></div>
+      <Shell section="kho" title="Sửa lô" back="/kho?tt=tq">
+        <div className="empty">Không tìm thấy lô. <Link className="link-btn" to="/kho?tt=tq">Về danh sách lô</Link></div>
       </Shell>
     )
   }
@@ -531,7 +531,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
   )
 
   return (
-    <Shell section="kho" title={editing ? `Sửa ${code}` : 'Nhập lô Goofish'} back={editing ? `/lo/${lot!.id}` : '/kho?xem=lo'}
+    <Shell section="kho" title={editing ? `Sửa ${code}` : 'Nhập lô Goofish'} back={editing ? `/lo/${lot!.id}` : '/kho?tt=tq'}
       savebar={<button className="btn btn-primary btn-block" disabled={saving || scanning} onClick={save}>{saving ? <><span className="spin" /> Đang lưu…</> : editing ? 'Lưu thay đổi' : 'Lưu lô'}</button>}>
       <div className="form-grid">
         <label className="f full"><span className="flab">Link tin Goofish</span>

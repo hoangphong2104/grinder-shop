@@ -61,8 +61,8 @@ export default function LotDetail() {
 
   if (!l) {
     return (
-      <Shell section="kho" title="Lô nhập" back="/kho?xem=lo">
-        <div className="empty">Không tìm thấy lô - có thể đã bị xoá. <Link className="link-btn" to="/kho?xem=lo">Về danh sách lô</Link></div>
+      <Shell section="kho" title="Lô nhập" back="/kho?tt=tq">
+        <div className="empty">Không tìm thấy lô - có thể đã bị xoá. <Link className="link-btn" to="/kho?tt=tq">Về danh sách lô</Link></div>
       </Shell>
     )
   }
@@ -91,7 +91,7 @@ export default function LotDetail() {
   ) : undefined
 
   return (
-    <Shell section="kho" title={d.lotCode[l.id] ?? 'Lô'} back="/kho?xem=lo" savebar={savebar}
+    <Shell section="kho" title={d.lotCode[l.id] ?? 'Lô'} back="/kho?tt=tq" savebar={savebar}
       actions={<button className="icon-btn more-btn" id="lot-more" aria-label="Thao tác khác" aria-haspopup="dialog" onClick={() => setMenu(true)}>⋯</button>}>
       <div className="lot-detail">
         <div className="lot-sum">

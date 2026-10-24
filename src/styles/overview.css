@@ -156,7 +156,14 @@ a.link-btn, a.btn { text-decoration: none; }
 [data-skin="tracker"] .cash-hero .k { text-transform: uppercase; letter-spacing: .2em; font-size: 10.5px; }
 [data-skin="tracker"] .cash-hero .v { font-weight: 200; font-size: 34px; }
 @media (max-width: 419px) { .kho-tiles { gap: 4px; } .kho-tile { padding: 6px 4px 6px 7px; } .kho-tile .k, [data-skin="tracker"] .kho-tile .k { font-size: 11px; letter-spacing: -.01em; } }
-/* CR-006: Kho = Từng chiếc / Theo lô (Lô nhập gộp vào Kho) */
-.kho-view { align-self: flex-start; }
-.kho-view .c { color: var(--muted); font-weight: 400; }
-.kho-view button[aria-pressed="true"] .c { color: inherit; }
+/* CR-006: Lãi theo model - thanh ngang (dài = tỷ lệ lãi) */
+.mg-list { display: flex; flex-direction: column; gap: 14px; margin-top: 12px; }
+.mg-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; color: inherit; text-decoration: none; }
+.mg-row .nm { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mg-row .pc { font: 600 15px/20px var(--mono); font-variant-numeric: tabular-nums; }
+.mg-row .pc.est { color: var(--muted); font-weight: 400; }
+.mg-row .track { display: block; grid-column: 1 / -1; height: 10px; border-radius: 5px; background: var(--surface-2); overflow: hidden; }
+.mg-row .fill { display: block; height: 100%; border-radius: 5px; background: var(--fg); }
+.mg-row .fill.est { background: repeating-linear-gradient(135deg, var(--faint) 0 4px, transparent 4px 7px); }
+.mg-row .fill.neg { background: var(--bad, #d33); }
+.mg-row .sub { grid-column: 1 / -1; font-size: 12.5px; color: var(--muted); }

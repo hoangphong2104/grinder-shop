@@ -6,7 +6,7 @@ import { Brandmark, Icon } from './icons.tsx'
 import { Sheet } from './feedback.tsx'
 
 export type Section = 'home' | 'kho' | 'don' | 'ghichu' | 'congno' | 'khach' | 'danhmuc' | 'caidat' | ''
-// CR-006: Lô nhập gộp vào Kho (/kho?xem=lo) → tab đáy điện thoại: Tổng quan, Kho, +, Đơn bán, Ghi chú, Sổ quỹ.
+// CR-006: Lô nhập gộp vào Kho (/kho?tt=tq) → tab đáy điện thoại: Tổng quan, Kho, +, Đơn bán, Ghi chú, Sổ quỹ.
 export const NAV: [string, string, Section, string][] = [
   ['/', 'Tổng quan', 'home', 'home'], ['/kho', 'Kho', 'kho', 'box'], ['/don', 'Đơn bán', 'don', 'receipt'], ['/ghichu', 'Ghi chú', 'ghichu', 'note'],
   ['/congno', 'Sổ quỹ', 'congno', 'wallet'],

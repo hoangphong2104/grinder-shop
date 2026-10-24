@@ -28,7 +28,7 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/kho" element={<Kho />} />
           <Route path="/kho/:id" element={<UnitDetail />} />
-          <Route path="/lo" element={<Navigate to="/kho?xem=lo" replace />} />
+          <Route path="/lo" element={<Navigate to="/kho?tt=tq" replace />} />
           <Route path="/lo/new" element={<LotNew />} />
           <Route path="/lo/:id" element={<LotDetail />} />
           <Route path="/lo/:id/sua" element={<LotNew />} />

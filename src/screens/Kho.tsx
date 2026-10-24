@@ -1,75 +1,106 @@
-import { Fragment, useCallback, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Fragment, useCallback, useState, type KeyboardEvent } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useData } from '../data/store.tsx'
-import type { UnitConditionDb, UnitViewRow } from '../data/types.ts'
+import type { DbData, LotRow, UnitConditionDb, UnitViewRow } from '../data/types.ts'
 import { Shell } from '../ui/Shell.tsx'
-import { LotsPanel } from './Lots.tsx'
 import { Sheet } from '../ui/feedback.tsx'
 import { Icon } from '../ui/icons.tsx'
-import { CONDITION_LABEL, CONDITION_ORDER, ConditionChip, UnitChip } from '../ui/status.tsx'
-import { cny, tr, vnd } from '../ui/format.ts'
+import { CONDITION_LABEL, CONDITION_ORDER } from '../ui/status.tsx'
+import { tr } from '../ui/format.ts'
 import {
-  CostCell, GoRow, Profit, UNIT_SORTS, UnitRow, agingCls, daysSince, holderCode, sortUnits, sortedModelStock, unitMatch, unitPrice,
-  unitProfit, useDesk, type UnitSort,
+  Profit, UNIT_SORTS, UnitChipShort, UnitRow, agingCls, holderCode, sortUnits, sortedModelStock, unitMatch, unitPrice, useDesk, type UnitSort,
 } from './overview/common.tsx'
+import { LotCard, LotRow2, byNewest, sellerOf, summaryOf, unitsOfLot } from './lots/common.tsx'
+import { useLotFlow } from './lots/LotFlow.tsx'
+import '../styles/lots.css'
 
-// CR-006: trạng thái chiếc giống tab Lô (Kho TQ → Kho VN → Kho Lumi) theo vị trí của chiếc, cộng "Đã bán".
-// Chiếc khách đã đặt vẫn nằm ở kho của nó (ghi "khách đặt" trên dòng). Lô nhập gộp vào đây: nút "Theo lô" (?xem=lo).
-type StatusFilter = 'avail' | 'tq' | 'vn' | 'lumi' | 'ban' | 'all' | 'giu' | 'giao' | 'xong' | 've'
-const CHIPS: [StatusFilter, string][] = [['avail', 'Còn hàng'], ['tq', 'Kho TQ'], ['vn', 'Kho VN'], ['lumi', 'Kho Lumi'], ['ban', 'Đã bán'], ['all', 'Tất cả']]
-/** Lọc ẩn (link từ Tổng quan / link cũ) - hiện chip ✕ để bỏ. */
-const HIDDEN: Partial<Record<StatusFilter, string>> = { giu: 'Khách đã đặt', giao: 'Đang giao tới khách', xong: 'Đã giao', ve: 'Đang về' }
-const ALIAS: Record<string, StatusFilter> = { in_stock: 'lumi', reserved: 'giu', incoming: 've', sold: 'ban' }
-const ALL_KEYS: StatusFilter[] = ['avail', 'tq', 'vn', 'lumi', 'ban', 'all', 'giu', 'giao', 'xong', 've']
-const parseStatus = (s: string | null): StatusFilter => (s && ALL_KEYS.includes(s as StatusFilter) ? (s as StatusFilter) : (s && ALIAS[s]) || 'avail')
+// SC_03 Kho (CR-006): gộp Lô nhập vào Kho - 1 màn theo trạng thái như bảng lô cũ.
+// Kho TQ / Kho VN = các LÔ đang về (nút bước kế); Kho Lumi / Đang giao khách / Đã bán = từng CHIẾC.
+// Máy tính: bảng 5 cột. Điện thoại: chip trạng thái + danh sách. Số đếm = số thẻ trong cột (lô ở Kho TQ / VN, chiếc ở các cột sau).
+type Stage = 'tq' | 'vn' | 'lumi' | 'giao' | 'ban'
+const STAGES: [Stage, string, string][] = [
+  ['tq', 'Kho TQ', 'var(--way)'], ['vn', 'Kho VN', 'var(--hold)'], ['lumi', 'Kho Lumi', 'var(--ok)'],
+  ['giao', 'Đang giao khách', 'var(--way)'], ['ban', 'Đã bán', 'var(--line)'],
+]
+/** Link cũ (?tt=…) → cột mới. */
+const ALIAS: Record<string, Stage> = { in_stock: 'lumi', avail: 'lumi', giu: 'lumi', reserved: 'lumi', incoming: 'tq', ve: 'tq', sold: 'ban', xong: 'ban' }
+const isStage = (s: string | null): s is Stage => STAGES.some(([k]) => k === s)
 const isSort = (s: string | null): s is UnitSort => UNIT_SORTS.some(([k]) => k === s)
 const isCond = (s: string | null): s is UnitConditionDb => CONDITION_ORDER.includes(s as UnitConditionDb)
-const unsold = (u: UnitViewRow) => u.status === 'in_stock' || u.status === 'incoming' || u.status === 'reserved'
-function matchStatus(u: UnitViewRow, f: StatusFilter): boolean {
-  switch (f) {
-    case 'all': return true
-    case 'avail': return unsold(u)
-    case 'tq': return unsold(u) && !u.is_received && u.lot_status === 'cn_warehouse'
-    case 'vn': return unsold(u) && !u.is_received && u.lot_status === 'vn_warehouse'
-    case 've': return unsold(u) && !u.is_received
-    case 'lumi': return unsold(u) && u.is_received
-    case 'giu': return u.status === 'reserved'
-    case 'giao': return u.status === 'sold' && u.holding_order_status === 'shipped'
-    case 'xong': return u.status === 'sold' && u.holding_order_status !== 'shipped'
-    case 'ban': return u.status === 'sold'
-  }
+const SOLD_PAGE = 20
+
+function unitStage(u: UnitViewRow): Stage | null {
+  if (u.status === 'in_stock' || u.status === 'reserved') return u.is_received ? 'lumi' : null
+  if (u.status === 'sold') return u.holding_order_status === 'shipped' ? 'giao' : 'ban'
+  return null
 }
-/** Vốn Kho Lumi = giá nhập chiếc đã về kho chưa bán (Kho Lumi + Đã giữ đã về) - như v_model_stock.stock_value_vnd. */
-const onHand = (u: UnitViewRow) => u.is_received && (u.status === 'in_stock' || u.status === 'reserved')
-/** Vốn đang về = giá nhập chiếc chưa về (Kho TQ / Kho VN, gồm chiếc đã giữ) - như incoming_value_vnd. */
-const onTheWay = (u: UnitViewRow) => !u.is_received && (u.status === 'incoming' || u.status === 'reserved')
+
+/** Chuỗi tìm của lô (chữ thường): mã lô, model, mã chiếc, seri, người bán, tiêu đề tin, ghi chú. */
+function lotHay(d: DbData, l: LotRow): string {
+  const units = unitsOfLot(d, l.id)
+  return [
+    d.lotCode[l.id], sellerOf(d, l)?.nickname, l.listing_title, l.goofish_item_id, l.note,
+    ...(summaryOf(d, l.id)?.models ?? []).map((m) => m.model_name), ...units.map((u) => `${u.code} ${u.code_prefix} ${u.serial_no ?? ''}`),
+  ].filter(Boolean).join(' ').toLowerCase()
+}
+
+/** Thẻ chiếc trong bảng cột (cùng kiểu thẻ lô). */
+function UnitCard({ d, u }: { d: DbData; u: UnitViewRow }) {
+  const nav = useNavigate()
+  const go = () => nav(`/kho/${u.unit_id}`)
+  const key = (e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go() } }
+  const price = unitPrice(u)
+  return (
+    <div className="kcard" role="button" tabIndex={0} onClick={go} onKeyDown={key}>
+      <span className="t">{u.code} · {u.model_name}</span>
+      <span className="row-wrap">
+        {(u.status !== 'in_stock' || u.condition !== 'new') && <UnitChipShort u={u} holder={holderCode(d, u)} />}
+        {u.condition && u.condition !== 'new' && <span className={`pill ${u.condition === 'defect' ? 'bad' : 'neu'}`}>{CONDITION_LABEL[u.condition]}</span>}
+        {u.status !== 'sold' && u.days_in_stock != null && <span className={`small ${agingCls(u.aging_level)}`}>{u.days_in_stock} ngày</span>}
+      </span>
+      <span className="m">
+        <span>{price != null ? tr(price) : '-'}</span>
+        {u.status === 'sold' ? <Profit n={u.actual_profit_vnd} prefix="lãi " /> : <span className="muted">nhập {tr(u.cost_vnd)}</span>}
+      </span>
+    </div>
+  )
+}
 
 export default function Kho() {
   const d = useData()
   const desk = useDesk()
+  const flow = useLotFlow()
   const [params, setParams] = useSearchParams()
   const modelF = params.get('model') ?? 'all'
   const ttRaw = params.get('tt'), sxRaw = params.get('sx'), condRaw = params.get('tinhtrang')
-  const statusF: StatusFilter = parseStatus(ttRaw)
   const sx: UnitSort = isSort(sxRaw) ? sxRaw : 'ma'
   const condF: UnitConditionDb | null = isCond(condRaw) ? condRaw : null
-  const byLot = params.get('xem') === 'lo'
   const [q, setQ] = useState('')
   const [sheet, setSheet] = useState(false)
+  const [allSold, setAllSold] = useState(false)
   const closeSheet = useCallback(() => setSheet(false), [])
 
-  const setParam = (k: string, v: string | null, def: string | null = null) => {
+  const setParam = (k: string, v: string | null) => {
     const p = new URLSearchParams(params)
-    if (v == null || v === def) p.delete(k); else p.set(k, v)
+    if (v == null) p.delete(k); else p.set(k, v)
+    p.delete('xem')
     setParams(p, { replace: true })
   }
 
   const stock = sortedModelStock(d)
-  const openLots = d.lots.filter((l) => l.status !== 'received' && l.status !== 'cancelled').length
   const modelName = d.models.find((m) => m.id === modelF)?.code_prefix ?? d.models.find((m) => m.id === modelF)?.name
-  // Lọc nền (model + tình trạng + tìm) - đếm chip trạng thái trên tập này
+  const needle = q.trim().toLowerCase()
+
+  // Lô đang về (Kho TQ / Kho VN): lọc theo tìm + model (lô có chiếc của model)
+  const lots = d.lots.filter((l) => (l.status === 'cn_warehouse' || l.status === 'vn_warehouse')
+    && (!needle || lotHay(d, l).includes(needle))
+    && (modelF === 'all' || (summaryOf(d, l.id)?.models ?? []).some((m) => m.model_id === modelF))).sort(byNewest)
+  const lotsAt = (st: 'cn_warehouse' | 'vn_warehouse') => lots.filter((l) => l.status === st)
+
+  // Chiếc (Kho Lumi / Đang giao / Đã bán)
   const hit = new Map<string, ReturnType<typeof unitMatch>>()
-  const base = d.unitView.filter((u) => {
+  const units = d.unitView.filter((u) => {
+    if (!unitStage(u)) return false
     if (modelF !== 'all' && u.model_id !== modelF) return false
     if (condF && u.condition !== condF) return false
     const m = unitMatch(u, q)
@@ -77,121 +108,95 @@ export default function Kho() {
     hit.set(u.unit_id, m)
     return true
   })
-  const count = (f: StatusFilter) => base.filter((u) => matchStatus(u, f)).length
-  const units = sortUnits(d, base.filter((u) => matchStatus(u, statusF)), sx)
-  // Tiền hàng chưa bán (theo model / tình trạng / tìm đang chọn): đang về (Kho TQ / Kho VN) và đã về Kho Lumi
-  const sellable = units.filter((u) => u.status === 'in_stock' || u.status === 'incoming').length
-  const capital = base.filter(onHand).reduce((a, u) => a + u.cost_vnd, 0)
-  const incomingCap = base.filter(onTheWay).reduce((a, u) => a + u.cost_vnd, 0)
-  // CR-005 ý 8: cảnh báo rõ theo từng model (đang bán): hết / còn N chiếc bán được (Kho Lumi + đang về chưa giữ)
-  const lowModels = stock.filter((m) => m.is_active && (m.is_low_stock || m.sellable_count <= 0) && (modelF === 'all' || m.model_id === modelF))
-  const filtering = modelF !== 'all' || condF != null || sx !== 'ma'
-  const capText = capital + incomingCap > 0 ? `Chưa bán: ${[incomingCap > 0 && `${tr(incomingCap)} đang về`, capital > 0 && `${tr(capital)} ở Kho Lumi`].filter(Boolean).join(' · ')}` : ''
+  const unitsAt = (st: Stage) => {
+    const us = units.filter((u) => unitStage(u) === st)
+    return st === 'lumi' ? sortUnits(d, us, sx) : us.sort((a, b) => (b.sold_at ?? '').localeCompare(a.sold_at ?? ''))
+  }
 
-  const filters = (
+  const cols: Record<Stage, { n: number; lots?: LotRow[]; units?: UnitViewRow[] }> = {
+    tq: { n: lotsAt('cn_warehouse').length, lots: lotsAt('cn_warehouse') },
+    vn: { n: lotsAt('vn_warehouse').length, lots: lotsAt('vn_warehouse') },
+    lumi: { n: 0, units: unitsAt('lumi') }, giao: { n: 0, units: unitsAt('giao') }, ban: { n: 0, units: unitsAt('ban') },
+  }
+  for (const k of ['lumi', 'giao', 'ban'] as const) cols[k].n = cols[k].units!.length
+  // Điện thoại: cột đang chọn - mặc định Kho Lumi, trống thì cột đầu có hàng
+  const stage: Stage = isStage(ttRaw) ? ttRaw : (ttRaw && ALIAS[ttRaw]) || (cols.lumi.n ? 'lumi' : STAGES.find(([k]) => cols[k].n)?.[0] ?? 'lumi')
+  const filtering = modelF !== 'all' || condF != null || sx !== 'ma'
+
+  const top = (
     <div className="ov-filter">
       <div className="line">
-        <input className="input" id="kho-q" type="search" placeholder="Tìm mã, seri, model, ghi chú" aria-label="Tìm chiếc theo mã, số seri, model hoặc ghi chú"
+        <input className="input" id="kho-q" type="search" placeholder="Tìm mã, seri, model, lô, người bán" aria-label="Tìm chiếc hoặc lô"
           value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1, minWidth: 0, maxWidth: desk ? 420 : undefined }} />
         <button className="btn btn-ghost btn-sm fbtn" id="kho-filter" onClick={() => setSheet(true)} aria-haspopup="dialog">
           Lọc{filtering && <span className="dot" aria-label="đang lọc" />}
         </button>
       </div>
-      <div className="chips stage-chips" role="group" aria-label="Lọc theo trạng thái">
-        {CHIPS.map(([k, t]) => (
-          <button key={k} type="button" className="chip" id={`kho-tt-${k}`} aria-pressed={statusF === k} onClick={() => setParam('tt', k, 'avail')}>
-            {t}<span className="c">{count(k)}</span>
-          </button>
-        ))}
-      </div>
-      {capText && <p className="ov-strip">{capText}</p>}
-      {(modelF !== 'all' || condF || HIDDEN[statusF]) && (
-        <div className="chips" role="group" aria-label="Đang lọc">
-          {modelF !== 'all' && (
-            <button className="chip x" id="kho-model-x" onClick={() => setParam('model', null)} aria-label={`Bỏ lọc model ${modelName ?? ''}`}>{modelName ?? 'Model'} ✕</button>
-          )}
-          {condF && <button className="chip x" id="kho-cond-x" onClick={() => setParam('tinhtrang', null)} aria-label="Bỏ lọc tình trạng">{CONDITION_LABEL[condF]} ✕</button>}
-          {HIDDEN[statusF] && <button className="chip x" id="kho-tt-x" onClick={() => setParam('tt', null)}>{HIDDEN[statusF]} ✕</button>}
+      {!desk && (
+        <div className="chips stage-chips" role="group" aria-label="Lọc theo trạng thái">
+          {STAGES.map(([k, t]) => (
+            <button key={k} type="button" className="chip" id={`kho-tt-${k}`} aria-pressed={stage === k} onClick={() => setParam('tt', k)}>
+              {t}<span className="c">{cols[k].n}</span>
+            </button>
+          ))}
         </div>
       )}
-      {lowModels.length > 0 && (
-        <div className="kho-low" id="kho-low" role="note" aria-label="Model sắp hết">
-          {lowModels.map((m) => (
-            <Link key={m.model_id} className="ln" to={`/kho?model=${m.model_id}`}>
-              <Icon name="warn" size={15} /><span className="nm">{m.model_name}</span>
-              <span className={m.sellable_count <= 0 ? 'neg' : 'age-warn'}>{m.sellable_count <= 0 ? 'hết hàng' : `còn ${m.sellable_count} chiếc chưa ai đặt`}</span>
-            </Link>
-          ))}
-          <Link className="link-btn small" to="/lo/new">Nhập lô Goofish <Icon name="chev" size={14} /></Link>
+      {(modelF !== 'all' || condF) && (
+        <div className="chips" role="group" aria-label="Đang lọc">
+          {modelF !== 'all' && <button className="chip x" id="kho-model-x" onClick={() => setParam('model', null)} aria-label={`Bỏ lọc model ${modelName ?? ''}`}>{modelName ?? 'Model'} ✕</button>}
+          {condF && <button className="chip x" id="kho-cond-x" onClick={() => setParam('tinhtrang', null)} aria-label="Bỏ lọc tình trạng">{CONDITION_LABEL[condF]} ✕</button>}
         </div>
       )}
     </div>
   )
 
-  const noUnits = d.unitView.length === 0
-  const emptyText = noUnits
-    ? <div className="empty">Chưa có chiếc cối nào - bấm <Link to="/lo/new">Nhập lô Goofish</Link> để tạo chiếc (mỗi chiếc có mã riêng).</div>
-    : <div className="empty">Không có chiếc nào khớp bộ lọc{q.trim() ? ` “${q.trim()}”` : ''}.</div>
+  const empty = d.unitView.length === 0
+    ? <div className="empty">Chưa có hàng - bấm <Link to="/lo/new">Nhập lô Goofish</Link> để thêm lô đầu tiên.</div>
+    : null
 
-  // Tiêu đề cột sắp xếp được (máy tính) - bấm lần nữa về sắp theo mã
-  const sortTh = (k: UnitSort, label: string, r?: boolean) => (
-    <th className={r ? 'r' : undefined} aria-sort={sx === k ? (k === 'ma' ? 'ascending' : 'descending') : 'none'}>
-      <button className="sort" id={`kho-th-${k}`} onClick={() => setParam('sx', sx === k ? 'ma' : k, 'ma')}>{label}{sx === k && k !== 'ma' ? ' ↓' : ''}</button>
-    </th>
-  )
-
-  let list
-  if (units.length === 0) list = emptyText
+  let body
+  if (empty) body = empty
   else if (desk) {
-    list = (
-      <div className="tbl-wrap"><table className="tbl">
-        <thead><tr>
-          {sortTh('ma', 'Mã')}<th>Model</th><th>Lô</th><th>Trạng thái</th><th>Tình trạng</th><th className="r">Giá ¥</th>
-          <th className="r">Giá nhập ₫</th>{sortTh('gia', 'Giá bán dự kiến', true)}{sortTh('lai', 'Lãi', true)}{sortTh('ton', 'Ngày tồn', true)}
-        </tr></thead>
-        <tbody>
-          {units.map((u) => {
-            const p = unitProfit(u)
-            const ordered = u.status === 'incoming' ? daysSince(u.ordered_at) : null
-            return (
-              <GoRow key={u.unit_id} to={`/kho/${u.unit_id}`}>
-                <td><Link className="cell-link num" to={`/kho/${u.unit_id}`}><b>{u.code}</b></Link>{u.serial_no && <div className="muted small">seri {u.serial_no}</div>}</td>
-                <td>{u.model_name}</td>
-                <td><Link className="link-btn small" style={{ padding: 0 }} to={`/lo/${u.lot_id}`}>{d.lotCode[u.lot_id] ?? 'Lô'}</Link></td>
-                <td><UnitChip s={u.status} holder={holderCode(d, u)} lot={u.lot_status} order={u.holding_order_status} /></td>
-                <td><ConditionChip c={u.condition ?? 'new'} /></td>
-                <td className="r">{cny(Number(u.price_cny))}</td>
-                <td className="r"><CostCell u={u} /></td>
-                <td className="r">{vnd(unitPrice(u))}{u.status === 'sold' && <div className="muted small">giá chốt</div>}</td>
-                <td className="r"><Profit n={p.value} full />{p.value != null && !p.actual && <div className="muted small">dự kiến</div>}</td>
-                <td className={`r ${agingCls(u.aging_level)}`}>{u.days_in_stock ?? (ordered != null ? <span className="muted">đặt {ordered}</span> : '-')}</td>
-              </GoRow>
-            )
-          })}
-          <tr className="tot">
-            <td colSpan={5}>{units.length} chiếc · {sellable} chưa ai đặt</td>
-            <td colSpan={5} className="muted" style={{ textAlign: 'right' }}>{capText}</td>
-          </tr>
-        </tbody>
-      </table></div>
-    )
-  } else {
-    // Điện thoại (KHO-M1): danh sách phẳng từng chiếc; sắp theo mã thì chèn tiêu đề nhóm dính theo model (KHO-S5)
-    list = (
-      <div className="ov-list">
-        {units.map((u, i) => {
-          const head = sx === 'ma' && (i === 0 || units[i - 1].model_id !== u.model_id)
-          const n = head ? units.filter((x) => x.model_id === u.model_id).length : 0
-          const m = hit.get(u.unit_id)
+    body = (
+      <div className="board" style={{ ['--cols' as string]: STAGES.length }}>
+        {STAGES.map(([k, t, cc]) => {
+          const c = cols[k]
+          const us = k === 'ban' && !allSold ? c.units!.slice(0, SOLD_PAGE) : c.units
           return (
-            <Fragment key={u.unit_id}>
-              {head && <div className="ov-gh"><span>{u.model_name}</span><span className="muted">{n} chiếc</span></div>}
-              <UnitRow d={d} u={u} sub={m === 'serial' && q.trim() ? <>seri {u.serial_no}</> : undefined} />
-            </Fragment>
+            <div key={k} className="bcol" style={{ ['--cc' as string]: cc }}>
+              <h4>{t}<span className="c">{c.n}</span></h4>
+              {c.lots?.map((l) => <LotCard key={l.id} d={d} l={l} withActs busy={flow.busy === l.id} onNext={flow.next} />)}
+              {us?.map((u) => <UnitCard key={u.unit_id} d={d} u={u} />)}
+              {k === 'ban' && !allSold && c.n > SOLD_PAGE && <button className="link-btn small" onClick={() => setAllSold(true)}>Xem thêm {c.n - SOLD_PAGE} chiếc</button>}
+              {c.n === 0 && <div className="bghost">Trống</div>}
+            </div>
           )
         })}
       </div>
     )
+  } else {
+    const c = cols[stage]
+    if (c.lots) {
+      body = c.lots.length
+        ? <div className="ulist">{c.lots.map((l) => <LotRow2 key={l.id} d={d} l={l} busy={flow.busy === l.id} onNext={flow.next} />)}</div>
+        : <div className="empty">{needle || modelF !== 'all' ? 'Không có lô khớp bộ lọc.' : `Không có lô nào ở ${STAGES.find(([k]) => k === stage)![1]}.`}</div>
+    } else {
+      const us = c.units!
+      body = us.length ? (
+        <div className="ov-list">
+          {us.map((u, i) => {
+            const head = stage === 'lumi' && sx === 'ma' && (i === 0 || us[i - 1].model_id !== u.model_id)
+            const m = hit.get(u.unit_id)
+            return (
+              <Fragment key={u.unit_id}>
+                {head && <div className="ov-gh"><span>{u.model_name}</span><span className="muted">{us.filter((x) => x.model_id === u.model_id).length} chiếc</span></div>}
+                <UnitRow d={d} u={u} sub={m === 'serial' && q.trim() ? <>seri {u.serial_no}</> : undefined} />
+              </Fragment>
+            )
+          })}
+        </div>
+      ) : <div className="empty">{needle || filtering ? 'Không có chiếc nào khớp bộ lọc.' : `Không có chiếc nào ở ${STAGES.find(([k]) => k === stage)![1]}.`}</div>
+    }
   }
 
   return (
@@ -199,26 +204,22 @@ export default function Kho() {
       <Link className="btn btn-ghost btn-sm only-desk" to="/danhmuc">Model</Link>
       <Link className="btn btn-primary btn-sm only-desk" to="/lo/new"><Icon name="plus" /> Nhập lô</Link>
     </>}>
-      <div className="seg kho-view" role="group" aria-label="Xem kho">
-        <button id="kho-xem-chiec" aria-pressed={!byLot} onClick={() => setParam('xem', null)}>Từng chiếc</button>
-        <button id="kho-xem-lo" aria-pressed={byLot} onClick={() => setParam('xem', 'lo')}>Theo lô{openLots ? <span className="c"> {openLots} đang về</span> : null}</button>
-      </div>
-      {byLot ? <LotsPanel /> : <>{filters}{list}</>}
-      {!byLot && sheet && (
+      {top}
+      {body}
+      {flow.sheets}
+      {sheet && (
         <Sheet title="Lọc & sắp xếp" onClose={closeSheet}>
-          <p className="ov-sheet-t">Sắp xếp</p>
+          <p className="ov-sheet-t">Sắp xếp chiếc ở Kho Lumi</p>
           <div className="ov-opts" role="radiogroup" aria-label="Sắp xếp">
             {UNIT_SORTS.map(([k, t]) => (
-              <button key={k} className="chip" role="radio" id={`kho-sx-${k}`} aria-checked={sx === k} aria-pressed={sx === k} onClick={() => setParam('sx', k, 'ma')}>{t}</button>
+              <button key={k} className="chip" role="radio" id={`kho-sx-${k}`} aria-checked={sx === k} aria-pressed={sx === k} onClick={() => setParam('sx', k === 'ma' ? null : k)}>{t}</button>
             ))}
           </div>
           <p className="ov-sheet-t">Model</p>
           <div className="ov-opts" role="group" aria-label="Lọc theo model">
             <button className="chip" id="kho-m-all" aria-pressed={modelF === 'all'} onClick={() => setParam('model', null)}>Tất cả</button>
             {stock.map((m) => (
-              <button key={m.model_id} className="chip" id={`kho-m-${m.code_prefix}`} aria-pressed={modelF === m.model_id} onClick={() => setParam('model', m.model_id)}>
-                {m.model_name} <span className="c">{m.sellable_count + m.reserved_count}</span>
-              </button>
+              <button key={m.model_id} className="chip" id={`kho-m-${m.code_prefix}`} aria-pressed={modelF === m.model_id} onClick={() => setParam('model', m.model_id)}>{m.model_name}</button>
             ))}
           </div>
           <p className="ov-sheet-t">Tình trạng</p>

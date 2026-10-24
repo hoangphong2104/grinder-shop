@@ -6,7 +6,7 @@ import { Shell } from '../ui/Shell.tsx'
 import { Icon } from '../ui/icons.tsx'
 import { todayVn, tr } from '../ui/format.ts'
 import {
-  Ident, unitPrice, LotRow, OrderRow, Profit, Row2, Tx, UnitRow, codesText, daysSince, kpiAmount, lotModelsText, profitMonth, signed, sortedModelStock, thresholds, useDesk,
+  Ident, unitPrice, LotRow, OrderRow, Row2, Tx, UnitRow, codesText, daysSince, kpiAmount, lotModelsText, profitMonth, signed, sortedModelStock, thresholds, useDesk,
 } from './overview/common.tsx'
 import { PayLotButton } from './lots/PayLot.tsx'
 
@@ -48,8 +48,6 @@ export default function Home() {
   const [period, setPeriod] = useState<Period>('thang')
   // Vốn đang nằm ở hàng (CR-005 ý 4): Kho Lumi + đang về (Kho TQ / Kho VN) - v_model_stock.total_capital_vnd
   const capital = d.modelStock.reduce((a, s) => a + (s.total_capital_vnd ?? s.stock_value_vnd), 0)
-  const stockValue = d.modelStock.reduce((a, s) => a + s.stock_value_vnd, 0)
-  const incomingValue = d.modelStock.reduce((a, s) => a + (s.incoming_value_vnd ?? 0), 0)
   const cash = d.cashBalance?.balance_vnd ?? 0
   // Khách còn nợ: đơn chưa Hoàn tất (đơn Huỷ / Hoàn hàng = 0 - Q-009); trả dư không trừ
   const dueOrders = d.orderSummary.filter((o) => o.status !== 'completed' && o.receivable_vnd > 0)
@@ -88,11 +86,11 @@ export default function Home() {
   add({ key: 'lateship', title: `Đã gửi > ${SHIP_LATE_DAYS} ngày chưa hoàn tất`, tone: 'way', count: lateShip.length, more: '/don?f=sent', rows: orderRows(lateShip, sentAgo) })
 
   const noShip = d.lots.filter((l) => l.status === 'vn_warehouse' && l.ship_fee_vnd == null)
-  add({ key: 'noship', title: 'Thiếu phí ship lô', tone: 'bad', count: noShip.length, more: '/kho?xem=lo', rows: noShip.slice(0, PER_GROUP).map((l) => <LotRow key={l.id} d={d} l={l} />) })
+  add({ key: 'noship', title: 'Thiếu phí ship lô', tone: 'bad', count: noShip.length, more: '/kho?tt=tq', rows: noShip.slice(0, PER_GROUP).map((l) => <LotRow key={l.id} d={d} l={l} />) })
 
   const lateLotIds = new Set(d.lotSummary.filter((s) => s.is_lot_late).map((s) => s.lot_id))
   const lateLots = d.lots.filter((l) => lateLotIds.has(l.id)).sort((a, b) => a.ordered_at.localeCompare(b.ordered_at))
-  add({ key: 'latelot', title: `Lô về trễ (> ${th.lotLate} ngày)`, tone: 'way', count: lateLots.length, more: '/kho?xem=lo', rows: lateLots.slice(0, PER_GROUP).map((l) => <LotRow key={l.id} d={d} l={l} />) })
+  add({ key: 'latelot', title: `Lô về trễ (> ${th.lotLate} ngày)`, tone: 'way', count: lateLots.length, more: '/kho?tt=tq', rows: lateLots.slice(0, PER_GROUP).map((l) => <LotRow key={l.id} d={d} l={l} />) })
 
   const waiting = byDate.filter((o) => o.status === 'preorder' && !o.all_units_received)
   const waitSub = (o: OrderSummaryRow) => {
@@ -147,7 +145,7 @@ export default function Home() {
         <span className="s">{shippedN} đơn đã gửi{returnedN ? ` · ${returnedN} hoàn` : ''}</span></button>
       <Link className="kpi" to="/don"><span className="k">Doanh thu tháng {mNo}</span><span className="v">{kpiAmount(rev, desk)}</span><span className="s">giá chốt các chiếc đã gửi</span></Link>
       <Link className="kpi" to="/kho"><span className="k">Tiền nằm ở hàng</span><span className="v">{kpiAmount(capital, desk)}</span>
-        <span className="s">{capital > 0 ? [incomingValue > 0 && `${tr(incomingValue)} đang về`, stockValue > 0 && `${tr(stockValue)} ở Kho Lumi`].filter(Boolean).join(' · ') : 'chưa có hàng'}</span></Link>
+</Link>
       <Link className="kpi" to="/don?f=due"><span className="k">Khách còn nợ</span><span className="v">{kpiAmount(due, desk)}</span><span className={`s ${dueOrders.length ? 'bad' : ''}`}>{dueOrders.length ? `${dueOrders.length} đơn chưa đủ` : 'đã thu đủ'}</span></Link>
       <Link className="kpi" to="/congno"><span className="k">Nợ trung gian</span><span className="v">{kpiAmount(Math.abs(debt), desk)}</span><span className={`s ${debt > 0 ? 'bad' : ''}`}>{debt > 0 ? 'còn phải trả' : debt < 0 ? 'đã chuyển dư' : 'không còn nợ'}</span></Link>
     </div>
@@ -174,6 +172,7 @@ export default function Home() {
     return { m, n: sold.length, rev, p, r: rate(p, rev), left: left.length, ep, er: rate(ep, er) }
   }).filter((x) => x.n > 0 || x.left > 0)
     .sort((a, b) => (b.n > 0 ? 1 : 0) - (a.n > 0 ? 1 : 0) || ((b.n ? b.r : b.er) ?? -1) - ((a.n ? a.r : a.er) ?? -1))
+  const maxRate = Math.max(0.01, ...margins.map((x) => Math.abs((x.n ? x.r : x.er) ?? 0)))
   const pctText = (x: number | null) => (x == null ? '-' : `${Math.round(x * 100)}%`)
   const marginBlock = (
     <div className="stack" id="home-margin">
@@ -184,22 +183,24 @@ export default function Home() {
       {margins.length === 0
         ? <p className="muted small" style={{ margin: 0 }}>Chưa có chiếc nào - nhập lô để xem lãi theo model.</p>
         : (
-          <div className="ov-list">
-            {margins.map((x) => x.n > 0 ? (
-              <Row2 key={x.m.id} to={`/kho?model=${x.m.id}&tt=ban`}
-                a={<Ident id={x.m.code_prefix} text={x.m.name} />}
-                b={<span className={x.p < 0 ? 'neg' : 'pos'}>lãi {pctText(x.r)}</span>}
-                c={<Tx>đã bán {x.n} · TB {signed(Math.round(x.p / x.n))}/chiếc</Tx>}
-                d={<Profit n={x.p} />} />
-            ) : (
-              <Row2 key={x.m.id} to={`/kho?model=${x.m.id}`}
-                a={<Ident id={x.m.code_prefix} text={x.m.name} />}
-                b={<span className="muted">dự kiến {pctText(x.er)}</span>}
-                c={<Tx>{x.left} chiếc chưa bán · TB {signed(Math.round(x.ep / x.left))}/chiếc</Tx>} />
-            ))}
+          <div className="mg-list">
+            {margins.map((x) => {
+              const sold = x.n > 0
+              const r = (sold ? x.r : x.er) ?? 0
+              return (
+                <Link key={x.m.id} className="mg-row" to={sold ? `/kho?model=${x.m.id}&tt=ban` : `/kho?model=${x.m.id}`}>
+                  <span className="nm">{x.m.name}</span>
+                  <span className={`pc ${sold ? (r < 0 ? 'neg' : '') : 'est'}`}>{pctText(sold ? x.r : x.er)}</span>
+                  <span className="track"><span className={`fill ${sold ? (r < 0 ? 'neg' : '') : 'est'}`} style={{ width: `${Math.max(2, Math.round((Math.abs(r) / maxRate) * 100))}%` }} /></span>
+                  <span className="sub">{sold
+                    ? <>đã bán {x.n} · lãi {signed(x.p)} · TB {signed(Math.round(x.p / x.n))}/chiếc</>
+                    : <>chưa bán · dự kiến {signed(Math.round(x.ep / x.left))}/chiếc ({x.left} chiếc)</>}</span>
+                </Link>
+              )
+            })}
           </div>
         )}
-      <p className="hint" style={{ margin: 0 }}>Tỷ lệ lãi = lãi ÷ giá bán. Lãi = giá chốt − giá nhập − ship shop chịu. "Dự kiến" tính theo giá bán dự kiến của các chiếc chưa bán.</p>
+      <p className="hint" style={{ margin: 0 }}>% = lãi ÷ giá bán. Thanh gạch chéo = chưa bán, tính theo giá bán dự kiến.</p>
     </div>
   )
 
