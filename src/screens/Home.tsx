@@ -49,6 +49,7 @@ export default function Home() {
   // Vốn đang nằm ở hàng (CR-005 ý 4): Kho Lumi + đang về (Kho TQ / Kho VN) - v_model_stock.total_capital_vnd
   const capital = d.modelStock.reduce((a, s) => a + (s.total_capital_vnd ?? s.stock_value_vnd), 0)
   const cash = d.cashBalance?.balance_vnd ?? 0
+  const unsoldN = d.unitView.filter((u) => u.status === 'incoming' || u.status === 'in_stock' || u.status === 'reserved').length
   // Khách còn nợ: đơn chưa Hoàn tất (đơn Huỷ / Hoàn hàng = 0 - Q-009); trả dư không trừ
   const dueOrders = d.orderSummary.filter((o) => o.status !== 'completed' && o.receivable_vnd > 0)
   const due = dueOrders.reduce((a, o) => a + o.receivable_vnd, 0)
@@ -115,7 +116,7 @@ export default function Home() {
   const low = sortedModelStock(d).filter((m) => m.is_active && (m.sellable_count <= 0 || m.is_low_stock))
   add({ key: 'low', title: 'Sắp hết hàng', tone: 'way', count: low.length, more: '/kho',
     rows: low.slice(0, PER_GROUP).map((m) => (
-      <Row2 key={m.model_id} to={`/kho?model=${m.model_id}`} a={<Ident id={m.code_prefix} text={m.model_name} />}
+      <Row2 key={m.model_id} to={`/kho?model=${m.model_id}`} a={<Ident id={m.model_name} />}
         b={<span className={m.sellable_count <= 0 ? 'neg' : 'age-warn'}>{m.sellable_count <= 0 ? 'hết hàng' : `còn ${m.sellable_count}`}</span>}
         c={<Tx>{stockText(m)}</Tx>} />
     )) })
@@ -149,7 +150,7 @@ export default function Home() {
         <span className="s">{shippedN} đơn đã gửi{returnedN ? ` · ${returnedN} hoàn` : ''}</span></button>
       <Link className="kpi" to="/don"><span className="k">Doanh thu tháng {mNo}</span><span className="v">{kpiAmount(rev, desk)}</span><span className="s">giá chốt các chiếc đã gửi</span></Link>
       <Link className="kpi" to="/kho"><span className="k">Tiền nằm ở hàng</span><span className="v">{kpiAmount(capital, desk)}</span>
-</Link>
+        <span className="s">{unsoldN} cối chưa bán</span></Link>
       <Link className="kpi" to="/don?f=due"><span className="k">Khách còn nợ</span><span className="v">{kpiAmount(due, desk)}</span><span className={`s ${dueOrders.length ? 'bad' : ''}`}>{dueOrders.length ? `${dueOrders.length} đơn chưa đủ` : 'đã thu đủ'}</span></Link>
       <Link className="kpi" to="/congno"><span className="k">Nợ trung gian</span><span className="v">{kpiAmount(Math.abs(debt), desk)}</span><span className={`s ${debt > 0 ? 'bad' : ''}`}>{debt > 0 ? 'còn phải trả' : debt < 0 ? 'đã chuyển dư' : 'không còn nợ'}</span></Link>
     </div>

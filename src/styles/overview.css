@@ -140,7 +140,8 @@ a.link-btn, a.btn { text-decoration: none; }
 .cash-hero .v.neg { color: var(--bad); }
 .cash-hero .io { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-top: 4px; }
 .cash-hero .io b { font-family: var(--mono); font-weight: 500; color: var(--fg); }
-.cash-acts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.cash-acts { display: flex; gap: 6px; }
+.cash-acts .btn { flex: 1 1 0; min-width: 0; }
 .cash-acts .btn { min-height: 44px; padding: 4px 6px; font-size: 13.5px; }
 .ov-row .b.in { color: var(--ok); }
 .cash-sheet-kinds { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }

@@ -132,12 +132,12 @@ function UnitView({ u }: { u: UnitViewRow }) {
         <div>
           <p className="section-title">Thông tin mua</p>
           <dl className="kv">
-            <dt>Tin Goofish</dt><dd>{href ? <a className="link-btn small lot-ext" href={href} target="_blank" rel="noopener noreferrer">Mở tin <Icon name="ext" /></a> : '-'}</dd>
+            {href && <><dt>Tin Goofish</dt><dd><a className="link-btn small lot-ext" href={href} target="_blank" rel="noopener noreferrer">Mở tin <Icon name="ext" /></a></dd></>}
             {lot?.listing_title && <><dt>Tiêu đề</dt><dd className="small">{lot.listing_title}</dd></>}
-            <dt>Người bán</dt><dd>{seller ? <>{seller.profile_url && /^https?:\/\//i.test(seller.profile_url) ? <a className="link-btn small lot-ext" href={seller.profile_url} target="_blank" rel="noopener noreferrer">{seller.nickname} <Icon name="ext" /></a> : seller.nickname}{seller.region ? ` · ${seller.region}` : ''}{seller.is_avoided && <> <span className="pill bad">tránh</span></>}</> : '-'}</dd>
+            {seller && <><dt>Người bán</dt><dd><>{seller.profile_url && /^https?:\/\//i.test(seller.profile_url) ? <a className="link-btn small lot-ext" href={seller.profile_url} target="_blank" rel="noopener noreferrer">{seller.nickname} <Icon name="ext" /></a> : seller.nickname}{seller.region ? ` · ${seller.region}` : ''}{seller.is_avoided && <> <span className="pill bad">tránh</span></>}</></dd></>}
             <dt>Ngày đặt</dt><dd>{fullDate(u.ordered_at)}{!u.is_received && u.status !== 'cancelled' ? ` · ${daysSince(u.ordered_at) ?? 0} ngày` : ''}</dd>
-            <dt>Ngày nhận</dt><dd>{u.received_at ? fullDate(u.received_at) : u.status === 'cancelled' ? '-' : '- (đang về)'}</dd>
-            <dt>{u.status === 'sold' ? 'Số ngày tồn (tới lúc gửi)' : 'Số ngày tồn'}</dt><dd className="num"><Aging u={u} /></dd>
+            {u.received_at ? <><dt>Ngày nhận</dt><dd>{fullDate(u.received_at)}</dd></> : u.status !== 'cancelled' && <><dt>Ngày nhận</dt><dd>Đang về</dd></>}
+            {u.days_in_stock != null && <><dt>{u.status === 'sold' ? 'Số ngày tồn (tới lúc gửi)' : 'Số ngày tồn'}</dt><dd className="num"><Aging u={u} /></dd></>}
             {u.status === 'sold' && <><dt>Ngày gửi khách</dt><dd>{fullDate(u.sold_at)}</dd></>}
             {!single && <><dt>Lô</dt><dd><Link className="link-btn" style={{ padding: 0 }} to={`/lo/${u.lot_id}`}>{d.lotCode[u.lot_id] ?? 'Lô'}</Link> <span className="muted small">({qty} chiếc)</span></dd></>}
             {lot?.note && <><dt>Ghi chú mua</dt><dd className="small">{lot.note}</dd></>}
@@ -175,7 +175,7 @@ function Aging({ u }: { u: UnitViewRow }) {
   const th = thresholds(d)
   if (u.days_in_stock == null) {
     const n = u.status === 'incoming' ? daysSince(u.ordered_at) : null
-    return <>{n != null ? <span className="muted">- (đã đặt {n} ngày)</span> : '-'}</>
+    return <>{n != null ? <span className="muted">Đã đặt {n} ngày</span> : 'Chưa có'}</>
   }
   const note = u.aging_level === 'alert' ? ` · tồn lâu, quá ${th.alert} ngày` : u.aging_level === 'warn' ? ` · quá ${th.warn} ngày` : ''
   return <span className={agingCls(u.aging_level)}>{u.days_in_stock} ngày{note}</span>

@@ -39,7 +39,9 @@
   border: 0; border-top: 1px solid var(--line); border-radius: 0; box-shadow: none; background: transparent;
 }
 [data-skin="tracker"] .shot { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; background: transparent; padding: 14px 0; }
-[data-skin="tracker"] .stack { gap: 0; }
+[data-skin="tracker"] .stack { gap: 12px; }
+[data-skin="tracker"] .kv { padding-top: 10px; gap: 10px 16px; }
+[data-skin="tracker"] .calc { padding-top: 8px; }
 [data-skin="tracker"] .urow, [data-skin="tracker"] .li { padding-left: 0; padding-right: 0; }
 
 /* Ô số tổng quan: không khung, số mảnh to, nhãn chữ hoa */

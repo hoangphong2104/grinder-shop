@@ -73,3 +73,8 @@
 }
 [data-skin="tracker"] .nl-list { border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; }
 [data-skin="tracker"] .nl-row .t { font-weight: 500; }
+/* CR-007: lịch sử / đã xoá gần đây - sheet nằm trên màn sửa */
+.scrim:has(.nk-hist) { z-index: 85; }
+.nk-hist .nl-row { grid-template-areas: "t w" "p p" "a a"; }
+.nk-hist .nl-row .a { grid-area: a; justify-self: start; margin-top: 4px; }
+.nk-trash { align-self: center; margin: 8px auto 0; color: var(--muted); }

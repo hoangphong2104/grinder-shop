@@ -60,6 +60,7 @@ drop table if exists public.sellers           cascade;
 drop table if exists public.customers         cascade;
 drop table if exists public.settings          cascade;
 drop table if exists public.ai_scan_log       cascade;
+drop table if exists public.note_revisions    cascade;   -- v2 (CR-007)
 drop table if exists public.notes             cascade;   -- v2 (CR-002)
 drop table if exists private.unit_code_retired cascade;  -- v2
 
@@ -78,7 +79,7 @@ begin
                      'recalc_lot','replay_variant_avg','lock_variants','variant_incoming','variant_reserved',
                      'order_fillable','next_unit_code','order_unreceived_codes',
                      'normalize_lot_status','cash_sync_payment','cash_sync_txn','cash_sync_order',
-                     'cash_on_payment','cash_on_txn','cash_on_order'))
+                     'cash_on_payment','cash_on_txn','cash_on_order','note_keep_revision'))
   loop
     execute format('drop function if exists %s cascade', r.sig);
   end loop;

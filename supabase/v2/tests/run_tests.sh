@@ -10,7 +10,7 @@
 #          (bản v2 trước CR-003) + dữ liệu (test 03) → chụp → 002 (2 lần) → dữ liệu không đổi → dữ liệu thêm (test 05)
 #          → chụp → 003 (2 lần) → dữ liệu cũ không đổi (test 09) + test CR-004 (10) → 004 (2 lần)
 #          → chụp (11) → 005 (2 lần) → trạng thái lô đổi mã, dữ liệu khác không đổi, sổ quỹ backfill khớp (12) + test CR-005 (13)
-#          → so schema: cài mới (setup-v2) = v2 cũ + 002 + 003 + 004 + 005
+#          → so schema: cài mới (setup-v2) = v2 cũ + 002 + 003 + 004 + 005 + 006
 #        → dừng server, xoá cụm.
 set -euo pipefail
 export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
@@ -96,6 +96,8 @@ done
 step "test CR-003 trên DB cài mới"; "${P[@]}" -f "$HERE/05_buying_fee_tests.sql" >>"$LOG" 2>&1
 step "test CR-004 trên DB cài mới"; "${P[@]}" -f "$HERE/10_cr004_tests.sql" >>"$LOG" 2>&1
 step "test CR-005 trên DB cài mới"; "${P[@]}" -f "$HERE/13_cr005_tests.sql" >>"$LOG" 2>&1
+step "006_note_history.sql (lần 1 + 2) trên DB cài mới (001 đã gồm CR-007 ⇒ không đổi gì)"; "${P[@]}" -f "$V2/006_note_history.sql" >>"$LOG" 2>&1; "${P[@]}" -f "$V2/006_note_history.sql" >>"$LOG" 2>&1
+step "test CR-007 trên DB cài mới"; "${P[@]}" -f "$HERE/14_note_history_tests.sql" >>"$LOG" 2>&1
 
 step "nâng cấp: DB v1 → v2 TRƯỚC CR-003 (fixtures/001_schema_v2_pre003.sql) + dữ liệu"
 "${PSQL[@]}" -d postgres -c "create database grinder_up" >/dev/null
@@ -122,13 +124,15 @@ step "nâng cấp: 005_cash_status_qr.sql lần 1 (DB thật mô phỏng: pre-00
 step "nâng cấp: 005_cash_status_qr.sql lần 2 (idempotent)"; "${U[@]}" -f "$V2/005_cash_status_qr.sql" >>"$LOG" 2>&1
 step "nâng cấp: trạng thái lô đổi mã + dữ liệu khác giữ nguyên + sổ quỹ backfill sau 005"; "${U[@]}" -f "$HERE/12_cr005_verify.sql" >>"$LOG" 2>&1
 step "nâng cấp: test CR-005 trên DB đã nâng cấp"; "${U[@]}" -f "$HERE/13_cr005_tests.sql" >>"$LOG" 2>&1
+step "nâng cấp: 006_note_history.sql lần 1 + 2"; "${U[@]}" -f "$V2/006_note_history.sql" >>"$LOG" 2>&1; "${U[@]}" -f "$V2/006_note_history.sql" >>"$LOG" 2>&1
+step "nâng cấp: test CR-007 trên DB đã nâng cấp"; "${U[@]}" -f "$HERE/14_note_history_tests.sql" >>"$LOG" 2>&1
 
-step "so schema public + private: cài mới (setup-v2) = v2 cũ + 002 + 003 + 004 + 005"
+step "so schema public + private: cài mới (setup-v2) = v2 cũ + 002 + 003 + 004 + 005 + 006"
 dump() { "$PGBIN/pg_dump" -h "$BASE" -p "$PORT" -U postgres -d "$1" --schema-only --no-owner -n public -n private \
            | grep -vE '^(--|\\restrict|\\unrestrict)' | sed '/^$/d'; }
 dump grinder > "$BASE/schema_fresh.sql"; dump grinder_up > "$BASE/schema_up.sql"
 if [ -s "$BASE/schema_fresh.sql" ] && diff -u "$BASE/schema_fresh.sql" "$BASE/schema_up.sql" >> "$LOG" 2>&1; then
-  echo "PASS: schema giống hệt: cài mới (001 có CR-003 + CR-004 + CR-005) = v2 cũ + 002 + 003 + 004 + 005 ($(wc -l < "$BASE/schema_fresh.sql" | tr -d ' ') dòng pg_dump)" | tee -a "$LOG"
+  echo "PASS: schema giống hệt: cài mới (001 có CR-003 + CR-004 + CR-005 + CR-007) = v2 cũ + 002 + 003 + 004 + 005 + 006 ($(wc -l < "$BASE/schema_fresh.sql" | tr -d ' ') dòng pg_dump)" | tee -a "$LOG"
 else
   echo "FAIL: schema cài mới khác v2 cũ + 002 + 003 + 004 + 005 (xem diff trong log)" | tee -a "$LOG"; exit 1
 fi

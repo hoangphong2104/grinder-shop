@@ -9,6 +9,7 @@ import { Icon } from '../ui/icons.tsx'
 import { CASH_KIND_LABEL, LotChip } from '../ui/status.tsx'
 import { dmy, parseNum, todayVn, tr, vnd } from '../ui/format.ts'
 import { CONFLICT_MSG, Ident, Row2, Tx, lotModelsText, useDesk, writeError } from './overview/common.tsx'
+import { codesText } from './lots/common.tsx'
 import { PayLotButton } from './lots/PayLot.tsx'
 
 // SC_10 Sổ quỹ (CR-005 ý 15, 1, 2, 5) - thay "Công nợ trung gian".
@@ -114,7 +115,7 @@ export default function Debt() {
           <div className="ov-list">
             {owing.map((s) => (
               <Row2 key={s.lot_id}
-                a={<Link className="row" style={{ gap: 8, minWidth: 0, color: 'inherit', textDecoration: 'none' }} to={`/lo/${s.lot_id}`}><Ident id={d.lotCode[s.lot_id] ?? 'Lô'} text={lotModelsText(d, s.lot_id, 'short')} /></Link>}
+                a={<Link className="row" style={{ gap: 8, minWidth: 0, color: 'inherit', textDecoration: 'none' }} to={`/lo/${s.lot_id}`}><Ident id={codesText(d.unitView.filter((u) => u.lot_id === s.lot_id).map((u) => u.code), 2) || (d.lotCode[s.lot_id] ?? 'Lô')} text={d.unitView.find((u) => u.lot_id === s.lot_id)?.model_name ?? lotModelsText(d, s.lot_id, 'short')} /></Link>}
                 b={<span className="neg">{tr(s.outstanding_vnd)}</span>}
                 c={<><LotChip s={s.status} /><Tx>{s.paid_vnd > 0 ? `đã trả ${tr(s.paid_vnd)} / ${tr(s.payable_vnd)}` : `phải trả ${tr(s.payable_vnd)}`}</Tx></>}
                 d={<PayLotButton lotId={s.lot_id} id={`pay-${s.lot_id}`} />} />

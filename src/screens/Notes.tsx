@@ -2,6 +2,8 @@
 // - Dòng cao bằng nhau: tiêu đề đậm 1 dòng + ngày (ghim) bên phải, 2 dòng xem trước; màu ghi chú = vạch trái nhỏ.
 // - Bấm thẻ → màn sửa toàn màn hình, ô chữ tự giãn; Xong / quay lại = tự lưu. Ghim, đổi màu, xoá ngay trong màn sửa.
 // - Tìm không dấu; nhóm Đã ghim / Khác. Lưu trên cloud, đồng bộ realtime.
+// - CR-007: lịch sử (DB tự lưu bản cũ mỗi lần sửa nội dung / xoá - note_revisions): "Lịch sử" trong màn sửa → dùng lại bản cũ;
+//   "Đã xoá gần đây" cuối danh sách → khôi phục ghi chú đã xoá.
 import '../styles/notes.css'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase.ts'
@@ -9,7 +11,7 @@ import { useData, useStore } from '../data/store.tsx'
 import { errorMessage } from '../data/errors.ts'
 import type { NoteColor, NoteRow } from '../data/types.ts'
 import { Shell } from '../ui/Shell.tsx'
-import { useToast } from '../ui/feedback.tsx'
+import { Sheet, useToast } from '../ui/feedback.tsx'
 import { Icon } from '../ui/icons.tsx'
 
 const COLORS: [NoteColor, string][] = [['default', 'Trắng'], ['yellow', 'Vàng'], ['green', 'Xanh lá'], ['blue', 'Xanh dương'], ['pink', 'Hồng'], ['purple', 'Tím']]
@@ -38,6 +40,7 @@ export default function Notes() {
   const d = useData()
   const [q, setQ] = useState('')
   const [open, setOpen] = useState<NoteRow | 'new' | null>(null)
+  const [trash, setTrash] = useState(false)
 
   const notes = useMemo(() => {
     const f = fold(q.trim())
@@ -68,6 +71,9 @@ export default function Notes() {
           {others.length > 0 && <><p className="nk-sec">{pinned.length > 0 ? 'Ghi chú khác' : 'Tất cả ghi chú'} <span className="c">{others.length}</span></p>{list(others)}</>}
         </>
       )}
+
+      <button className="link-btn nk-trash" id="note-trash" onClick={() => setTrash(true)}>Đã xoá gần đây</button>
+      {trash && <TrashSheet onClose={() => setTrash(false)} />}
 
       <button className="nk-fab only-mob" onClick={() => setOpen('new')} aria-label="Ghi chú mới"><Icon name="plus" strokeWidth={2} /></button>
       {open && <NoteEditor key={open === 'new' ? 'new' : open.id} note={open === 'new' ? null : open} onClose={close} />}
@@ -124,6 +130,7 @@ function NoteEditor({ note, onClose }: { note: NoteRow | null; onClose: () => vo
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [confirmDel, setConfirmDel] = useState(false)
+  const [hist, setHist] = useState(false)
   const ta = useRef<HTMLTextAreaElement>(null)
   const dirty = body.trim() !== (note?.body ?? '').trim() || pinned !== (note?.is_pinned ?? false) || color !== (note?.color ?? 'default')
 
@@ -179,10 +186,84 @@ function NoteEditor({ note, onClose }: { note: NoteRow | null; onClose: () => vo
             <button key={c} role="radio" aria-checked={color === c} aria-label={label} title={label} className={`nk-dot c-${c}`} onClick={() => setColor(c)} />
           ))}
         </div>
+        {note && !confirmDel && <button className="btn btn-ghost btn-sm" id="note-hist" onClick={() => setHist(true)}>Lịch sử</button>}
         {note && (confirmDel
           ? <span className="row"><button className="btn btn-ghost btn-sm" onClick={() => setConfirmDel(false)}>Không</button><button className="btn btn-danger btn-sm" onClick={remove} disabled={busy}>Xoá vĩnh viễn</button></span>
           : <button className="btn btn-ghost btn-sm" onClick={() => setConfirmDel(true)}>Xoá</button>)}
       </footer>
+      {hist && note && <HistorySheet noteId={note.id} onPick={(r) => { setBody(r.body); setHist(false); toast('Đã lấy bản cũ - bấm Xong để lưu (bản hiện tại vẫn còn trong lịch sử)') }} onClose={() => setHist(false)} />}
     </div>
+  )
+}
+
+interface Revision { id: string; note_id: string; body: string; color: NoteColor; is_pinned: boolean; action: 'edit' | 'delete'; created_at: string }
+
+/** Ngày giờ đầy đủ cho lịch sử: "24/10 14:05". */
+const stamp = (iso: string) => new Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(iso))
+
+/** Tải lịch sử khi mở (không giữ trong store - chỉ cần lúc xem). */
+function useRevisions(build: () => PromiseLike<{ data: unknown; error: { message: string } | null }>) {
+  const [rows, setRows] = useState<Revision[] | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  const load = useCallback(async () => {
+    const { data, error } = await build()
+    if (error) setErr(errorMessage(error)); else setRows((data ?? []) as Revision[])
+  }, [build])
+  useEffect(() => { void load() }, [load])
+  return { rows, err, load }
+}
+
+function RevisionList({ rows, err, empty, act }: { rows: Revision[] | null; err: string | null; empty: string; act: (r: Revision) => React.ReactNode }) {
+  if (err) return <p className="err-text">{err}</p>
+  if (!rows) return <p className="muted small"><span className="spin" /> Đang tải…</p>
+  if (!rows.length) return <p className="muted small">{empty}</p>
+  return (
+    <div className="nl-list nk-hist">
+      {rows.map((r) => (
+        <div key={r.id} className={`nl-row c-${r.color}`} style={{ cursor: 'default' }}>
+          <span className="t">{r.body.split('\n')[0] || '(Không tiêu đề)'}</span>
+          <span className="w">{stamp(r.created_at)}</span>
+          <span className="p">{r.body.split('\n').slice(1).join('\n').trim() || <span className="none">Không có nội dung thêm</span>}</span>
+          <span className="a">{act(r)}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** Các bản cũ của 1 ghi chú (mới nhất trước) → "Dùng bản này" đưa nội dung vào màn sửa. */
+function HistorySheet({ noteId, onPick, onClose }: { noteId: string; onPick: (r: Revision) => void; onClose: () => void }) {
+  const build = useCallback(() => supabase.from('note_revisions').select('*').eq('note_id', noteId).eq('action', 'edit').order('created_at', { ascending: false }).limit(50), [noteId])
+  const { rows, err } = useRevisions(build)
+  return (
+    <Sheet title="Lịch sử ghi chú" onClose={onClose}>
+      <p className="hint" style={{ margin: 0 }}>Mỗi lần sửa nội dung, app giữ lại bản trước đó (tối đa 50 bản).</p>
+      <RevisionList rows={rows} err={err} empty="Chưa có bản cũ - ghi chú chưa bị sửa nội dung lần nào."
+        act={(r) => <button className="btn btn-ghost btn-sm" onClick={() => onPick(r)}>Dùng bản này</button>} />
+    </Sheet>
+  )
+}
+
+/** Ghi chú đã xoá (30 cái gần nhất) → khôi phục = thêm lại ghi chú từ bản cuối, rồi bỏ bản "đã xoá". */
+function TrashSheet({ onClose }: { onClose: () => void }) {
+  const { reload } = useStore()
+  const toast = useToast()
+  const [busy, setBusy] = useState<string | null>(null)
+  const build = useCallback(() => supabase.from('note_revisions').select('*').eq('action', 'delete').order('created_at', { ascending: false }).limit(30), [])
+  const { rows, err, load } = useRevisions(build)
+  async function restore(r: Revision) {
+    setBusy(r.id)
+    const { error } = await supabase.from('notes').insert({ body: r.body, color: r.color, is_pinned: r.is_pinned })
+    if (!error) await supabase.from('note_revisions').delete().eq('id', r.id)
+    setBusy(null)
+    if (error) { toast(errorMessage(error)); return }
+    await Promise.all([reload(), load()])
+    toast('Đã khôi phục ghi chú')
+  }
+  return (
+    <Sheet title="Đã xoá gần đây" onClose={onClose}>
+      <RevisionList rows={rows} err={err} empty="Không có ghi chú nào bị xoá."
+        act={(r) => <button className="btn btn-ghost btn-sm" disabled={busy === r.id} onClick={() => void restore(r)}>{busy === r.id ? 'Đang khôi phục…' : 'Khôi phục'}</button>} />
+    </Sheet>
   )
 }

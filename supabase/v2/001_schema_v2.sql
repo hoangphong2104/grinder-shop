@@ -4,6 +4,7 @@
 -- Giữ nguyên từ v1 (migrations/001_init.sql): BR-02, BR-03, BR-10..BR-14, Q-006, Q-007, Q-009..Q-012,
 --   Q-014, Q-015, Q-017..Q-019; RLS theo user_id + quyền theo cột; RPC SECURITY DEFINER search_path = '';
 --   khoá lạc quan version + p_expected_version; mã lỗi qua RAISE ... MESSAGE '<CODE>' (SQLSTATE P0001).
+-- Gộp thêm CR-007 (006_note_history.sql): bảng public.note_revisions + trigger lịch sử ghi chú.
 -- Gộp thêm CR-002 (CR file §6): bảng public.notes (tab Ghi chú) — client ghi trực tiếp, RLS theo user, có realtime.
 -- Gộp thêm CR-003 (CR file §7, v0.3): phí mua hộ % — settings.default_buying_fee_pct, lots.buying_fee_pct (cột cuối
 --   bảng, để cài mới = v2 + 002_buying_fee.sql). DB đang chạy v2 có dữ liệu: chạy 002_buying_fee.sql (cộng thêm).
@@ -2126,6 +2127,47 @@ create policy private_images_update on storage.objects for update to authenticat
   using (bucket_id = 'private-images' and (storage.foldername(name))[1] = (select auth.uid())::text);
 create policy private_images_delete on storage.objects for delete to authenticated
   using (bucket_id = 'private-images' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+-- -----------------------------------------------------------------------------
+-- 6b. CR-007 Lịch sử ghi chú: mỗi lần SỬA nội dung (body đổi) hoặc XOÁ ghi chú ⇒ trigger lưu bản cũ vào note_revisions
+-- (giữ 50 bản mới nhất / ghi chú). Client chỉ đọc + xoá (khôi phục = ghi lại notes bằng body cũ — bản đang có cũng thành 1 bản lịch sử).
+-- Không FK tới notes: ghi chú đã xoá vẫn còn lịch sử để khôi phục.
+create table if not exists public.note_revisions (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  note_id     uuid not null,
+  body        text not null,
+  color       text not null default 'default',
+  is_pinned   boolean not null default false,
+  action      text not null check (action in ('edit','delete')),
+  created_at  timestamptz not null default pg_catalog.clock_timestamp()
+);
+create index if not exists note_revisions_note_idx on public.note_revisions (note_id, created_at desc);
+create index if not exists note_revisions_user_idx on public.note_revisions (user_id, action, created_at desc);
+
+create or replace function private.note_keep_revision() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if tg_op = 'UPDATE' and old.body is not distinct from new.body then
+    return null;
+  end if;
+  insert into public.note_revisions (user_id, note_id, body, color, is_pinned, action)
+  values (old.user_id, old.id, old.body, old.color, old.is_pinned, case when tg_op = 'DELETE' then 'delete' else 'edit' end);
+  delete from public.note_revisions r
+   where r.id in (select x.id from public.note_revisions x where x.note_id = old.id order by x.created_at desc offset 50);
+  return null;
+end $$;
+revoke execute on function private.note_keep_revision() from public, anon, authenticated;
+drop trigger if exists notes_keep_revision on public.notes;
+create trigger notes_keep_revision after update or delete on public.notes
+  for each row execute function private.note_keep_revision();
+
+revoke all on public.note_revisions from anon, authenticated;
+grant select, delete on public.note_revisions to authenticated;
+alter table public.note_revisions enable row level security;
+drop policy if exists note_revisions_owner on public.note_revisions;
+create policy note_revisions_owner on public.note_revisions for all to authenticated
+  using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
 
 -- -----------------------------------------------------------------------------
 -- 7. Realtime (Q-017): postgres_changes tôn trọng RLS ⇒ mỗi người chỉ nhận thay đổi của mình.
