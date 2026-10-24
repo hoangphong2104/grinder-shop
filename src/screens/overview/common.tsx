@@ -204,7 +204,7 @@ export function LotRow({ d, l, noChip }: { d: DbData; l: LotDbRow; noChip?: bool
     <Row2 to={`/lo/${l.id}`}
       a={<Ident id={d.lotCode[l.id] ?? 'Lô'} text={lotModelsText(d, l.id, 'short')} />}
       b={tr(s?.payable_vnd ?? 0)}
-      c={<>{!noChip && <LotChip s={l.status} />}<Tx className={s?.is_lot_late && open ? 'age-alert' : ''}>{when}{warn ? <> · <span className="neg">⚠ {warn}</span></> : null}</Tx></>}
+      c={<>{!noChip && <LotChip s={l.status} />}<Tx className={s?.is_lot_late && open ? 'age-alert' : ''}>{when}{warn ? <>, <span className="neg">⚠ {warn}</span></> : null}</Tx></>}
       d={`${s?.total_qty ?? 0} chiếc`} />
   )
 }
@@ -227,7 +227,7 @@ export function OrderRow({ d, o, noChip, sub, right2 }: { d: DbData; o: OrderSum
     <Row2 to={`/don/${o.order_id}`}
       a={<Ident id={d.orderCode[o.order_id] ?? 'Đơn'} text={o.customer_name} />}
       b={tr(o.goods_vnd + o.ship_charged_vnd)}
-      c={<>{!noChip && <OrderChip s={o.status} />}<Tx>{sub ?? <>{dmyShort(o.order_date)} · {codesText(o.unit_codes)}</>}</Tx></>}
+      c={<>{!noChip && <OrderChip s={o.status} />}<Tx>{sub ?? <>{dmyShort(o.order_date)}, {codesText(o.unit_codes)}</>}</Tx></>}
       d={right2 ?? <PayText o={o} />} />
   )
 }

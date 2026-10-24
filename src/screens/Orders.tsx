@@ -24,7 +24,7 @@ function PayPill({ s }: { s: OrderSummaryRow }) {
 function OrderCard({ s, lk, code }: { s: OrderSummaryRow; lk: Lookup; code: string }) {
   return (
     <Link className="kcard" to={`/don/${s.order_id}`}>
-      <span className="t">{code} · {s.customer_name}</span>
+      <span className="t">{code}, {s.customer_name}</span>
       <span className="s">{codesText(s.unit_codes, 3)}</span>
       <span className="m"><span>{dmy(s.status === 'returned' ? s.returned_at : s.order_date)}</span><span>{tr(lk.total(s))}</span></span>
       <PayPill s={s} />

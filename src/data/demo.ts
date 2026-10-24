@@ -452,7 +452,7 @@ export function buildDemoData(): DbData {
   const settings: SettingsRow = {
     user_id: UID, ai_scan_enabled: true, ai_scan_monthly_cap: 100, ai_confidence_threshold: 0.7, default_ship_fee_payer: 'customer',
     default_buying_fee_pct: 3, aging_warn_days: DEFAULT_AGING.warnDays, aging_alert_days: DEFAULT_AGING.alertDays,
-    lot_late_days: DEFAULT_LOT_LATE_DAYS, bank_info: 'Vietcombank 0123456789 · NGUYEN VAN A (mẫu)', updated_at: stamp(ago(30)), version: 1,
+    lot_late_days: DEFAULT_LOT_LATE_DAYS, bank_info: 'Vietcombank 0123456789, NGUYEN VAN A (mẫu)', updated_at: stamp(ago(30)), version: 1,
     bank_bin: '970436', bank_account_no: '0123456789', bank_account_name: 'NGUYEN VAN A', // CR-005 VietQR mẫu (Vietcombank)
   }
 

@@ -70,7 +70,7 @@ function OrderDetailView({ id }: { id: string }) {
   })
   // Chiếc còn chưa về kho (lô chưa Đã nhận) - chặn chốt (A7) và gửi (A8).
   const notIn = rows.filter((r) => !r.u?.is_received)
-  const notInText = notIn.map((r) => r.u ? `${r.u.code} (${d.lotCode[r.u.lot_id] ?? 'lô'} · ${LOT_LABEL[r.u.lot_status]})` : '?').join(', ')
+  const notInText = notIn.map((r) => r.u ? `${r.u.code} (${d.lotCode[r.u.lot_id] ?? 'lô'}, ${LOT_LABEL[r.u.lot_status]})` : '?').join(', ')
   const provisional = rows.some((r) => r.u?.cost_is_provisional)
   const codesAll = codesText(s.unit_codes, 50)
   // CR-005 ý 12: QR chuyển khoản = số còn phải thu (trừ phần COD shipper đang thu hộ, tránh khách trả 2 lần).
@@ -82,7 +82,7 @@ function OrderDetailView({ id }: { id: string }) {
     try { await fn(); setSheet(null); toast(ok) } catch (e) { toast(e instanceof Error ? e.message : errorMessage(e)) } finally { setBusy(false) }
   }
   const chot = () => run(() => rpc('confirm_preorder', { p_order_id: o.id, p_expected_version: o.version }), `Đã chốt ${code}`)
-  const complete = (force: boolean) => run(() => rpc('complete_order', { p_order_id: o.id, p_force: force, p_expected_version: o.version }), `${code} · Đã giao`)
+  const complete = (force: boolean) => run(() => rpc('complete_order', { p_order_id: o.id, p_force: force, p_expected_version: o.version }), `${code}, Đã giao`)
   const onDone = () => (due !== 0 ? setSheet('done') : complete(false))
 
   // DON-S2: sao chép ngay trong lúc bấm (giữ "user activation"); không được ⇒ sheet có ô chữ để tự chọn / sao chép.
@@ -156,22 +156,22 @@ function OrderDetailView({ id }: { id: string }) {
           <div className="calc">
             {rows.map(({ x, u }) => (
               <div key={x.id} className="ln">
-                <span>{u ? <Link to={`/kho/${u.unit_id}`}>{u.code}</Link> : '?'} · {u?.model_name ?? 'Không tìm thấy chiếc'}</span>
+                <span>{u ? <Link to={`/kho/${u.unit_id}`}>{u.code}</Link> : '?'}, {u?.model_name ?? 'Không tìm thấy chiếc'}</span>
                 <span>{vnd(x.unit_price_vnd)}</span>
               </div>
             ))}
-            <div className="ln"><span>Ship VN · {o.ship_fee_payer === 'customer' ? 'khách trả (thu hộ)' : 'shop chịu'}</span><span>{vnd(o.ship_fee_vnd)}</span></div>
+            <div className="ln"><span>Ship VN, {o.ship_fee_payer === 'customer' ? 'khách trả (thu hộ)' : 'shop chịu'}</span><span>{vnd(o.ship_fee_vnd)}</span></div>
             <div className="ln total"><span>Khách phải trả</span><span>{vnd(total)}</span></div>
             {payments.map((p) => (
               <div key={p.id} className="ln sub-ln">
-                <span><button className="link-btn" onClick={() => setSheet({ delPay: p })} aria-label={`Khoản ${PAY_LABEL[p.kind]} ngày ${dmy(p.paid_at)} - bấm để xoá nếu ghi nhầm`}>{dmy(p.paid_at)} · {PAY_LABEL[p.kind]}</button>
-                  <span className="pm"> · {PAY_METHOD_LABEL[p.method ?? 'transfer']}{p.note ? ` · ${p.note}` : ''}</span></span>
+                <span><button className="link-btn" onClick={() => setSheet({ delPay: p })} aria-label={`Khoản ${PAY_LABEL[p.kind]} ngày ${dmy(p.paid_at)} - bấm để xoá nếu ghi nhầm`}>{dmy(p.paid_at)}, {PAY_LABEL[p.kind]}</button>
+                  <span className="pm">, {PAY_METHOD_LABEL[p.method ?? 'transfer']}{p.note ? `, ${p.note}` : ''}</span></span>
                 <span>{p.kind === 'refund' ? '−' : ''}{vnd(p.amount_vnd)}</span>
               </div>
             ))}
             <div className="ln"><span>Đã thu</span><span>{vnd(s.paid_vnd)}</span></div>
             {o.cod_amount_vnd > 0 && <>
-              <div className="ln sub-ln"><span>COD shipper thu{o.status === 'shipped' && <> · <button className="link-btn" onClick={() => setSheet('cod')}>sửa</button></>}</span><span>{vnd(o.cod_amount_vnd)}</span></div>
+              <div className="ln sub-ln"><span>COD shipper thu{o.status === 'shipped' && <>, <button className="link-btn" onClick={() => setSheet('cod')}>sửa</button></>}</span><span>{vnd(o.cod_amount_vnd)}</span></div>
               {s.cod_received_vnd > 0 && <div className="ln sub-ln"><span>COD đã về</span><span>{vnd(s.cod_received_vnd)}</span></div>}
               {s.cod_pending_vnd > 0 && <div className="ln cod"><span>COD chờ hãng chuyển</span><span>{vnd(s.cod_pending_vnd)}</span></div>}
             </>}
@@ -191,7 +191,7 @@ function OrderDetailView({ id }: { id: string }) {
             <dt>Địa chỉ</dt><dd className="small">{c?.address || '-'}</dd>
             <dt>Ngày đơn</dt><dd>{dmy(o.order_date)}</dd>
             <dt>Ngày gửi</dt><dd>{dmy(o.shipped_at)}</dd>
-            {returned && <><dt>Hoàn hàng</dt><dd>{dmy(o.returned_at)}{o.return_ship_fee_vnd > 0 ? ` · ship về ${vnd(o.return_ship_fee_vnd)}` : ''}{o.return_note ? <span className="small muted"> · {o.return_note}</span> : null}</dd></>}
+            {returned && <><dt>Hoàn hàng</dt><dd>{dmy(o.returned_at)}{o.return_ship_fee_vnd > 0 ? `, ship về ${vnd(o.return_ship_fee_vnd)}` : ''}{o.return_note ? <span className="small muted">, {o.return_note}</span> : null}</dd></>}
             <dt>Mã vận đơn</dt><dd>{o.tracking_no || '-'}</dd>
             <dt>Ghi chú</dt><dd className="small">{o.note || '-'}</dd>
           </dl>
@@ -209,7 +209,7 @@ function OrderDetailView({ id }: { id: string }) {
                   {rows.map(({ x, u, profit: p }) => (
                     <div key={x.id} className="ln">
                       <span>
-                        {u?.code ?? '?'} · chốt {tr(x.unit_price_vnd)}
+                        {u?.code ?? '?'}, chốt {tr(x.unit_price_vnd)}
                         <span className="sub">giá nhập {u ? vnd(u.cost_vnd) : '-'}{u?.cost_is_overridden ? ' (sửa tay)' : u?.cost_is_provisional ? ' (tạm tính, chưa có ship lô)' : ''}</span>
                       </span>
                       <span>{profitStr(p)}</span>
@@ -226,7 +226,7 @@ function OrderDetailView({ id }: { id: string }) {
       </div>
 
       {sheet === 'menu' && (
-        <Sheet title={`Thao tác · ${code}`} onClose={close}>
+        <Sheet title={`Thao tác, ${code}`} onClose={close}>
           <div className="list o-menu">
             {(o.status === 'preorder' || o.status === 'confirmed') && (
               <button className="li" onClick={() => nav(`/don/${o.id}/sua`)}><span className="main"><b>Sửa đơn</b><span className="s">Khách, chiếc, giá chốt, ship</span></span><Icon name="chev" size={16} /></button>
@@ -236,10 +236,10 @@ function OrderDetailView({ id }: { id: string }) {
               <button className="li" onClick={() => setSheet('cod')}><span className="main"><b>Sửa tiền COD</b><span className="s">{o.cod_amount_vnd > 0 ? `Shipper thu ${vnd(o.cod_amount_vnd)}` : 'Không thu COD'}</span></span><Icon name="chev" size={16} /></button>
             )}
             {canPay && (
-              <button className="li" onClick={() => setSheet('pay')}><span className="main"><b>{closedMoney ? 'Ghi hoàn tiền' : 'Ghi khoản thu / hoàn tiền'}</b><span className="s">Chuyển khoản · Tiền mặt · COD</span></span><Icon name="chev" size={16} /></button>
+              <button className="li" onClick={() => setSheet('pay')}><span className="main"><b>{closedMoney ? 'Ghi hoàn tiền' : 'Ghi khoản thu / hoàn tiền'}</b><span className="s">Chuyển khoản, Tiền mặt, COD</span></span><Icon name="chev" size={16} /></button>
             )}
             {qrAmount > 0 && (
-              <button className="li" onClick={() => setSheet('qr')}><span className="main"><b>QR chuyển khoản</b><span className="s">{cfg ? `Khách quét trả ${vnd(qrAmount)} · nội dung ${qrContent(code)}` : 'Cần cài tài khoản ngân hàng trong Cài đặt'}</span></span><Icon name="chev" size={16} /></button>
+              <button className="li" onClick={() => setSheet('qr')}><span className="main"><b>QR chuyển khoản</b><span className="s">{cfg ? `Khách quét trả ${vnd(qrAmount)}, nội dung ${qrContent(code)}` : 'Cần cài tài khoản ngân hàng trong Cài đặt'}</span></span><Icon name="chev" size={16} /></button>
             )}
             <button className="li" onClick={() => copyConfirm()}><span className="main"><b>Sao chép tin xác nhận đơn</b><span className="s">Mã chiếc, giá, ship, cọc, còn lại - dán Messenger / Zalo</span></span><Icon name="chev" size={16} /></button>
             {o.status === 'shipped' && (
@@ -256,7 +256,7 @@ function OrderDetailView({ id }: { id: string }) {
         <ShipSheet onClose={close} busy={busy} tracking={o.tracking_no ?? ''}
           shortText={notIn.length ? notInText : ''} codes={codesAll} due={Math.max(due, 0)}
           onOk={(tracking, date, cod) => run(() => rpc('ship_order', { p_order_id: o.id, p_tracking_no: tracking || null, p_shipped_at: date || null, p_expected_version: o.version, p_cod_amount_vnd: cod }),
-            `${code} · Vận chuyển tới khách${cod > 0 ? ` · COD ${tr(cod)}` : ''}${profit.value != null ? ` · lãi ${profitStr(profit.value, false, true)}` : ''}`)} />
+            `${code}, Vận chuyển tới khách${cod > 0 ? `, COD ${tr(cod)}` : ''}${profit.value != null ? `, lãi ${profitStr(profit.value, false, true)}` : ''}`)} />
       )}
       {sheet === 'cod' && (
         <CodSheet onClose={close} busy={busy} cod={o.cod_amount_vnd} received={s.cod_received_vnd} due={Math.max(due, 0)} version={o.version}
@@ -269,7 +269,7 @@ function OrderDetailView({ id }: { id: string }) {
           shippedAt={o.shipped_at ?? o.order_date} version={o.version}
           onOk={(r) => run(() => rpc('return_order', {
             p_order_id: o.id, p_keep_deposit: r.keep, p_return_ship_fee_vnd: r.fee, p_returned_at: r.date || null, p_note: r.note || null, p_expected_version: r.version,
-          }), `Đã hoàn hàng ${code}${r.refund > 0 ? ` · cần hoàn ${tr(r.refund)}` : ''}`)} />
+          }), `Đã hoàn hàng ${code}${r.refund > 0 ? `, cần hoàn ${tr(r.refund)}` : ''}`)} />
       )}
       {sheet === 'done' && (
         <Sheet title={due > 0 ? 'Khách còn nợ' : 'Khách trả dư'} onClose={close}
@@ -285,7 +285,7 @@ function OrderDetailView({ id }: { id: string }) {
         <Sheet title="Huỷ đơn?" onClose={close}
           footer={<button className="btn btn-danger btn-block" disabled={busy}
             onClick={() => run(() => rpc('cancel_order', { p_order_id: o.id, p_expected_version: o.version }),
-              s.paid_vnd > 0 ? `Đã huỷ ${code} · cần hoàn ${tr(s.paid_vnd)}` : `Đã huỷ ${code}`)}>Huỷ đơn</button>}>
+              s.paid_vnd > 0 ? `Đã huỷ ${code}, cần hoàn ${tr(s.paid_vnd)}` : `Đã huỷ ${code}`)}>Huỷ đơn</button>}>
           <p className="muted" style={{ textAlign: 'center', margin: 0 }}>
             Bỏ giữ {codesAll} cho {code} - các chiếc trả về Kho Lumi / Kho TQ / Kho VN. Tiền cọc đã thu cần ghi “Hoàn tiền” nếu trả lại khách.{s.paid_vnd > 0 ? ` Đã thu ${vnd(s.paid_vnd)}.` : ''} Không hoàn tác được.
           </p>
@@ -300,7 +300,7 @@ function OrderDetailView({ id }: { id: string }) {
             const { error } = await supabase.from('payments').insert({ order_id: o.id, paid_at: date, kind, method, amount_vnd: amount, note: note || null })
             if (error) throw new Error(errorMessage(error))
             await reload()
-          }, `Đã ghi ${PAY_LABEL[kind].toLowerCase()} ${vnd(amount)} · ${PAY_METHOD_LABEL[method].toLowerCase()}`)} />
+          }, `Đã ghi ${PAY_LABEL[kind].toLowerCase()} ${vnd(amount)}, ${PAY_METHOD_LABEL[method].toLowerCase()}`)} />
       )}
       {sheet === 'info' && (
         <InfoSheet onClose={close} busy={busy} tracking={o.tracking_no ?? ''} note={o.note ?? ''} version={o.version}
@@ -348,7 +348,7 @@ function OrderDetailView({ id }: { id: string }) {
             await reload()
           }, 'Đã xoá khoản thu')}>Xoá khoản thu</button>}>
           <p className="muted" style={{ textAlign: 'center', margin: 0 }}>
-            {PAY_LABEL[sheet.delPay.kind]} · {PAY_METHOD_LABEL[sheet.delPay.method ?? 'transfer']} {vnd(sheet.delPay.amount_vnd)} ngày {dmy(sheet.delPay.paid_at)}. Chỉ xoá khi ghi nhầm - còn phải thu tính lại, dòng tương ứng trong Sổ quỹ cũng bị xoá.
+            {PAY_LABEL[sheet.delPay.kind]}, {PAY_METHOD_LABEL[sheet.delPay.method ?? 'transfer']} {vnd(sheet.delPay.amount_vnd)} ngày {dmy(sheet.delPay.paid_at)}. Chỉ xoá khi ghi nhầm - còn phải thu tính lại, dòng tương ứng trong Sổ quỹ cũng bị xoá.
           </p>
         </Sheet>
       )}
@@ -407,7 +407,7 @@ function CodSheet({ onClose, onOk, busy, cod, received, due, version }: {
       <label className="f" htmlFor="cod-amt">Tiền COD shipper thu (₫)
         <input className="input money" id="cod-amt" inputMode="numeric" value={v} onChange={(e) => setV(e.target.value)} placeholder="0" aria-invalid={!!err} />
         {err && <span className="err-text">{err}</span>}
-        <span className="hint">Đã nhận COD {vnd(received)} · còn phải thu {vnd(due)}. Khi hãng chuyển tiền, ghi khoản thu hình thức “COD”.</span>
+        <span className="hint">Đã nhận COD {vnd(received)}, còn phải thu {vnd(due)}. Khi hãng chuyển tiền, ghi khoản thu hình thức “COD”.</span>
       </label>
     </Sheet>
   )
@@ -575,7 +575,7 @@ function QrSheet({ onClose, cfg, amount, code, codPending, onOpenSettings, onCop
 }) {
   const toast = useToast()
   const content = qrContent(code)
-  const caption = cfg ? [vnd(amount), `${bankName(cfg.bin)} · ${cfg.accountNo}`, `${cfg.accountName ? `${cfg.accountName} · ` : ''}ND: ${content}`] : []
+  const caption = cfg ? [vnd(amount), `${bankName(cfg.bin)}, ${cfg.accountNo}`, `${cfg.accountName ? `${cfg.accountName}, ` : ''}ND: ${content}`] : []
   const { img, error } = useVietQr(cfg, amount, content, caption)
   if (!cfg) {
     return (
@@ -598,7 +598,7 @@ function QrSheet({ onClose, cfg, amount, code, codPending, onOpenSettings, onCop
     } catch { fail() }
   }
   return (
-    <Sheet title={`QR chuyển khoản · ${code}`} onClose={onClose}
+    <Sheet title={`QR chuyển khoản, ${code}`} onClose={onClose}
       footer={<div className="o-qr-actions">
         <button className="btn btn-primary btn-block" id="qr-save" disabled={!img} onClick={save}>Lưu ảnh QR</button>
         <button className="btn btn-ghost btn-block" id="qr-copy-stk" onClick={copyStk}>Sao chép STK</button>

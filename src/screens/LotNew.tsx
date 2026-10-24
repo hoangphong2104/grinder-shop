@@ -249,13 +249,14 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
     if (mode === 'text' && !text.trim()) return toast('Dán chữ từ trang tin trước')
     if (mode === 'text' && text.length > MAX_TEXT) return toast('Chữ dán tối đa 20.000 ký tự - bớt phần thừa')
     setScanning(true)
+    const t0 = performance.now()
     try {
       const input = mode === 'img'
         ? { kind: 'image' as const, image_path: (await ensureUploaded())! }
         : { kind: 'text' as const, text: text.trim() }
       const r = await invokeScan(input, draftRef.current.url.trim() || null)
       applyScan(r)
-      toast('AI đã điền - kiểm tra ô đánh dấu')
+      toast(`AI đã điền sau ${Math.max(1, Math.round((performance.now() - t0) / 1000))} giây - kiểm tra ô đánh dấu`)
     } catch (e) {
       toast(errText(e))
     } finally { setScanning(false) }
@@ -382,7 +383,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
       if (existing && !existing.region && region) await supabase.from('sellers').update({ region }).eq('id', existing.id)
       const made = (r.created_units ?? []).map((u) => u.code)
       const gone = (r.removed_units ?? []).map((u) => u.code)
-      toast(`Đã lưu ${code}${made.length ? ` · tạo ${codesText(made, 3)}` : ''}${gone.length ? ` · bỏ ${codesText(gone, 3)}` : ''}`)
+      toast(`Đã lưu ${code}${made.length ? `, tạo ${codesText(made, 3)}` : ''}${gone.length ? `, bỏ ${codesText(gone, 3)}` : ''}`)
       // CR-006: mở luôn trang cối (lô 1 chiếc ⇒ /lo/:id cũng tự chuyển sang trang cối)
       const one = r.created_units?.length === 1 && !kept.length ? r.created_units[0].unit_id : null
       nav(one ? `/kho/${one}` : `/lo/${r.lot_id}`, { replace: true })
@@ -416,7 +417,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
         <>
           <label className={`drop ${file || keptShot ? 'has' : ''}`}>
             <Icon name="cam" />
-            <span>{file ? 'Đã chọn 1 ảnh · chạm để đổi' : keptShot ? 'Lô đã có ảnh chụp · chạm để đổi' : 'Chụp / chọn ảnh tin trong app 闲鱼 (thấy giá + tên người bán)'}</span>
+            <span>{file ? 'Đã chọn 1 ảnh, chạm để đổi' : keptShot ? 'Lô đã có ảnh chụp, chạm để đổi' : 'Chụp / chọn ảnh tin trong app 闲鱼 (thấy giá + tên người bán)'}</span>
             <input type="file" id="f-img" accept="image/*" onChange={(e) => { pickFile(e.target.files?.[0] ?? null); e.target.value = '' }} />
           </label>
           {preview && <img className="scan-preview" src={preview} alt="Ảnh tin đã chọn" />}
@@ -517,7 +518,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
             </div>
             {codes.length > 0 && (
               <p className="hint">Sẽ tạo <span className="lot-codes">{rangeText(codes)}</span>{codes.length > 3 ? ` (${codes.length} chiếc)` : ''}
-                {c != null && c > 0 && calcOk ? <> · giá nhập ₫ ≈ {costText(c)} / chiếc</> : null}</p>
+                {c != null && c > 0 && calcOk ? <>, giá nhập ₫ ≈ {costText(c)} / chiếc</> : null}</p>
             )}
           </div>
         )
@@ -558,7 +559,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
             onChange={(e) => set('sellerNick', e.target.value, 'seller')} />
           <datalist id="lot-sellers">{sellers.map((s) => <option key={s.id} value={s.nickname} />)}</datalist>
           {sMatch
-            ? <span className="hint">Người bán cũ · đã mua {d.lots.filter((l) => l.seller_id === sMatch.id).length} cối{sMatch.is_avoided && <> · <span className="req">đang đánh dấu TRÁNH</span></>}</span>
+            ? <span className="hint">Người bán cũ, đã mua {d.lots.filter((l) => l.seller_id === sMatch.id).length} cối{sMatch.is_avoided && <>, <span className="req">đang đánh dấu TRÁNH</span></>}</span>
             : draft.sellerNick.trim() ? <span className="hint">Người bán mới - sẽ thêm vào danh bạ</span> : null}
           {err('f-seller')}
         </label>
@@ -584,13 +585,13 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
           </div>
           {/* Gợi ý dưới cả hàng để 2 ô thẳng hàng (audit U6) */}
           <p className="hint two-hint">
-            {d.suggestions.last_exchange_rate != null ? 'Tỷ giá gợi ý theo lô gần nhất' : 'Chưa có lô trước để gợi ý tỷ giá'} · phí mua hộ tính trên tiền hàng
+            {d.suggestions.last_exchange_rate != null ? 'Tỷ giá gợi ý theo lô gần nhất' : 'Chưa có lô trước để gợi ý tỷ giá'}, phí mua hộ tính trên tiền hàng
             {editing ? ' (khoá khi lô đã nhận)' : ` (mặc định ${pct(Number(d.settings?.default_buying_fee_pct ?? 0))} trong Cài đặt)`}
           </p>
         </div>
         <label className="f"><span className="flab">Phí ship về VN (₫)</span>
           <input className="input money" id="f-ship" inputMode="numeric" value={draft.shipFee} placeholder="để trống" onChange={(e) => set('shipFee', e.target.value)} />
-          <span className="hint">Thường biết khi hàng về{shipPer != null ? ` · cối trước khoảng ${tr(shipPer)}` : ''}</span>
+          <span className="hint">Thường biết khi hàng về{shipPer != null ? `, cối trước khoảng ${tr(shipPer)}` : ''}</span>
           {err('f-ship')}
         </label>
         <label className="f"><span className="flab">Ngày đặt</span>
@@ -608,7 +609,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
           <div className="ln"><span>Phí ship về VN</span><span>{shipVal != null ? vnd(shipVal) : 'chưa nhập'}</span></div>
           {draft.groups.map((g, i) => (
             <div className="ln" key={g.key}>
-              <span>Giá nhập ₫{draft.groups.length + kept.length > 1 ? ` · ${groupCodes[i].length ? rangeText(groupCodes[i], 2) : `nhóm ${i + 1}`}` : ''}</span>
+              <span>Giá nhập ₫{draft.groups.length + kept.length > 1 ? `, ${groupCodes[i].length ? rangeText(groupCodes[i], 2) : `nhóm ${i + 1}`}` : ''}</span>
               <span>{previewOk ? costText(parseNum(g.cny)) : '-'}</span>
             </div>
           ))}
@@ -619,7 +620,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
               <input type="checkbox" className="switch" id="f-paid" checked={paidNow} onChange={(e) => setPaidNow(e.target.checked)} />
             </label>
           )}
-          <div className="formula">Giá nhập ₫ = giá ¥ × tỷ giá × (1 + phí {feeVal != null ? pct(feeVal) : '%'}) + ship về VN · mã cối do app cấp khi lưu</div>
+          <div className="formula">Giá nhập ₫ = giá ¥ × tỷ giá × (1 + phí {feeVal != null ? pct(feeVal) : '%'}) + ship về VN, mã cối do app cấp khi lưu</div>
         </div>
       </div>
     </Shell>

@@ -71,7 +71,7 @@ export default function Customers() {
                 <button key={c.id} type="button" className="orow" onClick={() => setEditing(c)}>
                   <span className="l1"><span className="nm" style={{ fontWeight: 500 }}>{c.fb_name}</span></span>
                   <span className={`r1 ${st.due > 0 || st.refund > 0 ? 'tone-bad' : ''}`} style={{ fontSize: 14 }}>{st.due > 0 ? `còn nợ ${tr(st.due)}` : st.refund > 0 ? `cần hoàn ${tr(st.refund)}` : ''}</span>
-                  <span className="l2"><span className="meta">{[c.phone, c.address].filter(Boolean).join(' · ') || 'Chưa có SĐT / địa chỉ'}</span></span>
+                  <span className="l2"><span className="meta">{[c.phone, c.address].filter(Boolean).join(', ') || 'Chưa có SĐT / địa chỉ'}</span></span>
                   <span className="r2 tone-neu">{st.n} đơn</span>
                 </button>
               )

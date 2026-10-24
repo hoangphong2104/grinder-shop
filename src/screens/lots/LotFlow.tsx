@@ -59,7 +59,7 @@ function CostPreview({ units, rate, feePct, fee }: { units: UnitViewRow[]; rate:
   return (
     <div className="calc lot-calc">
       {[...groups.values()].map((g) => (
-        <div className="ln" key={g.label}><span>{codesText(g.codes, 3)} · {g.label}</span><span>{vnd(g.cost)}</span></div>
+        <div className="ln" key={g.label}><span>{codesText(g.codes, 3)}, {g.label}</span><span>{vnd(g.cost)}</span></div>
       ))}
       {over.length > 0 && <div className="formula">Giữ giá sửa tay: {codesText(over.map((u) => u.code), 3)}</div>}
       <div className="formula">= giá ¥ × tỷ giá × (1 + phí {pct(feePct)}) + ship lô ÷ {units.length} chiếc</div>
@@ -153,7 +153,7 @@ function ReceiveSheet({ lotId, onClose, onDone }: { lotId: string; onClose: () =
         p_units: units.map((u) => ({ unit_id: u.unit_id, condition: cur(u).condition, serial_no: cur(u).serial.trim() })),
       })
       const ids = r.auto_confirmed_order_ids ?? []
-      toast(`Đã nhập kho ${r.units?.length ?? qty} chiếc${ids.length ? ` · tự chốt ${ids.length} đơn đặt trước` : ''}`)
+      toast(`Đã nhập kho ${r.units?.length ?? qty} chiếc${ids.length ? `, tự chốt ${ids.length} đơn đặt trước` : ''}`)
       onDone(ids)
     } catch (e) { setErr(errText(e)); setSending(false) }
   }
@@ -180,7 +180,7 @@ function ReceiveSheet({ lotId, onClose, onDone }: { lotId: string; onClose: () =
       {qty > 0 && (
         <>
           <div className="rc-all">
-            <span>Tình trạng · seri (tuỳ chọn)</span>
+            <span>Tình trạng, seri (tuỳ chọn)</span>
             {qty > 1 && (
               <select className="input" id="rc-all" aria-label="Đặt tình trạng cho mọi chiếc" value={allSame}
                 onChange={(e) => { if (e.target.value) setAll(e.target.value as UnitConditionDb) }}>
@@ -242,7 +242,7 @@ function ShipFeeSheet({ lotId, onClose }: { lotId: string; onClose: () => void }
     try {
       if (received) await rpc('update_lot_ship_fee', { p_lot_id: l.id, p_ship_fee_vnd: val, p_expected_version: l.version })
       else await rpc('save_lot', saveLotArgs(l, units, { ship_fee_vnd: val }))
-      toast(received ? 'Đã lưu phí ship · giá nhập ₫ các chiếc đã tính lại' : 'Đã lưu phí ship')
+      toast(received ? 'Đã lưu phí ship, giá nhập ₫ các chiếc đã tính lại' : 'Đã lưu phí ship')
       onClose()
     } catch (e) { setErr(errText(e)); setSending(false) }
   }
@@ -319,7 +319,7 @@ function CancelSheet({ lotId, onClose }: { lotId: string; onClose: () => void })
               return (
                 <Link key={oid} className="li" to={`/don/${oid}`}>
                   <div className="main">
-                    <b>{d.orderCode[oid] ?? 'Đơn'}{o ? ` · ${d.customers.find((c) => c.id === o.customer_id)?.fb_name ?? '?'}` : ''}</b>
+                    <b>{d.orderCode[oid] ?? 'Đơn'}{o ? `, ${d.customers.find((c) => c.id === o.customer_id)?.fb_name ?? '?'}` : ''}</b>
                     {cs.length > 0 && <div className="s">Giữ {codesText(cs, 4)}</div>}
                   </div>
                   <Icon name="chev" size={16} />
@@ -349,8 +349,8 @@ function AutoConfirmedSheet({ ids, onClose }: { ids: string[]; onClose: () => vo
                 <b>Đã tự chốt {d.orderCode[id] ?? 'đơn'} vì đủ hàng</b>
                 <div className="s">
                   {o ? d.customers.find((c) => c.id === o.customer_id)?.fb_name ?? '?' : ''}
-                  {os?.unit_codes?.length ? ` · ${codesText(os.unit_codes, 4)}` : ''}
-                  {o ? ` · đặt ${dmy(o.order_date)}` : ''}
+                  {os?.unit_codes?.length ? `, ${codesText(os.unit_codes, 4)}` : ''}
+                  {o ? `, đặt ${dmy(o.order_date)}` : ''}
                 </div>
               </div>
               <Icon name="chev" size={16} />

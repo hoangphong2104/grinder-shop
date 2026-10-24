@@ -276,7 +276,7 @@ export default function Settings() {
         <p className="section-title">Đơn bán</p>
         <label className="f">Dòng STK in trong tin xác nhận đơn (khi không dùng dòng VietQR)
           <textarea className={`input ${errs.bank ? 'invalid' : ''}`} id="bank-info" rows={3} maxLength={500} value={bank}
-            placeholder="VD: STK 0123456789 · Vietcombank · NGUYEN VAN A" onChange={(e) => setBank(e.target.value)} />
+            placeholder="VD: STK 0123456789, Vietcombank, NGUYEN VAN A" onChange={(e) => setBank(e.target.value)} />
           {errs.bank && <span className="field-err">{errs.bank}</span>}
         </label>
         <button className="btn btn-ghost" id="bank-save" style={{ alignSelf: 'flex-start' }} disabled={busy || !dirtyBank} onClick={saveBank}>Lưu số tài khoản</button>

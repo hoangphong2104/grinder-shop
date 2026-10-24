@@ -71,7 +71,7 @@ export function payState(s: OrderSummaryRow): PayState | null {
   if (s.status === 'cancelled' || s.status === 'returned') return null
   if (s.receivable_vnd > 0) {
     if (s.paid_vnd <= 0) return { short: 'chưa thu', long: 'Chưa thu', tone: 'bad' }
-    return { short: `còn ${tr(s.receivable_vnd)}`, long: s.deposit_vnd > 0 && s.paid_vnd === s.deposit_vnd ? `Cọc ${tr(s.deposit_vnd)} · còn ${tr(s.receivable_vnd)}` : `Còn ${tr(s.receivable_vnd)}`, tone: 'bad' }
+    return { short: `còn ${tr(s.receivable_vnd)}`, long: s.deposit_vnd > 0 && s.paid_vnd === s.deposit_vnd ? `Cọc ${tr(s.deposit_vnd)}, còn ${tr(s.receivable_vnd)}` : `Còn ${tr(s.receivable_vnd)}`, tone: 'bad' }
   }
   if (s.receivable_vnd < 0) return { short: `trả dư ${tr(-s.receivable_vnd)}`, long: `Trả dư ${tr(-s.receivable_vnd)}`, tone: 'hold' }
   return { short: 'đã đủ', long: 'Đã thu đủ', tone: 'ok' }

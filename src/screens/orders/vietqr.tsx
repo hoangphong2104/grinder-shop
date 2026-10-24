@@ -51,8 +51,8 @@ export const qrContent = (code: string) => vietQrText(code, 25)
 /** Dòng cho tin xác nhận đơn: ngân hàng · STK · tên · số tiền · nội dung + nhắc quét QR. */
 export function qrMessageLines(cfg: BankCfg, amount: number, code: string): string[] {
   return [
-    `Chuyển khoản: ${bankName(cfg.bin)} · STK ${cfg.accountNo}${cfg.accountName ? ` · ${cfg.accountName}` : ''}`,
-    `Số tiền ${vnd(amount)} · nội dung: ${qrContent(code)}`,
+    `Chuyển khoản: ${bankName(cfg.bin)}, STK ${cfg.accountNo}${cfg.accountName ? `, ${cfg.accountName}` : ''}`,
+    `Số tiền ${vnd(amount)}, nội dung: ${qrContent(code)}`,
     'Shop gửi kèm mã QR - anh/chị quét bằng app ngân hàng là điền sẵn số tiền và nội dung.',
   ]
 }

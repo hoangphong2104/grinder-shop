@@ -23,7 +23,7 @@ export function unitLabel(s: UnitStatusDb, lot?: LotStatusDb | null, order?: Ord
 }
 /** holder = mã đơn đang giữ (vd. D-005) → "Đã giữ cho D-005"; lot / order (tuỳ chọn, CR-005) = v_units.lot_status / holding_order_status. */
 export const UnitChip = ({ s, holder, lot, order }: { s: UnitStatusDb; holder?: string; lot?: LotStatusDb | null; order?: OrderStatusDb | null }) =>
-  <span className={`pill ${UNIT_TONE[s]}`}>{s === 'reserved' && holder ? `Khách đặt · ${holder}` : s === 'sold' && holder ? `${order ? ORDER_LABEL[order] : 'Đã bán'} · ${holder}` : unitLabel(s, lot, order)}</span>
+  <span className={`pill ${UNIT_TONE[s]}`}>{s === 'reserved' && holder ? `Khách đặt, ${holder}` : s === 'sold' && holder ? `${order ? ORDER_LABEL[order] : 'Đã bán'}, ${holder}` : unitLabel(s, lot, order)}</span>
 /** Chip tồn theo model (A9). */
 export function ModelStockChip({ m }: { m: ModelStockRow }) {
   if (m.sellable_count <= 0) return <span className="pill bad">Hết hàng</span>

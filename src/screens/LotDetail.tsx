@@ -100,7 +100,7 @@ export default function LotDetail() {
           <LotChip s={l.status} />
           {sum?.is_lot_late && <span className="pill bad">Về trễ</span>}
           <span>{days != null ? `đặt ${days} ngày (${dmy(l.ordered_at)})` : l.status === 'received' ? `nhận ${dmy(l.received_at)}` : `đặt ${dmy(l.ordered_at)}`}</span>
-          <span>· <b>{modelsText(d, sum)}</b></span>
+          <span>, <b>{modelsText(d, sum)}</b></span>
           {warns.filter(([t]) => t !== 'Về trễ').map(([t, c]) => <span key={t} className={`pill ${c}`}>{t}</span>)}
         </div>
         <div className="cols">
@@ -112,7 +112,7 @@ export default function LotDetail() {
             </div>
             {l.status === 'cancelled' && <div className="warn-box">Lô đã huỷ{l.cancelled_at ? ` ngày ${dmy(l.cancelled_at.slice(0, 10))}` : ''} - không tính vào tồn và công nợ.</div>}
             <div className="calc">
-              <div className="ln"><span>Tiền hàng · {cny(Number(sum?.total_cny ?? 0))} × {rate.toLocaleString('vi-VN')}</span><span>{vnd(sum?.goods_vnd ?? 0)}</span></div>
+              <div className="ln"><span>Tiền hàng, {cny(Number(sum?.total_cny ?? 0))} × {rate.toLocaleString('vi-VN')}</span><span>{vnd(sum?.goods_vnd ?? 0)}</span></div>
               <div className="ln"><span>Phí mua hộ {pct(feePct)}</span><span>{vnd(sum?.buying_fee_vnd ?? 0)}</span></div>
               <div className="ln"><span>Phí ship về VN</span><span>{l.ship_fee_vnd == null ? <span className="req">chưa nhập</span> : vnd(l.ship_fee_vnd)}</span></div>
               <div className="ln"><span>Ship / chiếc ({totalQty})</span><span>{sum?.ship_per_unit_vnd != null ? vnd(sum.ship_per_unit_vnd) : '-'}</span></div>
@@ -138,7 +138,7 @@ export default function LotDetail() {
               <dd>{s ? <>{s.profile_url && /^https?:\/\//i.test(s.profile_url) ? <a className="link-btn small lot-ext" href={s.profile_url} target="_blank" rel="noopener noreferrer">{s.nickname} <Icon name="ext" /></a> : <b>{s.nickname}</b>}{s.is_avoided && <> <span className="pill bad">tránh</span></>}</> : '-'}</dd>
               <dt>Khu vực</dt><dd>{s?.region || '-'}</dd>
               {s?.reputation_note && <><dt>Uy tín người bán</dt><dd className="small">{s.reputation_note}</dd></>}
-              <dt>Ngày đặt</dt><dd>{dmy(l.ordered_at)}{days != null ? ` · ${days} ngày` : ''}</dd>
+              <dt>Ngày đặt</dt><dd>{dmy(l.ordered_at)}{days != null ? `, ${days} ngày` : ''}</dd>
               <dt>Ngày nhận</dt><dd>{dmy(l.received_at)}</dd>
               <dt>Ghi chú</dt><dd className="small">{l.note || '-'}</dd>
             </dl>
@@ -200,11 +200,11 @@ function CostBreakdown({ units, rate, feePct, shipPer }: { units: UnitViewRow[];
         })}
         {over.map((u) => (
           <div className="cb" key={u.unit_id}>
-            <div className="ln"><span>{u.code} · sửa tay</span><span>{vnd(u.cost_vnd)}</span></div>
+            <div className="ln"><span>{u.code}, sửa tay</span><span>{vnd(u.cost_vnd)}</span></div>
             <div className="formula">tự tính {vnd(u.cost_vnd_auto)}</div>
           </div>
         ))}
-        <div className="formula cb-f">= giá ¥ × tỷ giá × (1 + phí {pct(feePct)}) + ship lô ÷ {units.length} chiếc{shipPer == null ? ' · chưa có phí ship' : ''}</div>
+        <div className="formula cb-f">= giá ¥ × tỷ giá × (1 + phí {pct(feePct)}) + ship lô ÷ {units.length} chiếc{shipPer == null ? ', chưa có phí ship' : ''}</div>
       </div>
     </>
   )
@@ -225,7 +225,7 @@ function UnitTable({ d, units }: { d: DbData; units: UnitViewRow[] }) {
             const h = holderCode(d, u)
             return (
               <tr key={u.unit_id} data-act="go" tabIndex={0} onClick={go} onKeyDown={(e) => { if (e.key === 'Enter') go() }}>
-                <td><Link className="link-btn" to={`/kho/${u.unit_id}`} onClick={(e) => e.stopPropagation()}>{u.code}</Link>{u.serial_no ? <span className="muted small"> · {u.serial_no}</span> : null}</td>
+                <td><Link className="link-btn" to={`/kho/${u.unit_id}`} onClick={(e) => e.stopPropagation()}>{u.code}</Link>{u.serial_no ? <span className="muted small">, {u.serial_no}</span> : null}</td>
                 <td>{u.model_name}</td>
                 <td><ConditionChip c={u.condition ?? 'new'} /></td>
                 <td className="r">{cny(Number(u.price_cny))}</td>

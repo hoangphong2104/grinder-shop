@@ -21,7 +21,7 @@ export function buildConfirmText(p: {
   out.push(`XÁC NHẬN ĐƠN ${code}`)
   out.push(`Khách: ${c?.fb_name ?? s.customer_name}`)
   out.push('')
-  for (const l of lines) out.push(`- ${l.code} · ${l.model}: ${vnd(l.price)}`)
+  for (const l of lines) out.push(`- ${l.code}, ${l.model}: ${vnd(l.price)}`)
   if (o.ship_fee_vnd > 0) out.push(`Phí ship: ${vnd(o.ship_fee_vnd)}${o.ship_fee_payer === 'shop' ? ' (shop chịu)' : ''}`)
   else out.push('Phí ship: miễn phí')
   const total = s.goods_vnd + s.ship_charged_vnd
@@ -47,7 +47,7 @@ export function buildConfirmText(p: {
   }
   if (s.status === 'preorder') out.push('Hàng đặt trước - shop báo ngay khi hàng về kho.')
   if (o.tracking_no) out.push(`Mã vận đơn: ${o.tracking_no}`)
-  const ship = [c?.phone, c?.address].filter(Boolean).join(' · ')
+  const ship = [c?.phone, c?.address].filter(Boolean).join(', ')
   if (ship && s.status !== 'cancelled' && s.status !== 'returned') out.push(`Giao tới: ${ship}`)
   out.push('')
   out.push('Anh/chị kiểm tra giúp shop thông tin trên nhé. Cảm ơn anh/chị!')

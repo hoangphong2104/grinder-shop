@@ -38,10 +38,10 @@ function sourceOf(d: DbData, e: CashEntryRow): { text: string; to: string | null
   const orderId = e.order_id ?? (e.payment_id ? d.payments.find((p) => p.id === e.payment_id)?.order_id ?? null : null)
   if (orderId) {
     const o = d.orderSummary.find((x) => x.order_id === orderId)
-    return { text: `${d.orderCode[orderId] ?? 'Đơn'}${o ? ` · ${o.customer_name}` : ''}`, to: `/don/${orderId}` }
+    return { text: `${d.orderCode[orderId] ?? 'Đơn'}${o ? `, ${o.customer_name}` : ''}`, to: `/don/${orderId}` }
   }
   const lotId = e.lot_id ?? (e.txn_id ? d.txns.find((t) => t.id === e.txn_id)?.lot_id ?? null : null)
-  if (lotId) return { text: `${d.lotCode[lotId] ?? 'Lô'} · ${lotModelsText(d, lotId, 'short')}`, to: `/lo/${lotId}` }
+  if (lotId) return { text: `${d.lotCode[lotId] ?? 'Lô'}, ${lotModelsText(d, lotId, 'short')}`, to: `/lo/${lotId}` }
   return { text: e.kind === 'intermediary' ? 'không gắn lô' : '', to: null }
 }
 
@@ -135,7 +135,7 @@ export default function Debt() {
         <div className="ov-list">
           {manualTxns.map((t) => (
             <Row2 key={t.id} onClick={() => setTxnForm({ kind: t.kind as 'transfer' | 'adjustment', txn: t })}
-              a={<><b className="id muted">{dmy(t.txn_date)}</b><span className="tx"><b>{TXN_LABEL[t.kind]}</b>{t.lot_id ? ` · ${d.lotCode[t.lot_id] ?? ''}` : ''}</span></>}
+              a={<><b className="id muted">{dmy(t.txn_date)}</b><span className="tx"><b>{TXN_LABEL[t.kind]}</b>{t.lot_id ? `, ${d.lotCode[t.lot_id] ?? ''}` : ''}</span></>}
               b={t.kind === 'transfer' ? tr(t.amount_vnd) : `${t.amount_vnd > 0 ? '+' : '−'}${tr(Math.abs(t.amount_vnd))}`}
               c={<Tx>{t.note || (t.kind === 'adjustment' ? (t.amount_vnd > 0 ? 'tăng nợ' : 'giảm nợ') : '-')}</Tx>}
               d="sửa / xoá" />
@@ -163,7 +163,7 @@ export default function Debt() {
               const head = i === 0 || shown[i - 1].entry_date !== e.entry_date
               const src = e.is_auto ? sourceOf(d, e) : null
               const title = e.kind === 'expense' && e.expense_category ? e.expense_category : CASH_KIND_LABEL[e.kind]
-              const sub = e.is_auto ? [src?.text, e.note].filter(Boolean).join(' · ') : [e.kind === 'expense' ? 'Chi phí khác' : null, e.note].filter(Boolean).join(' · ')
+              const sub = e.is_auto ? [src?.text, e.note].filter(Boolean).join(', ') : [e.kind === 'expense' ? 'Chi phí khác' : null, e.note].filter(Boolean).join(', ')
               return (
                 <Fragment key={e.id}>
                   {head && <div className="ov-gh"><span>{dayLabel(e.entry_date)}</span></div>}
@@ -287,7 +287,7 @@ function AutoSheet({ e, onClose }: { e: CashEntryRow; onClose: () => void }) {
   const src = sourceOf(d, e)
   return (
     <Sheet title={CASH_KIND_LABEL[e.kind]} onClose={onClose}
-      footer={src.to ? <Link className="btn btn-primary btn-block" to={src.to} onClick={onClose}>Sửa ở nguồn: mở {src.text.split(' · ')[0]}</Link> : undefined}>
+      footer={src.to ? <Link className="btn btn-primary btn-block" to={src.to} onClick={onClose}>Sửa ở nguồn: mở {src.text.split(', ')[0]}</Link> : undefined}>
       <dl className="kv">
         <dt>Ngày</dt><dd>{dmy(e.entry_date)}/{e.entry_date.slice(0, 4)}</dd>
         <dt>Số tiền</dt><dd className={`num ${e.direction === 'in' ? 'pos' : 'neg'}`}>{e.direction === 'in' ? '+' : '−'}{vnd(e.amount_vnd)}</dd>
@@ -374,7 +374,7 @@ function TxnSheet({ kind, txn, onClose }: { kind: 'transfer' | 'adjustment'; txn
             if (s && !amt && s.outstanding_vnd > 0) setAmt(String(s.outstanding_vnd))
           }}>
             <option value="">Không gắn lô</option>
-            {lots.map((s) => <option key={s.lot_id} value={s.lot_id}>{d.lotCode[s.lot_id]} · còn nợ {tr(s.outstanding_vnd)}</option>)}
+            {lots.map((s) => <option key={s.lot_id} value={s.lot_id}>{d.lotCode[s.lot_id]}, còn nợ {tr(s.outstanding_vnd)}</option>)}
           </select>
         </label>
       )}

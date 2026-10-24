@@ -44,7 +44,7 @@ function UnitCard({ d, u, next }: { d: DbData; u: UnitViewRow; next?: ReactNode 
   const price = unitPrice(u)
   return (
     <div className="kcard" role="button" tabIndex={0} onClick={go} onKeyDown={key}>
-      <span className="t">{u.code} · {u.model_name}</span>
+      <span className="t">{u.code}, {u.model_name}</span>
       <span className="row-wrap">
         {(u.status === 'reserved' || u.status === 'sold') && <UnitChipShort u={u} holder={holderCode(d, u)} />}
         {u.condition && u.condition !== 'new' && <span className={`pill ${u.condition === 'defect' ? 'bad' : 'neu'}`}>{CONDITION_LABEL[u.condition]}</span>}

@@ -24,7 +24,7 @@ export function OrderRow2({ s, code, meta, hideStatus }: {
       <span className="r1">{tr(total)}</span>
       <span className="l2">
         {!hideStatus && <OrderChip s={s.status} />}
-        <span className="meta">{meta ?? dmy(s.order_date)} · <span className="num">{codesText(s.unit_codes, 2)}</span></span>
+        <span className="meta">{meta ?? dmy(s.order_date)}, <span className="num">{codesText(s.unit_codes, 2)}</span></span>
       </span>
       <span className={`r2 ${p ? `tone-${p.tone}` : ''}`}>{p?.short ?? ''}</span>
     </Link>

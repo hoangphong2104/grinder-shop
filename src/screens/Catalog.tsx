@@ -35,8 +35,8 @@ export default function Catalog() {
               <Row2 key={m.id} onClick={() => setEdit({ m })} className={m.is_active ? '' : 'dim'} label={`Sửa model ${m.name}`}
                 a={<><span className="gpic" style={{ width: 24, height: 24 }}><GrinderArt shape={shapeOf(m.name)} /></span><Tx><b>{m.name}</b></Tx></>}
                 b={m.default_list_price_vnd != null ? tr(m.default_list_price_vnd) : '-'}
-                c={<>{!m.is_active && <span className="pill">Đã ẩn</span>}<Tx><span className="num">{m.code_prefix}</span> · ngưỡng {m.low_stock_threshold} · tiếp {nextCode(m)}</Tx></>}
-                d={`${s?.sellable_count ?? 0} bán được · ${unitCount(m.id)} đã nhập`} />
+                c={<>{!m.is_active && <span className="pill">Đã ẩn</span>}<Tx><span className="num">{m.code_prefix}</span>, ngưỡng {m.low_stock_threshold}, tiếp {nextCode(m)}</Tx></>}
+                d={`${s?.sellable_count ?? 0} bán được, ${unitCount(m.id)} đã nhập`} />
             )
           })}
         </div>
@@ -113,7 +113,7 @@ function ModelSheet({ m, onClose }: { m?: ModelRow; onClose: () => void }) {
   }
 
   return (
-    <Sheet title={m ? `Sửa model · ${m.name}` : 'Thêm model'} onClose={onClose}
+    <Sheet title={m ? `Sửa model, ${m.name}` : 'Thêm model'} onClose={onClose}
       footer={<button className="btn btn-primary btn-block" id="nm-save" onClick={save} disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu'}</button>}>
       <label className="f">Tên model
         <input className={`input ${errs.name ? 'invalid' : ''}`} id="nm-name" maxLength={80} placeholder="VD: K Ultra" value={name} onChange={(e) => setName(e.target.value)} />

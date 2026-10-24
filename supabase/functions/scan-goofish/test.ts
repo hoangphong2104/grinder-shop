@@ -503,3 +503,13 @@ Deno.test("CORS: preflight origin hợp lệ ⇒ 204; origin lạ ⇒ 403", asyn
   assertEquals(bad.status, 403);
   assertEquals(bad.headers.get("access-control-allow-origin"), null);
 });
+
+Deno.test("generationConfigFor: Flash 3.x ⇒ thinking minimal; alias -latest / 2.5 Flash ⇒ tắt thinking", () => {
+  const t = (model: string) => m.generationConfigFor(model, {}).thinkingConfig;
+  assertEquals(t("gemini-3.8-flash"), { thinkingLevel: "minimal" });
+  assertEquals(t("gemini-3.5-flash-lite"), { thinkingLevel: "minimal" });
+  assertEquals(t("gemini-flash-latest"), { thinkingBudget: 0 });
+  assertEquals(t("gemini-flash-lite-latest"), { thinkingBudget: 0 });
+  assertEquals(t("gemini-2.5-flash"), { thinkingBudget: 0 });
+  assertEquals(t("gemini-3-pro"), { thinkingLevel: "low" });
+});

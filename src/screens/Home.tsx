@@ -24,7 +24,7 @@ const PER_GROUP = 3
 /** "1 đang về · 1 khách đặt" - chỉ ghi phần khác 0 (CR-006). */
 const stockText = (m: { in_stock_count: number; incoming_count: number; reserved_count: number }) =>
   [m.in_stock_count && `${m.in_stock_count} ở Kho Lumi`, m.incoming_count && `${m.incoming_count} đang về`, m.reserved_count && `${m.reserved_count} khách đặt`]
-    .filter(Boolean).join(' · ') || 'không còn chiếc nào'
+    .filter(Boolean).join(', ') || 'không còn chiếc nào'
 
 type Group = { key: string; title: string; tone?: 'bad' | 'way'; count: number; sum?: number; more: string; rows: ReactNode[] }
 
@@ -59,7 +59,7 @@ export default function Home() {
   const byDate = [...d.orderSummary].sort((a, b) => a.order_date.localeCompare(b.order_date))
   const orderRows = (list: OrderSummaryRow[], sub?: (o: OrderSummaryRow) => ReactNode, chip = false) =>
     list.slice(0, PER_GROUP).map((o) => <OrderRow key={o.order_id} d={d} o={o} noChip={!chip} sub={sub?.(o)} />)
-  const sentAgo = (o: OrderSummaryRow) => <>gửi {daysSince(o.shipped_at) ?? 0} ngày · {codesText(o.unit_codes)}</>
+  const sentAgo = (o: OrderSummaryRow) => <>gửi {daysSince(o.shipped_at) ?? 0} ngày, {codesText(o.unit_codes)}</>
   const groups: Group[] = []
   const add = (g: Omit<Group, 'rows'> & { rows: ReactNode[] }) => { if (g.count > 0) groups.push(g) }
 
@@ -71,11 +71,11 @@ export default function Home() {
 
   const refund = byDate.filter((o) => o.refund_due_vnd > 0)
   add({ key: 'refund', title: 'Cần hoàn tiền', tone: 'bad', count: refund.length, sum: refund.reduce((a, o) => a + o.refund_due_vnd, 0), more: '/don?f=refund',
-    rows: orderRows(refund, (o) => o.status === 'returned' ? <>hoàn hàng {daysSince(o.returned_at) ?? 0} ngày trước</> : <>đơn huỷ · {codesText(o.unit_codes)}</>, true) })
+    rows: orderRows(refund, (o) => o.status === 'returned' ? <>hoàn hàng {daysSince(o.returned_at) ?? 0} ngày trước</> : <>đơn huỷ, {codesText(o.unit_codes)}</>, true) })
 
   const cod = [...d.orderSummary].filter((o) => o.cod_pending_vnd > 0).sort((a, b) => (a.shipped_at ?? '').localeCompare(b.shipped_at ?? ''))
   add({ key: 'cod', title: 'COD chờ về', tone: 'way', count: cod.length, sum: cod.reduce((a, o) => a + o.cod_pending_vnd, 0), more: '/don?f=cod',
-    rows: orderRows(cod, (o) => <>gửi {daysSince(o.shipped_at) ?? 0} ngày{o.tracking_no ? ` · ${o.tracking_no}` : ''}</>) })
+    rows: orderRows(cod, (o) => <>gửi {daysSince(o.shipped_at) ?? 0} ngày{o.tracking_no ? `, ${o.tracking_no}` : ''}</>) })
 
   // Còn thu trực tiếp từ khách (phần COD đã có nhóm riêng)
   const directDue = (o: OrderSummaryRow) => o.receivable_vnd - o.cod_pending_vnd
@@ -101,7 +101,7 @@ export default function Home() {
   const waitSub = (o: OrderSummaryRow) => {
     const lots = [...new Set(d.unitView.filter((u) => u.holding_order_id === o.order_id && !u.is_received).map((u) => u.lot_id))]
     const oldest = Math.max(0, ...lots.map((id) => daysSince(d.lots.find((l) => l.id === id)?.ordered_at) ?? 0))
-    return <>chờ {lots.map((id) => d.lotCode[id]).join(', ') || 'hàng về'} · lô đặt {oldest} ngày</>
+    return <>chờ {lots.map((id) => d.lotCode[id]).join(', ') || 'hàng về'}, lô đặt {oldest} ngày</>
   }
   add({ key: 'wait', title: 'Chờ hàng về (đặt trước)', count: waiting.length, more: '/don?f=pre', rows: orderRows(waiting, waitSub) })
 
@@ -133,7 +133,7 @@ export default function Home() {
       {groups.map((g) => (
         <section key={g.key} className="ov-todo" aria-label={g.title}>
           <h3 className={`ov-todo-h ${g.tone ?? ''}`}>
-            <span>{g.title} <span className="n">({g.count}){g.sum ? ` · ${tr(g.sum)}` : ''}</span></span>
+            <span>{g.title} <span className="n">({g.count}){g.sum ? `: ${tr(g.sum)}` : ''}</span></span>
             <Link className="link-btn" id={`todo-more-${g.key}`} to={g.more}>Xem tất cả <Icon name="chev" size={14} /></Link>
           </h3>
           <div className="ov-list">{g.rows}</div>
@@ -147,7 +147,7 @@ export default function Home() {
       <Link className="kpi hero" to="/congno"><span className="k">Quỹ hiện có</span><span className={`v ${cash < 0 ? 'neg' : ''}`}>{cash < 0 ? '−' : ''}{kpiAmount(Math.abs(cash), desk)}</span>
         <span className="s">tiền mặt + tài khoản</span></Link>
       <button type="button" className="kpi" onClick={() => document.getElementById('home-margin')?.scrollIntoView({ behavior: 'smooth' })}><span className="k">Lãi tháng {mNo}</span><span className={`v ${profit < 0 ? 'neg' : profit > 0 ? 'pos' : ''}`}>{desk ? (profit < 0 ? '−' : profit > 0 ? '+' : '') + kpiAmount(Math.abs(profit), desk) : signed(profit)}</span>
-        <span className="s">{shippedN} đơn đã gửi{returnedN ? ` · ${returnedN} hoàn` : ''}</span></button>
+        <span className="s">{shippedN} đơn đã gửi{returnedN ? `, ${returnedN} hoàn` : ''}</span></button>
       <Link className="kpi" to="/don"><span className="k">Doanh thu tháng {mNo}</span><span className="v">{kpiAmount(rev, desk)}</span><span className="s">giá chốt các chiếc đã gửi</span></Link>
       <Link className="kpi" to="/kho"><span className="k">Tiền nằm ở hàng</span><span className="v">{kpiAmount(capital, desk)}</span>
         <span className="s">{unsoldN} cối chưa bán</span></Link>
@@ -193,8 +193,8 @@ export default function Home() {
       <p className="section-title">Thời gian hàng về</p>
       <div className="ar-stat">
         {avgDays != null
-          ? <><span className="v">{avgDays} ngày</span><span className="s">trung bình từ lúc đặt tới khi về Kho Lumi · {arrived.length} cối
-            {arrived.length > 1 ? ` · nhanh nhất ${Math.min(...arrived)}, lâu nhất ${Math.max(...arrived)} ngày` : ''}</span></>
+          ? <><span className="v">{avgDays} ngày</span><span className="s">trung bình từ lúc đặt tới khi về Kho Lumi, {arrived.length} cối
+            {arrived.length > 1 ? `, nhanh nhất ${Math.min(...arrived)}, lâu nhất ${Math.max(...arrived)} ngày` : ''}</span></>
           : <span className="s">Chưa có cối nào về Kho Lumi - nhận cối đầu tiên để app tính thời gian hàng về.</span>}
       </div>
       {coming.length > 0 && (
@@ -205,7 +205,7 @@ export default function Home() {
               <Row2 key={u.unit_id} to={`/kho/${u.unit_id}`}
                 a={<Ident id={u.code} text={u.model_name} />}
                 b={left == null ? `đặt ${age} ngày` : left > 0 ? `còn ~${left} ngày` : left === 0 ? 'dự kiến hôm nay' : <span className="neg">trễ {-left} ngày</span>}
-                c={<Tx>{u.lot_status === 'vn_warehouse' ? 'Kho VN' : 'Kho TQ'} · đặt {dmy(u.ordered_at)}{eta ? ` · về ~${dmy(eta)}` : ''}</Tx>} />
+                c={<Tx>{u.lot_status === 'vn_warehouse' ? 'Kho VN' : 'Kho TQ'}, đặt {dmy(u.ordered_at)}{eta ? `, về ~${dmy(eta)}` : ''}</Tx>} />
             )
           })}
         </div>
@@ -259,7 +259,7 @@ export default function Home() {
         <div className="ov-list">
           {priceRows.map((x) => (
             <Row2 key={x.m.id} to={`/kho?model=${x.m.id}&tt=all`} a={<Ident id={x.m.name} />} b={cnyT(x.last)}
-              c={<Tx>{x.n > 1 ? `${x.n} lần mua · ${x.lo === x.hi ? cnyT(x.lo) : `${cnyT(x.lo)} - ${cnyT(x.hi)}`}` : `mua 1 lần · ${dmy(x.when)}`}</Tx>}
+              c={<Tx>{x.n > 1 ? `${x.n} lần mua, ${x.lo === x.hi ? cnyT(x.lo) : `${cnyT(x.lo)} - ${cnyT(x.hi)}`}` : `mua 1 lần, ${dmy(x.when)}`}</Tx>}
               d={x.before == null || x.last === x.before ? undefined
                 : <span className={x.last > x.before ? 'neg' : 'pos'} title="so với lần mua trước">{x.last > x.before ? '▲' : '▼'} {cnyT(Math.abs(x.last - x.before))}</span>} />
           ))}
@@ -282,7 +282,7 @@ export default function Home() {
         <div className="ov-list">
           {sellerRows.slice(0, 6).map((x) => (
             <Row2 key={x.sl.id} a={<Ident id={x.sl.nickname} text={x.sl.region ?? undefined} />} b={`${x.n} cối`}
-              c={<Tx>{x.avg != null ? `về TB ${x.avg} ngày` : 'chưa có cối về'}{x.sl.is_avoided ? ' · đang đánh dấu tránh' : ''}</Tx>}
+              c={<Tx>{x.avg != null ? `về TB ${x.avg} ngày` : 'chưa có cối về'}{x.sl.is_avoided ? ', đang đánh dấu tránh' : ''}</Tx>}
               d={x.bad > 0 ? <span className="neg">{x.bad} cối lỗi / đã dùng</span> : x.avg != null ? <span className="pos">hàng ổn</span> : undefined} />
           ))}
         </div>
@@ -309,8 +309,8 @@ export default function Home() {
                   <span className={`pc ${sold ? (r < 0 ? 'neg' : '') : 'est'}`}>{pctText(sold ? x.r : x.er)}</span>
                   <span className="track"><span className={`fill ${sold ? (r < 0 ? 'neg' : '') : 'est'}`} style={{ width: `${Math.max(2, Math.round((Math.abs(r) / maxRate) * 100))}%` }} /></span>
                   <span className="sub">{sold
-                    ? <>đã bán {x.n} · lãi {signed(x.p)} · TB {signed(Math.round(x.p / x.n))}/chiếc</>
-                    : <>chưa bán · dự kiến {signed(Math.round(x.ep / x.left))}/chiếc ({x.left} chiếc)</>}</span>
+                    ? <>đã bán {x.n}, lãi {signed(x.p)}, TB {signed(Math.round(x.p / x.n))}/chiếc</>
+                    : <>chưa bán, dự kiến {signed(Math.round(x.ep / x.left))}/chiếc ({x.left} chiếc)</>}</span>
                 </Link>
               )
             })}

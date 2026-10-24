@@ -11,7 +11,7 @@ export default function MoreMenu() {
   const cash = d.cashBalance?.balance_vnd ?? 0
   const debt = d.balance.balance_vnd
   const info: Record<string, [string, string | null]> = {
-    '/congno': [`Thu chi, quỹ${debt > 0 ? ` · nợ trung gian ${tr(debt)}` : ''}`, `${cash < 0 ? '−' : ''}${tr(Math.abs(cash))}`],
+    '/congno': [`Thu chi, quỹ${debt > 0 ? `, nợ trung gian ${tr(debt)}` : ''}`, `${cash < 0 ? '−' : ''}${tr(Math.abs(cash))}`],
     '/khach': ['Khách Facebook, công nợ', `${d.customers.filter((c) => !c.is_hidden).length}`],
     '/danhmuc': ['Tiền tố mã, giá mặc định, ngưỡng sắp hết', `${d.models.filter((m) => m.is_active).length}`],
     '/caidat': ['Giao diện, AI, ngưỡng ngày, STK, xuất Excel', null],

@@ -98,8 +98,8 @@ export function LotCard({ d, l, withActs, busy, onNext }: {
   const warns = lotWarnings(d, l)
   return (
     <div className="kcard" role="button" tabIndex={0} onClick={go} onKeyDown={key}>
-      <span className="t">{d.lotCode[l.id]} · {modelsText(d, sum)}</span>
-      <span className="s">{s?.nickname ?? 'Chưa rõ người bán'} · {l.status === 'received' ? `nhận ${dmy(l.received_at)}` : `đặt ${dmy(l.ordered_at)} · ${daysOpen(l) ?? 0} ngày`}</span>
+      <span className="t">{d.lotCode[l.id]}, {modelsText(d, sum)}</span>
+      <span className="s">{s?.nickname ?? 'Chưa rõ người bán'}, {l.status === 'received' ? `nhận ${dmy(l.received_at)}` : `đặt ${dmy(l.ordered_at)}, ${daysOpen(l) ?? 0} ngày`}</span>
       <span className="m">
         <span>{l.status === 'received' && sum?.ship_per_unit_vnd != null ? `ship ${tr(sum.ship_per_unit_vnd)}/chiếc` : cny(Number(sum?.total_cny ?? 0))}</span>
         <span>{tr(sum?.payable_vnd ?? 0)}</span>
@@ -136,7 +136,7 @@ export function LotRow2({ d, l, busy, onNext }: { d: DbData; l: LotRow; busy: bo
         {late && <span className="pill bad">Về trễ</span>}
         <span className="meta">
           {days != null ? `đặt ${days} ngày` : l.status === 'received' ? `nhận ${dmy(l.received_at)}` : `đặt ${dmy(l.ordered_at)}`}
-          {warn && <> · <span className={warn[1] === 'bad' ? 'req' : ''}>{warn[0]}</span></>}
+          {warn && <>, <span className={warn[1] === 'bad' ? 'req' : ''}>{warn[0]}</span></>}
         </span>
       </span>
       <span className="r2">

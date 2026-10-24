@@ -34,17 +34,20 @@ export interface ScanResponse {
 }
 export type ScanInput = { kind: 'image'; image_path: string } | { kind: 'text'; text: string }
 
-/** Thu nhỏ ảnh: cạnh dài ≤ 2.000 px, JPEG 0,8 (ADR-08). Không giải mã được ⇒ dùng ảnh gốc nếu hợp lệ. */
+/** Thu nhỏ ảnh: cạnh dài ≤ 1.600 px, JPEG 0,8 (ADR-08). Không giải mã được ⇒ dùng ảnh gốc nếu hợp lệ.
+ *  CR-008: ảnh chụp màn hình dọc (cao > 1,6 × rộng) chỉ giữ 60% phía trên - phần có người bán, giá, tiêu đề, tình trạng;
+ *  phía dưới là ảnh sản phẩm ⇒ bớt dữ liệu gửi AI, quét nhanh hơn. */
 async function shrink(file: File): Promise<{ blob: Blob; ext: string; type: string }> {
   try {
     const bmp = await createImageBitmap(file)
-    const k = Math.min(1, 2000 / Math.max(bmp.width, bmp.height))
-    const w = Math.max(1, Math.round(bmp.width * k)), h = Math.max(1, Math.round(bmp.height * k))
+    const srcH = bmp.height > bmp.width * 1.6 ? Math.round(bmp.height * 0.6) : bmp.height
+    const k = Math.min(1, 1600 / Math.max(bmp.width, srcH))
+    const w = Math.max(1, Math.round(bmp.width * k)), h = Math.max(1, Math.round(srcH * k))
     const c = document.createElement('canvas')
     c.width = w; c.height = h
     const ctx = c.getContext('2d')
     if (!ctx) throw new Error('canvas')
-    ctx.drawImage(bmp, 0, 0, w, h)
+    ctx.drawImage(bmp, 0, 0, bmp.width, srcH, 0, 0, w, h)
     bmp.close()
     const blob = await new Promise<Blob | null>((res) => c.toBlob(res, 'image/jpeg', 0.8))
     if (!blob) throw new Error('toBlob')

@@ -313,13 +313,13 @@ Model words: "ZP6" / "ZP6 Special" / "ZP6-S" = ZP6 Special; "K-Ultra" / "KULTRA"
 When a field is clearly visible like this, give confidence 0.9-1.
 
 Fields:
-- listing_title: the listing title / first line of the description (标题), copied verbatim (keep the original language). null if absent.
+- listing_title: the listing title / first sentence of the description (标题), TRANSLATED INTO VIETNAMESE (natural, short; keep brand / model names such as "1Zpresso ZP6", "K-Ultra" as written). null if absent.
 - price_cny: the CURRENT selling price in CNY (the large number next to ¥ / 价格 / 当前价). Ignore crossed-out or reference prices (原价, 划线价, 新品价, 入手价, 买的时候), shipping fees (运费, 包邮), counts like "N人想要" / 浏览, and deposit amounts. If several current prices appear (e.g. a price range or per-variant prices), choose the listed selling price shown as the main price and lower the confidence (≤ 0.6). Return a plain number (e.g. 1010 or 1010.5), no currency sign.
-- seller_nickname: the seller's nickname / display name (卖家昵称), verbatim. Not the buyer, not a commenter.
-- seller_region: 发货地 or IP属地 (e.g. "浙江", "上海"), verbatim. null if absent.
+- seller_nickname: the seller's nickname / display name (卖家昵称), copied VERBATIM in the original script (do NOT translate). Not the buyer, not a commenter.
+- seller_region: the city / province (after "|", or 发货地 / IP属地) written IN VIETNAMESE (Hán-Việt name), e.g. 珠海 → "Chu Hải", 嘉兴 → "Gia Hưng", 上海 → "Thượng Hải", 浙江 → "Chiết Giang", 北京 → "Bắc Kinh". null if absent.
 - model_id: the grinder model, chosen ONLY from the codes in CATALOGUE by matching the model name (and brand) or one of its aliases ("also called"). The "shop code" is the shop's own short prefix; it often equals the common shorthand (e.g. ZP6, KU) but is weaker evidence than the name or an alias. matched_text = the exact words in the listing that matched. If the model is not in the catalogue, unclear, a different brand, or several different models are sold together, answer "NONE" with low confidence (and mention it in notes). Colours / editions do not matter.
 - qty_guess: the number of grinder units sold in this listing, ONLY when the listing clearly states more than one (e.g. "两台", "2台", "两个", "一对", "x2", "共3台"). null with low confidence when it is one unit or not stated. Do not count accessories, "N人想要", views or stock counts of a shop listing where the buyer picks one.
-- condition_text: short condition phrase as written (e.g. "全新未拆", "9成新", "轻微使用痕迹"). null if absent.
+- condition_text: short condition phrase TRANSLATED INTO VIETNAMESE, e.g. 全新 → "Mới", 全新未拆 → "Mới, chưa bóc seal", 全新未使用 → "Mới, chưa dùng", 9成新 → "Như mới (90%)", 轻微使用痕迹 → "Có vết dùng nhẹ". null if absent.
 - notes: at most 2 short sentences IN VIETNAMESE for the shop owner about anything that affects the data, e.g. a crossed-out original price was ignored, several prices were present, the price is for all units together or per unit (when qty_guess > 1), shipping included (包邮), price negotiable, item possibly sold (已售出 / 已卖出). null if nothing notable.
 
 Confidence (0..1) for every field: 1 = clearly readable and unambiguous; 0.7-0.9 = readable but some doubt; below 0.7 = a guess. Use a low confidence when value is null because the field could not be found.
@@ -489,11 +489,14 @@ export function generationConfigFor(model: string, schema: Record<string, unknow
     responseSchema: schema,
     maxOutputTokens: 4096,
   };
-  if (/^gemini-2\.5-flash/.test(model)) {
+  if (/^gemini-2\.5-flash/.test(model) || /^gemini-flash(-lite)?-latest$/.test(model)) {
     cfg.temperature = 0;
-    cfg.thinkingConfig = { thinkingBudget: 0 }; // 2.5 Flash / Flash-Lite cho phép tắt thinking
+    cfg.thinkingConfig = { thinkingBudget: 0 }; // 2.5 Flash / Flash-Lite (+ alias -latest) cho phép tắt thinking - nhanh hơn nhiều
+  } else if (/^gemini-[3-9][.\d]*-flash/.test(model)) {
+    // CR-008: đọc ảnh tin rao không cần suy luận ⇒ mức thấp nhất "minimal" cho Flash 3.x (nhanh hơn "low").
+    // Model không nhận "minimal" (400) ⇒ handler tự chuyển model kế trong chuỗi.
+    cfg.thinkingConfig = { thinkingLevel: "minimal" };
   } else if (/^gemini-[3-9]/.test(model)) {
-    // Gemini 3+: Google khuyên giữ temperature mặc định; "low" hợp lệ cho mọi bản Flash 3.x.
     cfg.thinkingConfig = { thinkingLevel: "low" };
   } else {
     cfg.temperature = 0;

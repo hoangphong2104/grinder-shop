@@ -114,7 +114,7 @@ function OrderForm({ editId }: { editId: string | null }) {
         if (!u) return 'một chiếc đã bị xoá'
         if (u.lot_status === 'cancelled') return `${u.code} (lô đã huỷ)`
         const by = u.holding_order_id ? d.orderCode[u.holding_order_id] ?? 'đơn khác' : 'đơn khác'
-        return `${u.code} (${u.status === 'sold' ? `đã bán · ${by}` : `khách đặt ở ${by}`})`
+        return `${u.code} (${u.status === 'sold' ? `đã bán, ${by}` : `khách đặt ở ${by}`})`
       }).join(', ')} - bỏ chiếc này khỏi đơn.`,
     }
   } else if (rows.length) {
@@ -174,7 +174,7 @@ function OrderForm({ editId }: { editId: string | null }) {
         p_expected_version: order?.version ?? null,
       })
       const code = editId ? d.orderCode[editId] : `D-${String(d.orders.length + 1).padStart(3, '0')}`
-      toast(`Đã lưu ${code} · ${ORDER_LABEL[res.status]}${!editId && dep > 0 ? ` · cọc ${vnd(dep)}` : ''}`)
+      toast(`Đã lưu ${code}, ${ORDER_LABEL[res.status]}${!editId && dep > 0 ? `, cọc ${vnd(dep)}` : ''}`)
       nav(`/don/${res.order_id}`, { replace: true })
     } catch (err) {
       toast(err instanceof Error ? err.message : errorMessage(err))
@@ -195,10 +195,10 @@ function OrderForm({ editId }: { editId: string | null }) {
             <input className="input" id="o-cust-q" type="search" value={custQ} onChange={(e) => setCustQ(e.target.value)} placeholder="Tên Facebook hoặc SĐT" />
           </label>
         )}
-        <label className="f" htmlFor="o-cust">Khách{cqq ? ` · ${custOpts.length} khớp` : ''}
+        <label className="f" htmlFor="o-cust">Khách{cqq ? `, ${custOpts.length} khớp` : ''}
           <select className="input" id="o-cust" value={f.custId} onChange={(e) => set('custId', e.target.value)}>
             <option value="">+ Khách mới</option>
-            {custOpts.map((c) => <option key={c.id} value={c.id}>{c.fb_name}{c.phone ? ` · ${c.phone}` : ''}{c.is_hidden ? ' (đã ẩn)' : ''}</option>)}
+            {custOpts.map((c) => <option key={c.id} value={c.id}>{c.fb_name}{c.phone ? `, ${c.phone}` : ''}{c.is_hidden ? ' (đã ẩn)' : ''}</option>)}
           </select>
           <Err k="o-cust" />
         </label>
@@ -214,13 +214,13 @@ function OrderForm({ editId }: { editId: string | null }) {
             <label className="f full" htmlFor="o-addr">Địa chỉ giao<input className="input" id="o-addr" value={f.newAddr} onChange={(e) => set('newAddr', e.target.value)} maxLength={500} /></label>
           </>}
 
-        <p className="section-title full">Chiếc bán{rows.length ? ` · ${rows.length}` : ''}</p>
+        <p className="section-title full">Chiếc bán{rows.length ? `, ${rows.length}` : ''}</p>
         {rows.length === 0 && <div className="empty full">Chưa chọn chiếc nào - bấm “+ Chọn chiếc”.</div>}
         {rows.map((r) => (
           <div key={r.l.unitId} className="full ord-line">
             <div className="lrow">
               <span className="ord-unit">
-                <b className="num">{r.u?.code ?? '?'}</b> · {r.u?.model_name ?? 'Không tìm thấy chiếc'}
+                <b className="num">{r.u?.code ?? '?'}</b>, {r.u?.model_name ?? 'Không tìm thấy chiếc'}
                 {r.where === 'in_stock' && <span className="pill ok">Kho Lumi</span>}
                 {r.where === 'incoming' && <span className="pill way">{LOT_LABEL[r.u!.lot_status]} ({d.lotCode[r.u!.lot_id] ?? 'lô'})</span>}
                 {!r.where && <span className="pill bad">Không còn chọn được</span>}
@@ -231,7 +231,7 @@ function OrderForm({ editId }: { editId: string | null }) {
               <input className="input money" id={`o-price-${r.l.unitId}`} inputMode="numeric" value={r.l.price} onChange={(e) => setPrice(r.l.unitId, e.target.value)}
                 placeholder={fmt(r.u?.list_price_vnd)} aria-invalid={!!errs[`o-price-${r.l.unitId}`]} />
               <Err k={`o-price-${r.l.unitId}`} />
-              {r.u && <span className="hint">Giá bán dự kiến {vnd(r.u.list_price_vnd)} · giá nhập {vnd(r.u.cost_vnd)}{r.u.cost_is_provisional ? ' (tạm tính, chưa có ship lô)' : ''}</span>}
+              {r.u && <span className="hint">Giá bán dự kiến {vnd(r.u.list_price_vnd)}, giá nhập {vnd(r.u.cost_vnd)}{r.u.cost_is_provisional ? ' (tạm tính, chưa có ship lô)' : ''}</span>}
             </label>
           </div>
         ))}
@@ -295,7 +295,7 @@ function OrderForm({ editId }: { editId: string | null }) {
             : <div className="ln"><span>Cọc</span><span>{vnd(dep)}</span></div>}
           <div className="ln total"><span>Còn phải thu</span><span>{total != null ? vnd(total - (editId ? paidBefore : dep)) : '-'}</span></div>
           <div className="ln"><span>Lãi dự kiến</span><span className={(profit ?? 0) < 0 ? 'tone-bad' : undefined}>{profitStr(profit, false)}</span></div>
-          <div className="formula">= Σ(giá chốt − giá nhập ₫ hiện tại){f.shipPayer === 'shop' ? ' − ship shop chịu' : ''}{provisional ? ' · có chiếc giá nhập tạm tính' : ''}</div>
+          <div className="formula">= Σ(giá chốt − giá nhập ₫ hiện tại){f.shipPayer === 'shop' ? ' − ship shop chịu' : ''}{provisional ? ', có chiếc giá nhập tạm tính' : ''}</div>
         </div>
       </div>
 
@@ -334,7 +334,7 @@ function UnitPicker({ d, editId, chosen, full, onToggle, onClose }: {
 
   return (
     <Sheet title="Chọn chiếc" onClose={onClose}
-      footer={<button className="btn btn-primary btn-block" onClick={onClose}>Xong{chosen.size ? ` · đã chọn ${chosen.size}` : ''}</button>}>
+      footer={<button className="btn btn-primary btn-block" onClick={onClose}>Xong{chosen.size ? `, đã chọn ${chosen.size}` : ''}</button>}>
       <input className="input" id="up-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm mã (KU-007) hoặc số seri" aria-label="Tìm chiếc" />
       {models.length > 1 && (
         <div className="chips" role="group" aria-label="Lọc theo model">
@@ -355,10 +355,10 @@ function UnitPicker({ d, editId, chosen, full, onToggle, onClose }: {
                   <button key={u.unit_id} type="button" className="li" aria-pressed={on} disabled={!on && full} onClick={() => onToggle(u)}>
                     <span className={`up-check ${on ? 'on' : ''}`} aria-hidden="true" />
                     <span className="main">
-                      <b className="num">{u.code}</b> · {u.model_name}
+                      <b className="num">{u.code}</b>, {u.model_name}
                       <span className="s">
                         {u.is_received ? <span className="pill ok">Kho Lumi</span> : <span className="pill way">{LOT_LABEL[u.lot_status]} ({d.lotCode[u.lot_id] ?? 'lô'})</span>}
-                        {u.serial_no ? ` · seri ${u.serial_no}` : ''}
+                        {u.serial_no ? `, seri ${u.serial_no}` : ''}
                       </span>
                     </span>
                     <span className="v">{vnd(u.list_price_vnd)}</span>
