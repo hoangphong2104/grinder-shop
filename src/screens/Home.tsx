@@ -254,7 +254,7 @@ export default function Home() {
   const cnyT = (n: number) => `¥${n.toLocaleString('vi-VN')}`
   const priceBlock = (
     <div className="stack" id="home-price">
-      <p className="section-title">Giá Goofish theo model <span className="muted">lần mua gần nhất</span></p>
+      <p className="section-title">Giá Goofish theo model</p>
       {priceRows.length === 0 ? <p className="muted small" style={{ margin: 0 }}>Chưa nhập cối nào.</p> : (
         <div className="ov-list">
           {priceRows.map((x) => (
@@ -323,7 +323,19 @@ export default function Home() {
   return (
     <Shell section="home" title="Tổng quan" actions={<span className="muted small only-desk">Tháng {mNo}/{month.slice(0, 4)}</span>}>
       {desk
-        ? <>{kpis}<div className="cols">{todo}<div className="stack">{compareBlock}{arriveBlock}{marginBlock}{priceBlock}{sellerBlock}</div></div></>
+        // CR-008: máy tính xem gọn trong 1 màn - 6 ô số 1 hàng + lưới 3 cột × 2 hàng, mỗi ô tự cuộn bên trong
+        ? (
+          <div className="ov-desk">
+            {kpis}
+            <div className="ov-dash">
+              <section className="ov-panel todo">{todo}</section>
+              <section className="ov-panel">{compareBlock}{arriveBlock}</section>
+              <section className="ov-panel">{priceBlock}</section>
+              <section className="ov-panel">{marginBlock}</section>
+              <section className="ov-panel">{sellerBlock}</section>
+            </div>
+          </div>
+        )
         : <>{kpis}{compareBlock}{todo}{arriveBlock}{marginBlock}{priceBlock}{sellerBlock}</>}
     </Shell>
   )
