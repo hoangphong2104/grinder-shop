@@ -180,12 +180,10 @@ a.link-btn, a.btn { text-decoration: none; }
   .ov-desk .kpi { padding: 10px 8px; }
   .ov-desk .kpi .v { font-size: 22px; }
   .ov-desk .kpi .k { letter-spacing: .1em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .ov-dash { flex: none; display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; align-items: start; }
+  .ov-dash { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; align-items: stretch; }
+  .ov-left { display: flex; flex-direction: column; }
   .ov-dash > .stack { gap: 22px; }
   .ov-panel.todo { flex: 1 1 0; min-height: 280px; overflow: auto; scrollbar-width: thin; padding: 0 4px 28px 0;
     -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); }
   .ov-panel.todo .ov-todo > .section-title:first-child { position: sticky; top: 0; z-index: 1; background: var(--bg); padding-bottom: 4px; margin: 0; }
-  /* Việc cần làm: các nhóm xếp 2 cột thẳng với 2 cột phía trên */
-  .ov-panel.todo > .ov-todo { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 28px; align-items: start; }
-  .ov-panel.todo > .ov-todo > .section-title, .ov-panel.todo > .ov-todo > .empty { grid-column: 1 / -1; }
 }
