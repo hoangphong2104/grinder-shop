@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useData } from '../data/store.tsx'
 import type { UnitConditionDb, UnitViewRow } from '../data/types.ts'
 import { Shell } from '../ui/Shell.tsx'
+import { LotsPanel } from './Lots.tsx'
 import { Sheet } from '../ui/feedback.tsx'
 import { Icon } from '../ui/icons.tsx'
 import { CONDITION_LABEL, CONDITION_ORDER, ConditionChip, UnitChip } from '../ui/status.tsx'
@@ -12,27 +13,26 @@ import {
   unitProfit, useDesk, type UnitSort,
 } from './overview/common.tsx'
 
-// Ô tóm tắt không trùng nhau: Kho TQ / Kho VN = chiếc đang về CHƯA giữ; Đã giữ = mọi chiếc giữ cho đơn (đã về hay chưa).
-// CR-005 (ý 4, 7–10): trạng thái chiếc theo vị trí - Kho TQ / Kho VN (đang về) → Kho Lumi (bán được) → Giữ cho đơn → Vận chuyển tới khách → Đã giao.
-// Tham khảo Shopify (Incoming / On hand / Committed / Available) + KiotViet / Sapo (thẻ tóm tắt bấm để lọc, cảnh báo tồn theo từng mặt hàng).
-type StatusFilter = 'avail' | 'tq' | 'vn' | 'lumi' | 'giu' | 'giao' | 'xong' | 've' | 'ban' | 'all'
-const TILES: [StatusFilter, string][] = [['tq', 'Kho TQ'], ['vn', 'Kho VN'], ['lumi', 'Kho Lumi'], ['giu', 'Đã giữ'], ['giao', 'Đang giao']]
-const CHIPS: [StatusFilter, string][] = [['avail', 'Còn hàng'], ['xong', 'Đã giao'], ['all', 'Tất cả']]
-/** Lọc ẩn (link cũ ?tt=incoming / sold …) - hiện chip ✕ để bỏ. */
-const HIDDEN: Partial<Record<StatusFilter, string>> = { ve: 'Đang về', ban: 'Đã bán' }
+// CR-006: trạng thái chiếc giống tab Lô (Kho TQ → Kho VN → Kho Lumi) theo vị trí của chiếc, cộng "Đã bán".
+// Chiếc khách đã đặt vẫn nằm ở kho của nó (ghi "khách đặt" trên dòng). Lô nhập gộp vào đây: nút "Theo lô" (?xem=lo).
+type StatusFilter = 'avail' | 'tq' | 'vn' | 'lumi' | 'ban' | 'all' | 'giu' | 'giao' | 'xong' | 've'
+const CHIPS: [StatusFilter, string][] = [['avail', 'Còn hàng'], ['tq', 'Kho TQ'], ['vn', 'Kho VN'], ['lumi', 'Kho Lumi'], ['ban', 'Đã bán'], ['all', 'Tất cả']]
+/** Lọc ẩn (link từ Tổng quan / link cũ) - hiện chip ✕ để bỏ. */
+const HIDDEN: Partial<Record<StatusFilter, string>> = { giu: 'Khách đã đặt', giao: 'Đang giao tới khách', xong: 'Đã giao', ve: 'Đang về' }
 const ALIAS: Record<string, StatusFilter> = { in_stock: 'lumi', reserved: 'giu', incoming: 've', sold: 'ban' }
-const ALL_KEYS: StatusFilter[] = ['avail', 'tq', 'vn', 'lumi', 'giu', 'giao', 'xong', 've', 'ban', 'all']
+const ALL_KEYS: StatusFilter[] = ['avail', 'tq', 'vn', 'lumi', 'ban', 'all', 'giu', 'giao', 'xong', 've']
 const parseStatus = (s: string | null): StatusFilter => (s && ALL_KEYS.includes(s as StatusFilter) ? (s as StatusFilter) : (s && ALIAS[s]) || 'avail')
 const isSort = (s: string | null): s is UnitSort => UNIT_SORTS.some(([k]) => k === s)
 const isCond = (s: string | null): s is UnitConditionDb => CONDITION_ORDER.includes(s as UnitConditionDb)
+const unsold = (u: UnitViewRow) => u.status === 'in_stock' || u.status === 'incoming' || u.status === 'reserved'
 function matchStatus(u: UnitViewRow, f: StatusFilter): boolean {
   switch (f) {
     case 'all': return true
-    case 'avail': return u.status === 'in_stock' || u.status === 'incoming' || u.status === 'reserved'
-    case 'tq': return u.status === 'incoming' && u.lot_status === 'cn_warehouse'
-    case 'vn': return u.status === 'incoming' && u.lot_status === 'vn_warehouse'
-    case 've': return !u.is_received && (u.status === 'incoming' || u.status === 'reserved')
-    case 'lumi': return u.status === 'in_stock'
+    case 'avail': return unsold(u)
+    case 'tq': return unsold(u) && !u.is_received && u.lot_status === 'cn_warehouse'
+    case 'vn': return unsold(u) && !u.is_received && u.lot_status === 'vn_warehouse'
+    case 've': return unsold(u) && !u.is_received
+    case 'lumi': return unsold(u) && u.is_received
     case 'giu': return u.status === 'reserved'
     case 'giao': return u.status === 'sold' && u.holding_order_status === 'shipped'
     case 'xong': return u.status === 'sold' && u.holding_order_status !== 'shipped'
@@ -53,6 +53,7 @@ export default function Kho() {
   const statusF: StatusFilter = parseStatus(ttRaw)
   const sx: UnitSort = isSort(sxRaw) ? sxRaw : 'ma'
   const condF: UnitConditionDb | null = isCond(condRaw) ? condRaw : null
+  const byLot = params.get('xem') === 'lo'
   const [q, setQ] = useState('')
   const [sheet, setSheet] = useState(false)
   const closeSheet = useCallback(() => setSheet(false), [])
@@ -64,6 +65,7 @@ export default function Kho() {
   }
 
   const stock = sortedModelStock(d)
+  const openLots = d.lots.filter((l) => l.status !== 'received' && l.status !== 'cancelled').length
   const modelName = d.models.find((m) => m.id === modelF)?.code_prefix ?? d.models.find((m) => m.id === modelF)?.name
   // Lọc nền (model + tình trạng + tìm) - đếm chip trạng thái trên tập này
   const hit = new Map<string, ReturnType<typeof unitMatch>>()
@@ -77,51 +79,47 @@ export default function Kho() {
   })
   const count = (f: StatusFilter) => base.filter((u) => matchStatus(u, f)).length
   const units = sortUnits(d, base.filter((u) => matchStatus(u, statusF)), sx)
-  // CR-005 ý 9: tóm tắt có ích - số chiếc theo vị trí (bấm để lọc) + vốn Kho Lumi / vốn đang về (theo model / tình trạng / tìm đang chọn)
+  // Tiền hàng chưa bán (theo model / tình trạng / tìm đang chọn): đang về (Kho TQ / Kho VN) và đã về Kho Lumi
   const sellable = units.filter((u) => u.status === 'in_stock' || u.status === 'incoming').length
   const capital = base.filter(onHand).reduce((a, u) => a + u.cost_vnd, 0)
   const incomingCap = base.filter(onTheWay).reduce((a, u) => a + u.cost_vnd, 0)
   // CR-005 ý 8: cảnh báo rõ theo từng model (đang bán): hết / còn N chiếc bán được (Kho Lumi + đang về chưa giữ)
   const lowModels = stock.filter((m) => m.is_active && (m.is_low_stock || m.sellable_count <= 0) && (modelF === 'all' || m.model_id === modelF))
   const filtering = modelF !== 'all' || condF != null || sx !== 'ma'
-  const capText = [capital > 0 && `vốn Kho Lumi ${tr(capital)}`, incomingCap > 0 && `vốn đang về ${tr(incomingCap)}`].filter(Boolean).join(' · ')
+  const capText = capital + incomingCap > 0 ? `Chưa bán: ${[incomingCap > 0 && `${tr(incomingCap)} đang về`, capital > 0 && `${tr(capital)} ở Kho Lumi`].filter(Boolean).join(' · ')}` : ''
 
   const filters = (
     <div className="ov-filter">
-      <input className="input" id="kho-q" type="search" placeholder="Tìm mã, seri, model, ghi chú (VD: zp6 1)" aria-label="Tìm chiếc theo mã, số seri, model hoặc ghi chú"
-        value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: desk ? 420 : undefined }} />
-      <div className="kho-tiles" role="group" aria-label="Số chiếc theo vị trí - bấm để lọc">
-        {TILES.map(([k, t]) => (
-          <button key={k} type="button" className="kho-tile" id={`kho-tt-${k}`} aria-pressed={statusF === k} onClick={() => setParam('tt', statusF === k ? null : k, 'avail')}>
-            <span className="v">{count(k)}</span><span className="k">{t}</span>
+      <div className="line">
+        <input className="input" id="kho-q" type="search" placeholder="Tìm mã, seri, model, ghi chú" aria-label="Tìm chiếc theo mã, số seri, model hoặc ghi chú"
+          value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1, minWidth: 0, maxWidth: desk ? 420 : undefined }} />
+        <button className="btn btn-ghost btn-sm fbtn" id="kho-filter" onClick={() => setSheet(true)} aria-haspopup="dialog">
+          Lọc{filtering && <span className="dot" aria-label="đang lọc" />}
+        </button>
+      </div>
+      <div className="chips stage-chips" role="group" aria-label="Lọc theo trạng thái">
+        {CHIPS.map(([k, t]) => (
+          <button key={k} type="button" className="chip" id={`kho-tt-${k}`} aria-pressed={statusF === k} onClick={() => setParam('tt', k, 'avail')}>
+            {t}<span className="c">{count(k)}</span>
           </button>
         ))}
       </div>
       {capText && <p className="ov-strip">{capText}</p>}
-      <div className="line">
-        <div className="chips" role="group" aria-label="Lọc theo trạng thái">
+      {(modelF !== 'all' || condF || HIDDEN[statusF]) && (
+        <div className="chips" role="group" aria-label="Đang lọc">
           {modelF !== 'all' && (
             <button className="chip x" id="kho-model-x" onClick={() => setParam('model', null)} aria-label={`Bỏ lọc model ${modelName ?? ''}`}>{modelName ?? 'Model'} ✕</button>
           )}
           {condF && <button className="chip x" id="kho-cond-x" onClick={() => setParam('tinhtrang', null)} aria-label="Bỏ lọc tình trạng">{CONDITION_LABEL[condF]} ✕</button>}
           {HIDDEN[statusF] && <button className="chip x" id="kho-tt-x" onClick={() => setParam('tt', null)}>{HIDDEN[statusF]} ✕</button>}
-          {TILES.some(([k]) => k === statusF) && <button className="chip x" id="kho-tt-x" onClick={() => setParam('tt', null)}>{TILES.find(([k]) => k === statusF)![1]} ✕</button>}
-          {CHIPS.map(([k, t]) => (
-            <button key={k} className="chip" id={`kho-tt-${k}`} aria-pressed={statusF === k} onClick={() => setParam('tt', k, 'avail')}>
-              {t} <span className="c">{count(k)}</span>
-            </button>
-          ))}
         </div>
-        <button className="btn btn-ghost btn-sm fbtn" id="kho-filter" onClick={() => setSheet(true)} aria-haspopup="dialog">
-          Lọc{filtering && <span className="dot" aria-label="đang lọc" />}
-        </button>
-      </div>
+      )}
       {lowModels.length > 0 && (
         <div className="kho-low" id="kho-low" role="note" aria-label="Model sắp hết">
           {lowModels.map((m) => (
             <Link key={m.model_id} className="ln" to={`/kho?model=${m.model_id}`}>
               <Icon name="warn" size={15} /><span className="nm">{m.model_name}</span>
-              <span className={m.sellable_count <= 0 ? 'neg' : 'age-warn'}>{m.sellable_count <= 0 ? 'hết hàng bán được' : `còn ${m.sellable_count} bán được`}</span>
+              <span className={m.sellable_count <= 0 ? 'neg' : 'age-warn'}>{m.sellable_count <= 0 ? 'hết hàng' : `còn ${m.sellable_count} chiếc chưa ai đặt`}</span>
             </Link>
           ))}
           <Link className="link-btn small" to="/lo/new">Nhập lô Goofish <Icon name="chev" size={14} /></Link>
@@ -171,7 +169,7 @@ export default function Kho() {
             )
           })}
           <tr className="tot">
-            <td colSpan={5}>{units.length} chiếc · bán được {sellable}</td>
+            <td colSpan={5}>{units.length} chiếc · {sellable} chưa ai đặt</td>
             <td colSpan={5} className="muted" style={{ textAlign: 'right' }}>{capText}</td>
           </tr>
         </tbody>
@@ -201,9 +199,12 @@ export default function Kho() {
       <Link className="btn btn-ghost btn-sm only-desk" to="/danhmuc">Model</Link>
       <Link className="btn btn-primary btn-sm only-desk" to="/lo/new"><Icon name="plus" /> Nhập lô</Link>
     </>}>
-      {filters}
-      {list}
-      {sheet && (
+      <div className="seg kho-view" role="group" aria-label="Xem kho">
+        <button id="kho-xem-chiec" aria-pressed={!byLot} onClick={() => setParam('xem', null)}>Từng chiếc</button>
+        <button id="kho-xem-lo" aria-pressed={byLot} onClick={() => setParam('xem', 'lo')}>Theo lô{openLots ? <span className="c"> {openLots} đang về</span> : null}</button>
+      </div>
+      {byLot ? <LotsPanel /> : <>{filters}{list}</>}
+      {!byLot && sheet && (
         <Sheet title="Lọc & sắp xếp" onClose={closeSheet}>
           <p className="ov-sheet-t">Sắp xếp</p>
           <div className="ov-opts" role="radiogroup" aria-label="Sắp xếp">

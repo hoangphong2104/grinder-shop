@@ -99,14 +99,14 @@ export default function LotNew() {
   const lot = id ? d.lots.find((x) => x.id === id) : undefined
   if (id && !lot) {
     return (
-      <Shell section="lo" title="Sửa lô" back="/lo">
-        <div className="empty">Không tìm thấy lô. <Link className="link-btn" to="/lo">Về danh sách lô</Link></div>
+      <Shell section="kho" title="Sửa lô" back="/kho?xem=lo">
+        <div className="empty">Không tìm thấy lô. <Link className="link-btn" to="/kho?xem=lo">Về danh sách lô</Link></div>
       </Shell>
     )
   }
   if (lot && (lot.status === 'received' || lot.status === 'cancelled')) {
     return (
-      <Shell section="lo" title={`Sửa ${d.lotCode[lot.id]}`} back={`/lo/${lot.id}`}>
+      <Shell section="kho" title={`Sửa ${d.lotCode[lot.id]}`} back={`/lo/${lot.id}`}>
         <div className="note-box">
           <span>{lot.status === 'received'
             ? 'Lô đã nhận: không thêm / bớt chiếc, không đổi giá ¥ / tỷ giá (A10, Q-014). Sửa phí ship và ghi chú ở trang lô; giá nhập ₫, giá bán dự kiến, số seri ở trang từng chiếc.'
@@ -531,7 +531,7 @@ function LotForm({ lot }: { lot: LotRow | undefined }) {
   )
 
   return (
-    <Shell section="lo" title={editing ? `Sửa ${code}` : 'Nhập lô Goofish'} back={editing ? `/lo/${lot!.id}` : '/lo'}
+    <Shell section="kho" title={editing ? `Sửa ${code}` : 'Nhập lô Goofish'} back={editing ? `/lo/${lot!.id}` : '/kho?xem=lo'}
       savebar={<button className="btn btn-primary btn-block" disabled={saving || scanning} onClick={save}>{saving ? <><span className="spin" /> Đang lưu…</> : editing ? 'Lưu thay đổi' : 'Lưu lô'}</button>}>
       <div className="form-grid">
         <label className="f full"><span className="flab">Link tin Goofish</span>

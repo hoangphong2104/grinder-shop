@@ -6,7 +6,7 @@ import { Shell } from '../ui/Shell.tsx'
 import { Icon } from '../ui/icons.tsx'
 import { todayVn, tr } from '../ui/format.ts'
 import {
-  Ident, LotRow, OrderRow, Profit, Row2, Tx, UnitRow, codesText, daysSince, kpiAmount, lotModelsText, profitMonth, signed, sortedModelStock, thresholds, useDesk,
+  Ident, unitPrice, LotRow, OrderRow, Profit, Row2, Tx, UnitRow, codesText, daysSince, kpiAmount, lotModelsText, profitMonth, signed, sortedModelStock, thresholds, useDesk,
 } from './overview/common.tsx'
 import { PayLotButton } from './lots/PayLot.tsx'
 
@@ -21,11 +21,15 @@ const addMonths = (ym: string, k: number) => {
 /** Đơn Đã gửi quá số ngày này mà chưa Hoàn tất → nhắc (HOME-S1; Cài đặt chưa có cột riêng nên cố định 7 ngày). */
 const SHIP_LATE_DAYS = 7
 const PER_GROUP = 3
+/** "1 đang về · 1 khách đặt" - chỉ ghi phần khác 0 (CR-006). */
+const stockText = (m: { in_stock_count: number; incoming_count: number; reserved_count: number }) =>
+  [m.in_stock_count && `${m.in_stock_count} ở Kho Lumi`, m.incoming_count && `${m.incoming_count} đang về`, m.reserved_count && `${m.reserved_count} khách đặt`]
+    .filter(Boolean).join(' · ') || 'không còn chiếc nào'
 
 type Group = { key: string; title: string; tone?: 'bad' | 'way'; count: number; sum?: number; more: string; rows: ReactNode[] }
 
 // SC_01 Tổng quan (CR-001 + CR-004 + CR-005 ý 6, gộp Báo cáo): Tiền (quỹ, lãi tháng, doanh thu) · Vốn đang nằm ở hàng + khách còn nợ
-// · Việc cần làm (gom nhóm) · Biểu đồ lãi 6 tháng + model bán chạy. Điện thoại: ô số → Cần làm → biểu đồ → model.
+// · Việc cần làm (gom nhóm) · Lãi theo model (CR-006, thay biểu đồ 6 tháng). Điện thoại: ô số → Cần làm → lãi theo model.
 // Cần làm gom theo loại có số đếm, mỗi nhóm tối đa 3 việc + "Xem tất cả" (HOME-M1); thêm việc theo tuổi (HOME-S1).
 // Lãi tháng gom theo profit_date (ngày gửi; đơn Hoàn hàng = ngày hoàn) - số chính thức v_order_summary.
 export default function Home() {
@@ -84,11 +88,11 @@ export default function Home() {
   add({ key: 'lateship', title: `Đã gửi > ${SHIP_LATE_DAYS} ngày chưa hoàn tất`, tone: 'way', count: lateShip.length, more: '/don?f=sent', rows: orderRows(lateShip, sentAgo) })
 
   const noShip = d.lots.filter((l) => l.status === 'vn_warehouse' && l.ship_fee_vnd == null)
-  add({ key: 'noship', title: 'Thiếu phí ship lô', tone: 'bad', count: noShip.length, more: '/lo', rows: noShip.slice(0, PER_GROUP).map((l) => <LotRow key={l.id} d={d} l={l} />) })
+  add({ key: 'noship', title: 'Thiếu phí ship lô', tone: 'bad', count: noShip.length, more: '/kho?xem=lo', rows: noShip.slice(0, PER_GROUP).map((l) => <LotRow key={l.id} d={d} l={l} />) })
 
   const lateLotIds = new Set(d.lotSummary.filter((s) => s.is_lot_late).map((s) => s.lot_id))
   const lateLots = d.lots.filter((l) => lateLotIds.has(l.id)).sort((a, b) => a.ordered_at.localeCompare(b.ordered_at))
-  add({ key: 'latelot', title: `Lô về trễ (> ${th.lotLate} ngày)`, tone: 'way', count: lateLots.length, more: '/lo', rows: lateLots.slice(0, PER_GROUP).map((l) => <LotRow key={l.id} d={d} l={l} />) })
+  add({ key: 'latelot', title: `Lô về trễ (> ${th.lotLate} ngày)`, tone: 'way', count: lateLots.length, more: '/kho?xem=lo', rows: lateLots.slice(0, PER_GROUP).map((l) => <LotRow key={l.id} d={d} l={l} />) })
 
   const waiting = byDate.filter((o) => o.status === 'preorder' && !o.all_units_received)
   const waitSub = (o: OrderSummaryRow) => {
@@ -111,7 +115,7 @@ export default function Home() {
     rows: low.slice(0, PER_GROUP).map((m) => (
       <Row2 key={m.model_id} to={`/kho?model=${m.model_id}`} a={<Ident id={m.code_prefix} text={m.model_name} />}
         b={<span className={m.sellable_count <= 0 ? 'neg' : 'age-warn'}>{m.sellable_count <= 0 ? 'hết hàng' : `còn ${m.sellable_count}`}</span>}
-        c={<Tx>Kho Lumi {m.in_stock_count} · đang về {m.incoming_count} · đã giữ {m.reserved_count}</Tx>} />
+        c={<Tx>{stockText(m)}</Tx>} />
     )) })
 
   const aged = d.unitView.filter((u) => u.aging_level === 'alert').sort((a, b) => (b.days_in_stock ?? 0) - (a.days_in_stock ?? 0))
@@ -139,41 +143,18 @@ export default function Home() {
     <div className="kpis ov-k6">
       <Link className="kpi hero" to="/congno"><span className="k">Quỹ hiện có</span><span className={`v ${cash < 0 ? 'neg' : ''}`}>{cash < 0 ? '−' : ''}{kpiAmount(Math.abs(cash), desk)}</span>
         <span className="s">tiền mặt + tài khoản</span></Link>
-      <button type="button" className="kpi" onClick={() => document.getElementById('home-chart')?.scrollIntoView({ behavior: 'smooth' })}><span className="k">Lãi tháng {mNo}</span><span className={`v ${profit < 0 ? 'neg' : profit > 0 ? 'pos' : ''}`}>{desk ? (profit < 0 ? '−' : profit > 0 ? '+' : '') + kpiAmount(Math.abs(profit), desk) : signed(profit)}</span>
+      <button type="button" className="kpi" onClick={() => document.getElementById('home-margin')?.scrollIntoView({ behavior: 'smooth' })}><span className="k">Lãi tháng {mNo}</span><span className={`v ${profit < 0 ? 'neg' : profit > 0 ? 'pos' : ''}`}>{desk ? (profit < 0 ? '−' : profit > 0 ? '+' : '') + kpiAmount(Math.abs(profit), desk) : signed(profit)}</span>
         <span className="s">{shippedN} đơn đã gửi{returnedN ? ` · ${returnedN} hoàn` : ''}</span></button>
       <Link className="kpi" to="/don"><span className="k">Doanh thu tháng {mNo}</span><span className="v">{kpiAmount(rev, desk)}</span><span className="s">giá chốt các chiếc đã gửi</span></Link>
-      <Link className="kpi" to="/kho"><span className="k">Vốn ở hàng</span><span className="v">{kpiAmount(capital, desk)}</span>
-        <span className="s">Kho Lumi {tr(stockValue)}{incomingValue > 0 ? ` + về ${tr(incomingValue)}` : ''}</span></Link>
+      <Link className="kpi" to="/kho"><span className="k">Tiền nằm ở hàng</span><span className="v">{kpiAmount(capital, desk)}</span>
+        <span className="s">{capital > 0 ? [incomingValue > 0 && `${tr(incomingValue)} đang về`, stockValue > 0 && `${tr(stockValue)} ở Kho Lumi`].filter(Boolean).join(' · ') : 'chưa có hàng'}</span></Link>
       <Link className="kpi" to="/don?f=due"><span className="k">Khách còn nợ</span><span className="v">{kpiAmount(due, desk)}</span><span className={`s ${dueOrders.length ? 'bad' : ''}`}>{dueOrders.length ? `${dueOrders.length} đơn chưa đủ` : 'đã thu đủ'}</span></Link>
       <Link className="kpi" to="/congno"><span className="k">Nợ trung gian</span><span className="v">{kpiAmount(Math.abs(debt), desk)}</span><span className={`s ${debt > 0 ? 'bad' : ''}`}>{debt > 0 ? 'còn phải trả' : debt < 0 ? 'đã chuyển dư' : 'không còn nợ'}</span></Link>
     </div>
   )
 
-  // ---------- Biểu đồ lãi 6 tháng (theo profit_date) ----------
-  const byMonth = new Map<string, number>()
-  d.orderSummary.forEach((o) => { const m = profitMonth(o); if (m) byMonth.set(m, (byMonth.get(m) ?? 0) + (o.profit_vnd ?? 0)) })
-  const months = Array.from({ length: 6 }, (_, i) => addMonths(month, i - 5))
-  const ps = months.map((m) => byMonth.get(m) ?? 0)
-  const max = Math.max(1, ...ps.map((p) => Math.abs(p)))
-  const mLabel = (m: string) => `T${Number(m.slice(5))}${m.slice(0, 4) !== month.slice(0, 4) ? `/${m.slice(2, 4)}` : ''}`
-  const chart = (
-    <div className="stack" id="home-chart">
-      <p className="section-title">Lãi 6 tháng <span className="muted">tổng {signed(ps.reduce((a, p) => a + p, 0))}</span></p>
-      <div>
-        <div className="bars" role="img" aria-label={`Lãi theo tháng: ${months.map((m, i) => `${mLabel(m)} ${signed(ps[i])}`).join(', ')}`}>
-          {ps.map((p, i) => (
-            <div key={months[i]} className={`b ${months[i] === month ? 'cur' : ''}`}>
-              <span>{p === 0 ? '0' : signed(p)}</span><i className={p < 0 ? 'neg' : ''} style={{ height: Math.max(2, Math.round((Math.abs(p) / max) * 100)) }} />
-            </div>
-          ))}
-        </div>
-        <div className="bars-x">{months.map((m) => <span key={m}>{mLabel(m)}</span>)}</div>
-      </div>
-      <p className="hint" style={{ margin: 0 }}>Lãi tính theo ngày gửi hàng (đơn Hoàn hàng: ngày hoàn) = giá chốt − giá nhập − ship shop chịu.</p>
-    </div>
-  )
-
-  // ---------- Model bán chạy (số chiếc đã bán + lãi theo model, chọn kỳ) ----------
+  // ---------- CR-006: Lãi theo model (thay biểu đồ 6 tháng) - tỷ lệ lãi = lãi ÷ giá chốt; chưa bán chiếc nào thì lấy lãi dự kiến
+  // của các chiếc đang có (giá bán dự kiến − giá nhập) để vẫn so được model nào lãi tốt.
   const inPeriod = (u: UnitViewRow) => {
     const m = u.sold_at?.slice(0, 7)
     if (!m) return false
@@ -182,38 +163,51 @@ export default function Home() {
     if (period === 'nam') return m.slice(0, 4) === month.slice(0, 4)
     return true
   }
-  const sold = d.unitView.filter((u) => u.status === 'sold' && inPeriod(u))
-  const best = d.models.map((m) => {
-    const us = sold.filter((u) => u.model_id === m.id)
-    return { m, n: us.length, rev: us.reduce((a, u) => a + (u.sold_price_vnd ?? 0), 0), p: us.reduce((a, u) => a + (u.actual_profit_vnd ?? 0), 0) }
-  }).filter((r) => r.n > 0).sort((a, b) => b.n - a.n || b.p - a.p)
-  const bestBlock = (
-    <div className="stack">
-      <p className="section-title">Model bán chạy</p>
+  const rate = (p: number, r: number) => (r > 0 ? p / r : null)
+  const margins = d.models.map((m) => {
+    const sold = d.unitView.filter((u) => u.model_id === m.id && u.status === 'sold' && inPeriod(u))
+    const rev = sold.reduce((a, u) => a + (u.sold_price_vnd ?? 0), 0)
+    const p = sold.reduce((a, u) => a + (u.actual_profit_vnd ?? 0), 0)
+    const left = d.unitView.filter((u) => u.model_id === m.id && u.status !== 'sold' && u.status !== 'cancelled' && u.expected_profit_vnd != null)
+    const ep = left.reduce((a, u) => a + (u.expected_profit_vnd ?? 0), 0)
+    const er = left.reduce((a, u) => a + (unitPrice(u) ?? 0), 0)
+    return { m, n: sold.length, rev, p, r: rate(p, rev), left: left.length, ep, er: rate(ep, er) }
+  }).filter((x) => x.n > 0 || x.left > 0)
+    .sort((a, b) => (b.n > 0 ? 1 : 0) - (a.n > 0 ? 1 : 0) || ((b.n ? b.r : b.er) ?? -1) - ((a.n ? a.r : a.er) ?? -1))
+  const pctText = (x: number | null) => (x == null ? '-' : `${Math.round(x * 100)}%`)
+  const marginBlock = (
+    <div className="stack" id="home-margin">
+      <p className="section-title">Lãi theo model</p>
       <div className="chips" role="group" aria-label="Kỳ">
         {PERIODS.map(([k, t]) => <button key={k} className="chip" id={`home-ky-${k}`} aria-pressed={period === k} onClick={() => setPeriod(k)}>{t}</button>)}
       </div>
-      {best.length === 0
-        ? <p className="muted small" style={{ margin: 0 }}>Chưa bán chiếc nào trong kỳ này.</p>
+      {margins.length === 0
+        ? <p className="muted small" style={{ margin: 0 }}>Chưa có chiếc nào - nhập lô để xem lãi theo model.</p>
         : (
           <div className="ov-list">
-            {best.map((r) => (
-              <Row2 key={r.m.id} to={`/kho?model=${r.m.id}&tt=xong`}
-                a={<Ident id={r.m.code_prefix} text={r.m.name} />}
-                b={`${r.n} chiếc`}
-                c={<Tx>doanh thu {tr(r.rev)}</Tx>}
-                d={<Profit n={r.p} prefix="lãi " />} />
+            {margins.map((x) => x.n > 0 ? (
+              <Row2 key={x.m.id} to={`/kho?model=${x.m.id}&tt=ban`}
+                a={<Ident id={x.m.code_prefix} text={x.m.name} />}
+                b={<span className={x.p < 0 ? 'neg' : 'pos'}>lãi {pctText(x.r)}</span>}
+                c={<Tx>đã bán {x.n} · TB {signed(Math.round(x.p / x.n))}/chiếc</Tx>}
+                d={<Profit n={x.p} />} />
+            ) : (
+              <Row2 key={x.m.id} to={`/kho?model=${x.m.id}`}
+                a={<Ident id={x.m.code_prefix} text={x.m.name} />}
+                b={<span className="muted">dự kiến {pctText(x.er)}</span>}
+                c={<Tx>{x.left} chiếc chưa bán · TB {signed(Math.round(x.ep / x.left))}/chiếc</Tx>} />
             ))}
           </div>
         )}
+      <p className="hint" style={{ margin: 0 }}>Tỷ lệ lãi = lãi ÷ giá bán. Lãi = giá chốt − giá nhập − ship shop chịu. "Dự kiến" tính theo giá bán dự kiến của các chiếc chưa bán.</p>
     </div>
   )
 
   return (
     <Shell section="home" title="Tổng quan" actions={<span className="muted small only-desk">Tháng {mNo}/{month.slice(0, 4)}</span>}>
       {desk
-        ? <>{kpis}<div className="cols">{todo}<div className="stack">{chart}{bestBlock}</div></div></>
-        : <>{kpis}{todo}{chart}{bestBlock}</>}
+        ? <>{kpis}<div className="cols">{todo}{marginBlock}</div></>
+        : <>{kpis}{todo}{marginBlock}</>}
     </Shell>
   )
 }

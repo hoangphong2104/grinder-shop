@@ -196,7 +196,7 @@ function ReceiveSheet({ lotId, onClose, onDone }: { lotId: string; onClose: () =
                 <div className="rc-unit" key={u.unit_id}>
                   <span className="uh">
                     <b className="num">{u.code}</b><span className="nm">{u.model_name}</span>
-                    {u.holding_order_id && <span className="pill hold">Giữ {d.orderCode[u.holding_order_id] ?? 'đơn'}</span>}
+                    {u.holding_order_id && <span className="pill hold">Khách đặt {d.orderCode[u.holding_order_id] ?? 'đơn'}</span>}
                   </span>
                   <select className="input" id={`rc-cond-${u.code}`} aria-label={`Tình trạng ${u.code}`} value={v.condition}
                     onChange={(e) => setU(u.unit_id, { condition: e.target.value as UnitConditionDb })}>

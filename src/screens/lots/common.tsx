@@ -40,7 +40,7 @@ export function unitCounts(sum: LotSummaryRow | undefined): [string, string][] {
   const out: [string, string][] = []
   if (sum.incoming_count) out.push([`${sum.incoming_count} ${sum.status === 'vn_warehouse' ? 'Kho VN' : sum.status === 'cn_warehouse' ? 'Kho TQ' : 'đang về'}`, 'way'])
   if (sum.in_stock_count) out.push([`${sum.in_stock_count} Kho Lumi`, 'ok'])
-  if (sum.reserved_count) out.push([`${sum.reserved_count} đã giữ`, 'hold'])
+  if (sum.reserved_count) out.push([`${sum.reserved_count} khách đặt`, 'hold'])
   if (sum.sold_count) out.push([`${sum.sold_count} đã bán`, 'neu'])
   return out
 }

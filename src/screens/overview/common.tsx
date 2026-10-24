@@ -101,9 +101,9 @@ export function unitMatch(u: UnitViewRow, q: string): false | 'code' | 'serial' 
 export const holderCode = (d: DbData, u: UnitViewRow) => (u.holding_order_id ? d.orderCode[u.holding_order_id] : undefined)
 
 const UNIT_TONE: Record<UnitStatusDb, string> = { incoming: 'way', in_stock: 'ok', reserved: 'hold', sold: 'neu', cancelled: 'neu' }
-/** Chip trạng thái chiếc rút gọn (CR-005): Kho TQ / Kho VN / Kho Lumi / "Giữ D-005" / Vận chuyển tới khách / "Đã giao D-005". */
+/** Chip trạng thái chiếc rút gọn (CR-005): Kho TQ / Kho VN / Kho Lumi / "Khách đặt D-005" / Vận chuyển tới khách / "Đã giao D-005". */
 export function UnitChipShort({ u, holder }: { u: UnitViewRow; holder?: string }) {
-  const t = u.status === 'reserved' && holder ? `Giữ ${holder}`
+  const t = u.status === 'reserved' && holder ? `Khách đặt ${holder}`
     : u.status === 'sold' && u.holding_order_status === 'completed' && holder ? `Đã giao ${holder}`
       : unitLabel(u.status, u.lot_status, u.holding_order_status)
   return <span className={`pill ${UNIT_TONE[u.status]}`}>{t}</span>

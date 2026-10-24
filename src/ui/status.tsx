@@ -13,7 +13,7 @@ export const LotChip = ({ s }: { s: LotStatusDb }) => <span className={`pill ${L
 export const OrderChip = ({ s }: { s: OrderStatusDb }) => <span className={`pill ${ORDER_TONE[s]}`}>{ORDER_LABEL[s]}</span>
 // CR-001 A5: trạng thái từng chiếc. CR-005: in_stock = "Kho Lumi"; incoming tách theo lô ("Kho TQ" / "Kho VN") và sold theo
 // trạng thái đơn ("Vận chuyển tới khách" / "Đã giao") qua unitLabel(s, lotStatus, orderStatus).
-export const UNIT_LABEL: Record<UnitStatusDb, string> = { incoming: 'Đang về', in_stock: 'Kho Lumi', reserved: 'Đã giữ', sold: 'Đã bán', cancelled: 'Huỷ' }
+export const UNIT_LABEL: Record<UnitStatusDb, string> = { incoming: 'Đang về', in_stock: 'Kho Lumi', reserved: 'Khách đặt', sold: 'Đã bán', cancelled: 'Huỷ' }
 const UNIT_TONE: Record<UnitStatusDb, string> = { incoming: 'way', in_stock: 'ok', reserved: 'hold', sold: 'neu', cancelled: 'neu' }
 /** Nhãn chiếc theo vị trí: Đang về ⇒ Kho TQ / Kho VN (theo lô); Đã bán ⇒ nhãn trạng thái đơn đang giữ; còn lại UNIT_LABEL. */
 export function unitLabel(s: UnitStatusDb, lot?: LotStatusDb | null, order?: OrderStatusDb | null): string {
@@ -23,7 +23,7 @@ export function unitLabel(s: UnitStatusDb, lot?: LotStatusDb | null, order?: Ord
 }
 /** holder = mã đơn đang giữ (vd. D-005) → "Đã giữ cho D-005"; lot / order (tuỳ chọn, CR-005) = v_units.lot_status / holding_order_status. */
 export const UnitChip = ({ s, holder, lot, order }: { s: UnitStatusDb; holder?: string; lot?: LotStatusDb | null; order?: OrderStatusDb | null }) =>
-  <span className={`pill ${UNIT_TONE[s]}`}>{s === 'reserved' && holder ? `Đã giữ cho ${holder}` : s === 'sold' && holder ? `${order ? ORDER_LABEL[order] : 'Đã bán'} · ${holder}` : unitLabel(s, lot, order)}</span>
+  <span className={`pill ${UNIT_TONE[s]}`}>{s === 'reserved' && holder ? `Khách đặt · ${holder}` : s === 'sold' && holder ? `${order ? ORDER_LABEL[order] : 'Đã bán'} · ${holder}` : unitLabel(s, lot, order)}</span>
 /** Chip tồn theo model (A9). */
 export function ModelStockChip({ m }: { m: ModelStockRow }) {
   if (m.sellable_count <= 0) return <span className="pill bad">Hết hàng</span>

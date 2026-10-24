@@ -114,7 +114,7 @@ function OrderForm({ editId }: { editId: string | null }) {
         if (!u) return 'một chiếc đã bị xoá'
         if (u.lot_status === 'cancelled') return `${u.code} (lô đã huỷ)`
         const by = u.holding_order_id ? d.orderCode[u.holding_order_id] ?? 'đơn khác' : 'đơn khác'
-        return `${u.code} (${u.status === 'sold' ? `đã bán · ${by}` : `đã giữ cho ${by}`})`
+        return `${u.code} (${u.status === 'sold' ? `đã bán · ${by}` : `khách đặt ở ${by}`})`
       }).join(', ')} - bỏ chiếc này khỏi đơn.`,
     }
   } else if (rows.length) {

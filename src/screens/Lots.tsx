@@ -1,12 +1,10 @@
-// SC_04 Lô nhập. CR-004: điện thoại = 1 danh sách + hàng chip bước có đếm (LOT-M2), dòng lô 2 dòng (LOT-M1),
+// SC_04 Lô nhập - CR-006: không còn tab riêng, hiện trong tab Kho (nút "Theo lô", /kho?xem=lo). CR-004: điện thoại = 1 danh sách + hàng chip bước có đếm (LOT-M2), dòng lô 2 dòng (LOT-M1),
 // 1 nút bước kế trên dòng (LOT-M3), "đặt N ngày" + chip "Về trễ" (LOT-S2). Máy tính giữ "Theo trạng thái" (bảng cột)
 // / "Danh sách" (bảng). Ô tìm theo mã lô, mã chiếc, seri, model, người bán, tiêu đề tin.
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useData } from '../data/store.tsx'
 import type { DbData, LotRow, LotStatusDb } from '../data/types.ts'
-import { Shell } from '../ui/Shell.tsx'
-import { Icon } from '../ui/icons.tsx'
 import { LOT_FLOW, LOT_LABEL, LotChip } from '../ui/status.tsx'
 import { dmy, pct, vnd } from '../ui/format.ts'
 import { byNewest, daysOpen, isLate, isOpen, LOT_SHORT, LotCard, LotRow2, lotFeePct, modelsText, sellerOf, summaryOf, UnitCounts, unitsOfLot, useIsDesk } from './lots/common.tsx'
@@ -34,7 +32,7 @@ function haystack(d: DbData, l: LotRow): string {
 const matchStage = (st: Stage, l: LotRow) =>
   st === 'all' ? true : st === 'open' ? isOpen(l.status) : l.status === st
 
-export default function Lots() {
+export function LotsPanel() {
   const d = useData()
   const nav = useNavigate()
   const desk = useIsDesk()
@@ -156,11 +154,10 @@ export default function Lots() {
   )
 
   return (
-    <Shell section="lo" title="Lô nhập"
-      actions={<Link className="btn btn-primary btn-sm" to="/lo/new" aria-label="Nhập lô Goofish"><Icon name="plus" /><span className="only-desk">Nhập lô Goofish</span></Link>}>
+    <>
       {seg}
       {body}
       {flow.sheets}
-    </Shell>
+    </>
   )
 }

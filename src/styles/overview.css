@@ -48,7 +48,7 @@ a.link-btn, a.btn { text-decoration: none; }
 .ov-filter .fbtn { flex: none; }
 .ov-filter .fbtn .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); display: inline-block; }
 .chip.x { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
-.ov-strip { margin: 0; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ov-strip { margin: 0; font-size: 13px; color: var(--muted); }
 .ov-strip b { color: var(--fg); font-weight: 600; }
 .ov-banner { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 12px; border-radius: var(--r-md); background: var(--way-bg); color: var(--way);
   font-size: 13.5px; text-decoration: none; white-space: nowrap; overflow: hidden; }
@@ -156,3 +156,7 @@ a.link-btn, a.btn { text-decoration: none; }
 [data-skin="tracker"] .cash-hero .k { text-transform: uppercase; letter-spacing: .2em; font-size: 10.5px; }
 [data-skin="tracker"] .cash-hero .v { font-weight: 200; font-size: 34px; }
 @media (max-width: 419px) { .kho-tiles { gap: 4px; } .kho-tile { padding: 6px 4px 6px 7px; } .kho-tile .k, [data-skin="tracker"] .kho-tile .k { font-size: 11px; letter-spacing: -.01em; } }
+/* CR-006: Kho = Từng chiếc / Theo lô (Lô nhập gộp vào Kho) */
+.kho-view { align-self: flex-start; }
+.kho-view .c { color: var(--muted); font-weight: 400; }
+.kho-view button[aria-pressed="true"] .c { color: inherit; }

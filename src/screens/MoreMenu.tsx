@@ -19,7 +19,7 @@ export default function MoreMenu() {
   return (
     <Shell section="" title="Menu">
       <div className="list">
-        {NAV.slice(5).map(([h, t, , ic]) => (
+        {NAV.slice(4).map(([h, t, , ic]) => (
           <Link key={h} className="li" to={h}><span className="gpic"><Icon name={ic} /></span>
             <div className="main"><b>{t}</b>{info[h] && <div className="s">{info[h][0]}</div>}</div>
             {info[h]?.[1] != null && <span className="v">{info[h][1]}</span>}<Icon name="chev" size={16} /></Link>

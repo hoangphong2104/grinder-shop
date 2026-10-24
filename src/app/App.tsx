@@ -4,7 +4,6 @@ import Login from '../screens/Login.tsx'
 import Home from '../screens/Home.tsx'
 import Kho from '../screens/Kho.tsx'
 import UnitDetail from '../screens/UnitDetail.tsx'
-import Lots from '../screens/Lots.tsx'
 import LotDetail from '../screens/LotDetail.tsx'
 import LotNew from '../screens/LotNew.tsx'
 import Orders from '../screens/Orders.tsx'
@@ -29,7 +28,7 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/kho" element={<Kho />} />
           <Route path="/kho/:id" element={<UnitDetail />} />
-          <Route path="/lo" element={<Lots />} />
+          <Route path="/lo" element={<Navigate to="/kho?xem=lo" replace />} />
           <Route path="/lo/new" element={<LotNew />} />
           <Route path="/lo/:id" element={<LotDetail />} />
           <Route path="/lo/:id/sua" element={<LotNew />} />

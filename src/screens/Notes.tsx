@@ -79,7 +79,7 @@ export default function Notes() {
 function splitNote(body: string): [string, string] {
   const b = body.trim()
   const nl = b.indexOf('\n')
-  if (nl >= 0) return [b.slice(0, nl).trim(), b.slice(nl + 1).replace(/\s*\n\s*/g, ' ').trim()]
+  if (nl >= 0) return [b.slice(0, nl).trim(), b.slice(nl + 1).replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim()] // CR-006: giữ xuống dòng
   if (b.length <= 36) return [b, '']
   const m = /^(.{8,70}?[.!?:])\s+(.+)$/.exec(b)
   if (m) return [m[1], m[2]]
@@ -88,7 +88,7 @@ function splitNote(body: string): [string, string] {
   return [b.slice(0, cut).trim(), b.slice(cut).trim()]
 }
 
-/** Dòng kiểu Apple Notes: cao bằng nhau - tiêu đề đậm 1 dòng + ngày / ghim bên phải, 2 dòng xem trước. Màu = vạch trái. */
+/** Dòng kiểu Apple Notes: tiêu đề đậm 1 dòng + ngày / ghim bên phải, nội dung giữ xuống dòng, tối đa 8 dòng (CR-006: đọc ngay ở danh sách). Màu = vạch trái. */
 function NoteLine({ n, q, onOpen }: { n: NoteRow; q: string; onOpen: () => void }) {
   const [title, rest] = splitNote(n.body)
   return (

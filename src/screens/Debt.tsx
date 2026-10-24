@@ -14,7 +14,7 @@ import { PayLotButton } from './lots/PayLot.tsx'
 // SC_10 Sổ quỹ (CR-005 ý 15, 1, 2, 5) - thay "Công nợ trung gian".
 // - Một quỹ chung bắt đầu từ 0: số dư (v_cash_balance), vào / ra tháng này (v_cash_monthly).
 // - Bút toán: tự sinh (thu khách, hoàn tiền, trả trung gian, ship shop chịu, ship chiều về - chỉ đọc, "sửa ở nguồn")
-//   + ghi tay (Chi phí khác có loại, Nạp vốn, Rút vốn, Điều chỉnh) - thêm / sửa / xoá (bảng cash_entries).
+//   + ghi tay (Chi phí khác có loại, Nạp vốn, Rút vốn; Điều chỉnh chỉ còn cho khoản cũ - CR-006) - thêm / sửa / xoá (bảng cash_entries).
 // - Công nợ trung gian: tổng còn nợ + từng lô còn nợ với nút "Đã thanh toán" (RPC pay_lot); sửa / xoá khoản Đã chuyển / Điều chỉnh.
 
 type Filter = 'all' | 'thu' | 'tg' | 'ship' | 'hoan' | 'chi' | 'von'
@@ -24,6 +24,8 @@ const FILTERS: [Filter, string, CashKindDb[]][] = [
 ]
 type ManualKind = 'expense' | 'capital_in' | 'capital_out' | 'adjustment'
 const MANUAL: [ManualKind, string][] = [['expense', 'Chi phí'], ['capital_in', 'Nạp vốn'], ['capital_out', 'Rút vốn'], ['adjustment', 'Điều chỉnh']]
+/** CR-006: ghi mới chỉ Chi phí / Nạp vốn / Rút vốn - "Điều chỉnh" trùng ý với nạp / rút nên ẩn; khoản Điều chỉnh cũ vẫn hiện để sửa / xoá. */
+const MANUAL_NEW = MANUAL.filter(([k]) => k !== 'adjustment')
 const EXPENSE_HINTS = ['Đóng gói', 'Phí sàn / quảng cáo', 'Ship nội thành', 'Sửa chữa', 'Dụng cụ']
 const TXN_LABEL = { payable: 'Phải trả', transfer: 'Đã chuyển', adjustment: 'Điều chỉnh nợ' } as const
 
@@ -94,7 +96,7 @@ export default function Debt() {
         </span>
       </div>
       <div className="cash-acts" role="group" aria-label="Ghi khoản thu chi">
-        {MANUAL.map(([k, t]) => (
+        {MANUAL_NEW.map(([k, t]) => (
           <button key={k} className={`btn ${k === 'expense' ? 'btn-primary' : 'btn-ghost'}`} id={`cash-add-${k}`} onClick={() => setCashForm({ kind: k })}>
             {k === 'expense' && <Icon name="plus" />}{t}
           </button>
@@ -246,7 +248,7 @@ function CashSheet({ kind: kind0, entry, onClose }: { kind: ManualKind; entry?: 
           <button className="btn btn-primary btn-block" id="cash-save" onClick={save} disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu'}</button>
         </div>}>
       <div className="cash-sheet-kinds" role="radiogroup" aria-label="Loại khoản">
-        {MANUAL.map(([k, t]) => <button key={k} className="chip" role="radio" id={`cash-k-${k}`} aria-checked={kind === k} aria-pressed={kind === k} onClick={() => setKind(k)}>{t}</button>)}
+        {(kind0 === 'adjustment' ? MANUAL : MANUAL_NEW).map(([k, t]) => <button key={k} className="chip" role="radio" id={`cash-k-${k}`} aria-checked={kind === k} aria-pressed={kind === k} onClick={() => setKind(k)}>{t}</button>)}
       </div>
       {kind === 'adjustment' && (
         <div className="seg" role="group" aria-label="Chiều điều chỉnh">

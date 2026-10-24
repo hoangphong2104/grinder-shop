@@ -5,9 +5,10 @@ import { useData, useStore } from '../data/store.tsx'
 import { Brandmark, Icon } from './icons.tsx'
 import { Sheet } from './feedback.tsx'
 
-export type Section = 'home' | 'kho' | 'lo' | 'don' | 'ghichu' | 'congno' | 'khach' | 'danhmuc' | 'caidat' | ''
+export type Section = 'home' | 'kho' | 'don' | 'ghichu' | 'congno' | 'khach' | 'danhmuc' | 'caidat' | ''
+// CR-006: Lô nhập gộp vào Kho (/kho?xem=lo) → tab đáy điện thoại: Tổng quan, Kho, +, Đơn bán, Ghi chú, Sổ quỹ.
 export const NAV: [string, string, Section, string][] = [
-  ['/', 'Tổng quan', 'home', 'home'], ['/kho', 'Kho', 'kho', 'box'], ['/lo', 'Lô nhập', 'lo', 'truck'], ['/don', 'Đơn bán', 'don', 'receipt'], ['/ghichu', 'Ghi chú', 'ghichu', 'note'],
+  ['/', 'Tổng quan', 'home', 'home'], ['/kho', 'Kho', 'kho', 'box'], ['/don', 'Đơn bán', 'don', 'receipt'], ['/ghichu', 'Ghi chú', 'ghichu', 'note'],
   ['/congno', 'Sổ quỹ', 'congno', 'wallet'],
   ['/khach', 'Khách', 'khach', 'user'], ['/danhmuc', 'Model', 'danhmuc', 'tag'], ['/caidat', 'Cài đặt', 'caidat', 'gear'],
 ]
@@ -26,7 +27,7 @@ export function Shell({ section, title, back, actions, savebar, children }: {
   const nav = useNavigate()
   const [fab, setFab] = useState(false)
   const cnt: Partial<Record<Section, number>> = {
-    lo: d.lots.filter((l) => l.status !== 'received' && l.status !== 'cancelled').length,
+    kho: d.lots.filter((l) => l.status !== 'received' && l.status !== 'cancelled').length,
     don: d.orders.filter((o) => ['preorder', 'confirmed', 'shipped'].includes(o.status)).length,
   }
   const tab = ([h, t, k, ic]: (typeof NAV)[number]) => (
@@ -42,8 +43,8 @@ export function Shell({ section, title, back, actions, savebar, children }: {
         </div>
         {NAV.map((n, i) => (
           <span key={n[0]} style={{ display: 'contents' }}>
-            {i === 5 && <div className="grp-t">Tiền</div>}
-            {i === 6 && <div className="grp-t">Danh mục</div>}
+            {i === 4 && <div className="grp-t">Tiền</div>}
+            {i === 5 && <div className="grp-t">Danh mục</div>}
             <Link to={n[0]} aria-current={n[2] === section ? 'page' : undefined}><Icon name={n[3]} />{n[1]}{cnt[n[2]] ? <span className="n">{cnt[n[2]]}</span> : null}</Link>
           </span>
         ))}
