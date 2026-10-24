@@ -168,3 +168,7 @@ a.link-btn, a.btn { text-decoration: none; }
 .mg-row .fill.est { background: repeating-linear-gradient(135deg, var(--faint) 0 4px, transparent 4px 7px); }
 .mg-row .fill.neg { background: var(--bad, #d33); }
 .mg-row .sub { grid-column: 1 / -1; font-size: 12.5px; color: var(--muted); }
+/* CR-008: Thời gian hàng về */
+.ar-stat { display: flex; flex-direction: column; gap: 2px; }
+.ar-stat .v { font: 300 28px/34px var(--mono); font-variant-numeric: tabular-nums; }
+.ar-stat .s { font-size: 13px; color: var(--muted); }

@@ -4,7 +4,7 @@ import { useData } from '../data/store.tsx'
 import type { OrderSummaryRow, UnitViewRow } from '../data/types.ts'
 import { Shell } from '../ui/Shell.tsx'
 import { Icon } from '../ui/icons.tsx'
-import { todayVn, tr } from '../ui/format.ts'
+import { dmy, todayVn, tr } from '../ui/format.ts'
 import {
   Ident, unitPrice, OrderRow, Row2, Tx, UnitRow, codesText, daysSince, kpiAmount, lotModelsText, profitMonth, signed, sortedModelStock, thresholds, useDesk,
 } from './overview/common.tsx'
@@ -179,6 +179,41 @@ export default function Home() {
     .sort((a, b) => (b.n > 0 ? 1 : 0) - (a.n > 0 ? 1 : 0) || ((b.n ? b.r : b.er) ?? -1) - ((a.n ? a.r : a.er) ?? -1))
   const maxRate = Math.max(0.01, ...margins.map((x) => Math.abs((x.n ? x.r : x.er) ?? 0)))
   const pctText = (x: number | null) => (x == null ? '-' : `${Math.round(x * 100)}%`)
+  // ---------- CR-008: Thời gian hàng về - TB số ngày đặt → về Kho Lumi (cối đã về), ngày dự kiến về của cối đang về
+  const dayDiff = (a: string, b: string) => Math.round((Date.parse(b.slice(0, 10)) - Date.parse(a.slice(0, 10))) / 864e5)
+  const arrived = d.unitView.filter((u) => u.received_at && u.ordered_at && u.status !== 'cancelled').map((u) => dayDiff(u.ordered_at!, u.received_at!)).filter((n) => n >= 0)
+  const avgDays = arrived.length ? Math.round(arrived.reduce((a, n) => a + n, 0) / arrived.length) : null
+  const today = todayVn()
+  const addDays = (iso: string, n: number) => new Date(Date.parse(iso.slice(0, 10)) + n * 864e5).toISOString().slice(0, 10)
+  const coming = d.unitView.filter((u) => !u.is_received && u.status !== 'cancelled' && u.ordered_at)
+    .map((u) => ({ u, eta: avgDays != null ? addDays(u.ordered_at!, avgDays) : null, age: dayDiff(u.ordered_at!, today) }))
+    .sort((a, b) => b.age - a.age)
+  const arriveBlock = (
+    <div className="stack" id="home-arrive">
+      <p className="section-title">Thời gian hàng về</p>
+      <div className="ar-stat">
+        {avgDays != null
+          ? <><span className="v">{avgDays} ngày</span><span className="s">trung bình từ lúc đặt tới khi về Kho Lumi · {arrived.length} cối
+            {arrived.length > 1 ? ` · nhanh nhất ${Math.min(...arrived)}, lâu nhất ${Math.max(...arrived)} ngày` : ''}</span></>
+          : <span className="s">Chưa có cối nào về Kho Lumi - nhận cối đầu tiên để app tính thời gian hàng về.</span>}
+      </div>
+      {coming.length > 0 && (
+        <div className="ov-list">
+          {coming.slice(0, 5).map(({ u, eta, age }) => {
+            const left = eta ? dayDiff(today, eta) : null
+            return (
+              <Row2 key={u.unit_id} to={`/kho/${u.unit_id}`}
+                a={<Ident id={u.code} text={u.model_name} />}
+                b={left == null ? `đặt ${age} ngày` : left > 0 ? `còn ~${left} ngày` : left === 0 ? 'dự kiến hôm nay' : <span className="neg">trễ {-left} ngày</span>}
+                c={<Tx>{u.lot_status === 'vn_warehouse' ? 'Kho VN' : 'Kho TQ'} · đặt {dmy(u.ordered_at)}{eta ? ` · về ~${dmy(eta)}` : ''}</Tx>} />
+            )
+          })}
+        </div>
+      )}
+      {coming.length > 5 && <Link className="link-btn small" to="/kho?tt=tq">Xem cả {coming.length} cối đang về <Icon name="chev" size={14} /></Link>}
+    </div>
+  )
+
   const marginBlock = (
     <div className="stack" id="home-margin">
       <p className="section-title">Lãi theo model</p>
@@ -212,8 +247,8 @@ export default function Home() {
   return (
     <Shell section="home" title="Tổng quan" actions={<span className="muted small only-desk">Tháng {mNo}/{month.slice(0, 4)}</span>}>
       {desk
-        ? <>{kpis}<div className="cols">{todo}{marginBlock}</div></>
-        : <>{kpis}{todo}{marginBlock}</>}
+        ? <>{kpis}<div className="cols">{todo}<div className="stack">{arriveBlock}{marginBlock}</div></div></>
+        : <>{kpis}{todo}{arriveBlock}{marginBlock}</>}
     </Shell>
   )
 }
