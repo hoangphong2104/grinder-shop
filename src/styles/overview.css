@@ -179,9 +179,12 @@ a.link-btn, a.btn { text-decoration: none; }
   .ov-desk .kpis.ov-k6 { grid-template-columns: repeat(6, minmax(0, 1fr)); flex: none; }
   .ov-desk .kpi { padding: 10px 8px; }
   .ov-desk .kpi .v { font-size: 22px; }
-  .ov-dash { flex: 1; min-height: 0; display: grid; grid-template-columns: 1.15fr 1fr 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); gap: 14px 24px; }
+  .ov-dash { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.1fr); gap: 14px 28px; }
   .ov-panel { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 14px; padding-right: 4px; scrollbar-width: thin; }
-  .ov-panel.todo { grid-row: 1 / 3; }
+  .ov-panel.todo { grid-column: 1 / -1; }
+  /* Việc cần làm: các nhóm xếp 2 cột thẳng với 2 cột phía trên */
+  .ov-panel.todo > .ov-todo { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 28px; align-items: start; }
+  .ov-panel.todo > .ov-todo > .section-title, .ov-panel.todo > .ov-todo > .empty { grid-column: 1 / -1; }
   /* mờ dần ở đáy ô ⇒ biết còn cuộn được; đệm đáy để dòng cuối không bị mờ */
   .ov-panel { padding-bottom: 28px; -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); }
   .ov-desk .kpi .k { letter-spacing: .1em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
