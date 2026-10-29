@@ -1,6 +1,6 @@
 /**
  * CR-005 ý 12 - VietQR chuyển khoản (chuẩn EMVCo QR / NAPAS 247, chuyển tới số tài khoản).
- * Khách quét ⇒ app ngân hàng điền sẵn ngân hàng (BIN), số TK, số tiền (= còn phải thu) và nội dung (= mã đơn).
+ * Khách quét ⇒ app ngân hàng điền sẵn ngân hàng (BIN), số TK, số tiền (= còn phải thu); app không truyền nội dung (để mặc định của ngân hàng).
  *
  * Cấu trúc (mỗi trường = ID 2 số + độ dài 2 số + giá trị):
  *   00 "01"                          Payload Format Indicator

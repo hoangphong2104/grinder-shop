@@ -3,7 +3,7 @@
 import { useMemo } from 'react'
 import { create as qrCreate } from 'qrcode'
 import type { SettingsRow } from '../../data/types.ts'
-import { buildVietQrPayload, checkVietQr, vietQrText } from '../../domain/vietqr.ts'
+import { buildVietQrPayload, checkVietQr } from '../../domain/vietqr.ts'
 import { vnd } from '../../ui/format.ts'
 
 /** Ngân hàng hay dùng + mã BIN NAPAS (6 số). Ngân hàng khác: chọn "Khác" và nhập BIN. */
@@ -45,22 +45,19 @@ export function bankCfg(st: SettingsRow | null | undefined): BankCfg | null {
   return { bin: st.bank_bin, accountNo: st.bank_account_no, accountName: st.bank_account_name ?? '' }
 }
 
-/** Nội dung chuyển khoản = mã đơn (bỏ dấu, ≤ 25 ký tự). */
-export const qrContent = (code: string) => vietQrText(code, 25)
-
-/** Dòng cho tin xác nhận đơn: ngân hàng · STK · tên · số tiền · nội dung + nhắc quét QR. */
-export function qrMessageLines(cfg: BankCfg, amount: number, code: string): string[] {
+/** Dòng cho tin xác nhận đơn: ngân hàng · STK · tên · số tiền + nhắc quét QR (nội dung để mặc định của app ngân hàng). */
+export function qrMessageLines(cfg: BankCfg, amount: number): string[] {
   return [
     `Chuyển khoản: ${bankName(cfg.bin)}, STK ${cfg.accountNo}${cfg.accountName ? `, ${cfg.accountName}` : ''}`,
-    `Số tiền ${vnd(amount)}, nội dung: ${qrContent(code)}`,
-    'Shop gửi kèm mã QR - anh/chị quét bằng app ngân hàng là điền sẵn số tiền và nội dung.',
+    `Số tiền ${vnd(amount)}`,
+    'Shop gửi kèm mã QR - anh/chị quét bằng app ngân hàng là điền sẵn số tiền.',
   ]
 }
 
 interface QrImage { dataUrl: string; size: number }
 /**
  * Vẽ QR (+ chữ dưới mã) ra PNG data URL - đồng bộ, để <img> bấm giữ "Lưu ảnh" trên điện thoại và tải về ngay trong lúc bấm.
- * caption: các dòng chữ in dưới mã (ảnh gửi khách vẫn đọc được số tiền / nội dung).
+ * caption: các dòng chữ in dưới mã (ảnh gửi khách vẫn đọc được số tiền / tài khoản).
  */
 function renderQrPng(payload: string, caption: string[]): QrImage | null {
   try {

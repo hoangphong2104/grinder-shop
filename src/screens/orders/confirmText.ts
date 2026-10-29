@@ -13,7 +13,7 @@ export interface ConfirmLine { code: string; model: string; price: number }
 
 export function buildConfirmText(p: {
   code: string; o: OrderRow; s: OrderSummaryRow; c: CustomerRow | undefined; lines: ConfirmLine[]; bankLine?: string | null
-  /** CR-005: dòng chuyển khoản VietQR (ngân hàng · STK · số tiền · nội dung + nhắc quét QR) - có thì thay dòng STK. */
+  /** CR-005: dòng chuyển khoản VietQR (ngân hàng · STK · số tiền + nhắc quét QR) - có thì thay dòng STK. */
   qrLines?: string[] | null
 }): string {
   const { code, o, s, c, lines } = p
