@@ -19,7 +19,7 @@ import {
 import type {
   BalanceRow, CashBalanceRow, CashEntryRow, CashKindDb, CashMonthlyRow, CustomerRow, DbData, LotRow, LotStatusDb, LotSummaryRow, ModelRow, ModelStockRow, NoteRow, OrderLineRow,
   OrderRow, OrderStatusDb, OrderSummaryRow, PaymentMethodDb, PaymentRow, SellerRow, SettingsRow, ShipPayerDb, SuggestionsRow, TxnRow,
-  UnitConditionDb, UnitRow, UnitViewRow,
+  UnitConditionDb, UnitRow, UnitViewRow, WarehouseRow,
 } from './types.ts'
 
 const UID = 'demo-user'
@@ -461,6 +461,13 @@ export function buildDemoData(): DbData {
     return { id: `demo-n-${i + 1}`, user_id: UID, body: n.body, is_pinned: n.pinned, color: (['yellow', 'default', 'green', 'blue', 'pink', 'purple'] as const)[i % 6], created_at: t, updated_at: t, version: 1 }
   })
 
+  // CR-008 danh bạ kho mẫu
+  const warehouses: WarehouseRow[] = [
+    { name: 'Kho TQ Quảng Châu', phone: '+86 138 0000 0000', address: 'Bạch Vân, Quảng Châu, Quảng Đông', note: 'Ghi mã khách trên kiện' },
+    { name: 'Kho VN Hà Nội', phone: '0901 234 567', address: '12 Ngõ Huế, Hai Bà Trưng, Hà Nội', note: 'Nhận hàng 8h-17h' },
+    { name: 'Kho Lumi', phone: '0987 654 321', address: '45 Lê Lợi, Q.1, TP.HCM', note: null },
+  ].map((w, i) => ({ ...base(`demo-w-${i + 1}`, ago(40 - i)), ...w }))
+
   units.sort((a, b) => a.code.localeCompare(b.code))
   unitView.sort((a, b) => a.code.localeCompare(b.code))
   payments.sort((a, b) => a.paid_at.localeCompare(b.paid_at) || a.created_at.localeCompare(b.created_at))
@@ -468,6 +475,6 @@ export function buildDemoData(): DbData {
   return {
     models, units, sellers, lots, txns, customers, orders, orderLines, payments, settings, notes,
     unitView, modelStock, lotSummary, orderSummary, balance, suggestions, lotCode, orderCode,
-    cashEntries, cashBalance: cashBal, cashMonthly,
+    cashEntries, cashBalance: cashBal, cashMonthly, warehouses,
   }
 }

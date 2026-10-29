@@ -26,7 +26,7 @@ begin
               where pubname = 'supabase_realtime' and schemaname = 'public'
                 and tablename in ('models','variants','sellers','lots','lot_lines','units','intermediary_txns',
                                   'customers','orders','order_lines','payments','settings','stock_movements',
-                                  'ai_scan_log','notes','cash_entries')
+                                  'ai_scan_log','notes','cash_entries','warehouses')
     loop
       execute format('alter publication supabase_realtime drop table %I.%I', r.schemaname, r.tablename);
     end loop;
@@ -61,6 +61,7 @@ drop table if exists public.customers         cascade;
 drop table if exists public.settings          cascade;
 drop table if exists public.ai_scan_log       cascade;
 drop table if exists public.note_revisions    cascade;   -- v2 (CR-007)
+drop table if exists public.warehouses        cascade;   -- v2 (CR-008)
 drop table if exists public.notes             cascade;   -- v2 (CR-002)
 drop table if exists private.unit_code_retired cascade;  -- v2
 

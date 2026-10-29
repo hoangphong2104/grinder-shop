@@ -6,3 +6,4 @@
 004_note_color.sql
 005_cash_status_qr.sql
 006_note_history.sql
+007_warehouses.sql
