@@ -106,7 +106,10 @@ select t.err(format('select public.confirm_preorder(%L)', :'o1'), 'UNIT_NOT_RECE
 select t.err(format('select public.ship_order(%L)', :'o1'), 'ORDER_NOT_CONFIRMED', 'gửi đơn Đặt trước → ORDER_NOT_CONFIRMED (Q-007)');
 
 -- ========== 4. Nhận lô A (ship 600.000) → 3.936.000 / chiếc, phải trả 7.872.000, O1 tự chốt ==========
-select t.err(format('select public.receive_lot(%L)', :'lot_a'), 'SHIP_FEE_REQUIRED', 'nhận lô không có ship → SHIP_FEE_REQUIRED (BR-02)');
+-- CR-009 (008): nhận cối không cần ship TQ→VN nữa ⇒ chỉ kiểm tra trên schema trước CR-009 (test 16 kiểm tra luật mới)
+select case when exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'lots' and column_name = 'local_ship_vnd')
+            then 'bỏ qua (CR-009)'
+            else t.err(format('select public.receive_lot(%L)', :'lot_a'), 'SHIP_FEE_REQUIRED', 'nhận lô không có ship → SHIP_FEE_REQUIRED (BR-02)') end;
 select x::text as recv_a from (select public.receive_lot(:'lot_a', 600000, '2026-10-01') x) s \gset
 select t.eq((select string_agg(cost_vnd_auto::text, ',') from public.units where lot_id = :'lot_a'), '3936000,3936000',
             'giá nhập tự tính = round(1010×3600 + 600000÷2) = 3.936.000 mỗi chiếc');

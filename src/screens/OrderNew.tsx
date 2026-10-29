@@ -12,6 +12,8 @@ import { LOT_LABEL, ORDER_LABEL, PAY_METHOD_LABEL } from '../ui/status.tsx'
 import { parseNum, todayVn, vnd } from '../ui/format.ts'
 import { fold, makeLookup, profitStr, unitAvailability } from './orders/common.ts'
 import '../styles/orders.css'
+import { MoneyInput } from '../ui/MoneyInput.tsx'
+import { lotName } from './overview/common.tsx'
 
 interface LineDraft { unitId: string; price: string }
 interface Draft {
@@ -112,14 +114,14 @@ function OrderForm({ editId }: { editId: string | null }) {
       msg: `Không còn chọn được: ${lost.map((r) => {
         const u = r.u
         if (!u) return 'một chiếc đã bị xoá'
-        if (u.lot_status === 'cancelled') return `${u.code} (lô đã huỷ)`
+        if (u.lot_status === 'cancelled') return `${u.code} (đã huỷ)`
         const by = u.holding_order_id ? d.orderCode[u.holding_order_id] ?? 'đơn khác' : 'đơn khác'
         return `${u.code} (${u.status === 'sold' ? `đã bán, ${by}` : `khách đặt ở ${by}`})`
       }).join(', ')} - bỏ chiếc này khỏi đơn.`,
     }
   } else if (rows.length) {
     preview = incomingLots.length
-      ? { st: 'preorder', msg: `→ Đặt trước, chờ ${incomingLots.map((id) => d.lotCode[id] ?? 'lô').join(', ')} về. Khi lô nhận vào kho, đơn tự chuyển Đã chốt.` }
+      ? { st: 'preorder', msg: `→ Đặt trước, chờ ${incomingLots.map((id) => lotName(d, id)).join(', ')} về. Khi cối về Kho Lumi, đơn tự chuyển Đã chốt.` }
       : { st: 'confirmed', msg: '→ Đã chốt - mọi chiếc đều đang trong kho.' }
   }
 
@@ -222,13 +224,13 @@ function OrderForm({ editId }: { editId: string | null }) {
               <span className="ord-unit">
                 <b className="num">{r.u?.code ?? '?'}</b>, {r.u?.model_name ?? 'Không tìm thấy chiếc'}
                 {r.where === 'in_stock' && <span className="pill ok">Kho Lumi</span>}
-                {r.where === 'incoming' && <span className="pill way">{LOT_LABEL[r.u!.lot_status]} ({d.lotCode[r.u!.lot_id] ?? 'lô'})</span>}
+                {r.where === 'incoming' && <span className="pill way">{LOT_LABEL[r.u!.lot_status]}</span>}
                 {!r.where && <span className="pill bad">Không còn chọn được</span>}
               </span>
               <button type="button" className="link-btn" onClick={() => removeLine(r.l.unitId)} aria-label={`Bỏ ${r.u?.code ?? 'chiếc'}`}>Bỏ</button>
             </div>
             <label className="f" htmlFor={`o-price-${r.l.unitId}`}>Giá chốt
-              <input className="input money" id={`o-price-${r.l.unitId}`} inputMode="numeric" value={r.l.price} onChange={(e) => setPrice(r.l.unitId, e.target.value)}
+              <MoneyInput className="input money" id={`o-price-${r.l.unitId}`} value={r.l.price} onValue={(v) => setPrice(r.l.unitId, v)}
                 placeholder={fmt(r.u?.list_price_vnd)} aria-invalid={!!errs[`o-price-${r.l.unitId}`]} />
               <Err k={`o-price-${r.l.unitId}`} />
               {r.u && <span className="hint">Giá bán dự kiến {vnd(r.u.list_price_vnd)}, giá nhập {vnd(r.u.cost_vnd)}{r.u.cost_is_provisional ? ' (tạm tính, chưa có ship lô)' : ''}</span>}
@@ -248,7 +250,7 @@ function OrderForm({ editId }: { editId: string | null }) {
 
         <p className="section-title full">Ship & tiền</p>
         <label className="f" htmlFor="o-ship">Phí ship trong VN
-          <input className="input money" id="o-ship" inputMode="numeric" value={f.shipFee} onChange={(e) => set('shipFee', e.target.value)} placeholder="0" aria-invalid={!!errs['o-ship']} />
+          <MoneyInput className="input money" id="o-ship" value={f.shipFee} onValue={(v) => set('shipFee', v)} placeholder="0" aria-invalid={!!errs['o-ship']} />
           <Err k="o-ship" />
         </label>
         <div className="f">
@@ -262,7 +264,7 @@ function OrderForm({ editId }: { editId: string | null }) {
         {editId
           ? <div className="hint" style={{ alignSelf: 'end' }}>Cọc / thu tiền ghi ở chi tiết đơn (đã thu {vnd(paidBefore)}).</div>
           : <label className="f" htmlFor="o-dep">Tiền cọc
-            <input className="input money" id="o-dep" inputMode="numeric" value={f.deposit} onChange={(e) => set('deposit', e.target.value)} placeholder="0" aria-invalid={!!errs['o-dep']} />
+            <MoneyInput className="input money" id="o-dep" value={f.deposit} onValue={(v) => set('deposit', v)} placeholder="0" aria-invalid={!!errs['o-dep']} />
             <Err k="o-dep" />
             {total != null && total > 0 && (
               <span className="o-dep-quick" role="group" aria-label="Cọc nhanh">
@@ -357,7 +359,7 @@ function UnitPicker({ d, editId, chosen, full, onToggle, onClose }: {
                     <span className="main">
                       <b className="num">{u.code}</b>, {u.model_name}
                       <span className="s">
-                        {u.is_received ? <span className="pill ok">Kho Lumi</span> : <span className="pill way">{LOT_LABEL[u.lot_status]} ({d.lotCode[u.lot_id] ?? 'lô'})</span>}
+                        {u.is_received ? <span className="pill ok">Kho Lumi</span> : <span className="pill way">{LOT_LABEL[u.lot_status]}</span>}
                         {u.serial_no ? `, seri ${u.serial_no}` : ''}
                       </span>
                     </span>

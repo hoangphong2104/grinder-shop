@@ -43,9 +43,10 @@ export const ConditionChip = ({ c, hideNew }: { c: UnitConditionDb; hideNew?: bo
 export const PAY_METHOD_LABEL: Record<PaymentMethodDb, string> = { transfer: 'Chuyển khoản', cash: 'Tiền mặt', cod: 'COD' }
 // CR-004 KHO-S1: màu tuổi tồn (v_units.aging_level) - dùng làm class chữ / chip
 export const AGING_TONE: Record<AgingLevelDb, string> = { ok: 'neu', warn: 'way', alert: 'bad' }
-// CR-005 sổ quỹ: nhãn loại bút toán (5 loại đầu tự sinh - chỉ đọc, sửa ở nguồn; 4 loại sau ghi tay)
+// CR-005 sổ quỹ: nhãn loại bút toán (5 loại đầu + local_ship tự sinh - chỉ đọc, sửa ở nguồn; 4 loại sau ghi tay)
 export const CASH_KIND_LABEL: Record<CashKindDb, string> = {
   customer_payment: 'Thu khách', customer_refund: 'Hoàn tiền khách', intermediary: 'Trả trung gian', ship_shop: 'Ship cho khách (shop chịu)',
   return_ship: 'Ship chiều về', expense: 'Chi phí khác', capital_in: 'Nạp vốn', capital_out: 'Rút vốn', adjustment: 'Điều chỉnh',
+  local_ship: 'Ship kho VN → Lumi', // CR-009 tự sinh từ cối
 }
 export const CASH_MANUAL_KINDS: CashKindDb[] = ['expense', 'capital_in', 'capital_out', 'adjustment']

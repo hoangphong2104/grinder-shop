@@ -74,13 +74,15 @@ begin
             where (n.nspname = 'public' and p.proname in (
                      'bootstrap_user','save_lot','set_lot_status','receive_lot','update_lot_ship_fee','cancel_lot',
                      'update_unit','save_order','confirm_preorder','ship_order','cancel_order','complete_order',
-                     'ai_scan_reserve','ai_scan_finish','set_order_cod','return_order','pay_lot','delete_order'))
+                     'ai_scan_reserve','ai_scan_finish','set_order_cod','return_order','pay_lot','delete_order',
+                     'set_lot_local_ship','settle_cn_ship'))
                or (n.nspname = 'private' and p.proname in (
                      'today_vn','require_uid','check_version','touch_row','touch_model',
                      'recalc_lot','replay_variant_avg','lock_variants','variant_incoming','variant_reserved',
                      'order_fillable','next_unit_code','order_unreceived_codes',
                      'normalize_lot_status','cash_sync_payment','cash_sync_txn','cash_sync_order',
-                     'cash_on_payment','cash_on_txn','cash_on_order','note_keep_revision'))
+                     'cash_on_payment','cash_on_txn','cash_on_order','note_keep_revision',
+                     'cash_sync_lot','cash_on_lot'))
   loop
     execute format('drop function if exists %s cascade', r.sig);
   end loop;

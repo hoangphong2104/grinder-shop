@@ -1,9 +1,10 @@
 /**
  * Unit cost (D2, A3, CR-003) and lot payable (A4 / BR-12, CR-003). Pure functions, no I/O.
  *
- *   giá nhập ₫ tự tính  = round(giá ¥ × tỷ giá × (1 + phí mua hộ %/100) + phí ship lô ÷ số chiếc của lô)   (D2, CR-003)
+ *   giá nhập ₫ tự tính  = round(giá ¥ × tỷ giá × (1 + phí mua hộ %/100) + (ship TQ→VN + ship VN→Lumi) ÷ số chiếc)   (D2, CR-003, CR-009)
  *   giá nhập ₫ hiệu lực = giá sửa tay ?? giá tự tính                                                     (D2, CR §3)
- *   phải trả lô          = round(Σ giá ¥ × tỷ giá × (1 + phí mua hộ %/100) + phí ship lô); lô huỷ = 0     (A4, CR-003)
+ *   phải trả lô          = round(Σ giá ¥ × tỷ giá × (1 + phí mua hộ %/100) + ship TQ→VN); lô huỷ = 0     (A4, CR-003)
+ *                          (CR-009: ship VN→Lumi shop trả ngay - không nằm trong phải trả trung gian)
  *   tiền hàng lô         = round(Σ giá ¥ × tỷ giá)            - chưa gồm phí mua hộ (= v_lot_summary.goods_vnd)
  *   phí mua hộ lô        = round(Σ giá ¥ × tỷ giá × %/100)    (= v_lot_summary.buying_fee_vnd)
  *
@@ -32,11 +33,11 @@ const withBuyingFee = (vnd: number, pct: number): number => (vnd * (100 + pct)) 
  * While the ship fee is blank the cost is provisional (ship counted as 0, see `isCostProvisional`).
  * `lotUnitCount` must be ≥ 1 (the unit itself belongs to the lot) - anything else is a caller bug.
  */
-export function autoUnitCost(unit: Pick<Unit, 'priceCny'>, lot: Pick<Lot, 'rate' | 'shipFee' | 'buyingFeePct'>, lotUnitCount: number): Vnd {
+export function autoUnitCost(unit: Pick<Unit, 'priceCny'>, lot: Pick<Lot, 'rate' | 'shipFee' | 'buyingFeePct' | 'localShip'>, lotUnitCount: number): Vnd {
   if (!Number.isInteger(lotUnitCount) || lotUnitCount < 1) {
     throw new RangeError(`autoUnitCost: lotUnitCount must be a positive integer (${lotUnitCount})`);
   }
-  return roundVnd(withBuyingFee(unit.priceCny * lot.rate, buyingFeePctOf(lot)) + (lot.shipFee ?? 0) / lotUnitCount);
+  return roundVnd(withBuyingFee(unit.priceCny * lot.rate, buyingFeePctOf(lot)) + ((lot.shipFee ?? 0) + (lot.localShip ?? 0)) / lotUnitCount);
 }
 
 /** The ¥ × rate × (1 + phí %) part only - no ship (UI shows "… + ship" while the ship fee is blank). */

@@ -187,3 +187,7 @@ a.link-btn, a.btn { text-decoration: none; }
     -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); }
   .ov-panel.todo .ov-todo > .section-title:first-child { position: sticky; top: 0; z-index: 1; background: var(--bg); padding-bottom: 4px; margin: 0; }
 }
+
+/* CR-009 Tất toán ship TQ → VN: danh sách chọn cối tự cuộn */
+.settle-list { max-height: 45vh; overflow-y: auto; border-top: 1px solid var(--line-2); }
+.settle-list .li input[type=checkbox] { width: 20px; height: 20px; flex: none; }

@@ -188,7 +188,7 @@ export default function Settings() {
         <div className="list">
           <div className="li" style={{ cursor: 'default' }}>
             <div className="main"><b>Dùng AI điền sẵn form lô</b><div className="s">Tắt thì chỉ nhập tay</div></div>
-            <input type="checkbox" className="switch" id="ai-enabled" aria-label="Dùng AI điền sẵn form lô" checked={st?.ai_scan_enabled ?? true} disabled={busy}
+            <input type="checkbox" className="switch" id="ai-enabled" aria-label="Dùng AI điền sẵn form nhập cối" checked={st?.ai_scan_enabled ?? true} disabled={busy}
               onChange={(e) => save({ ai_scan_enabled: e.target.checked }, e.target.checked ? 'Đã bật AI quét tin' : 'Đã tắt AI quét tin')} />
           </div>
           <div className="li" style={{ cursor: 'default' }}>
@@ -215,10 +215,10 @@ export default function Settings() {
             onChange={(e) => setFee(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && dirtyFee) saveFee() }} />
           {errs.fee && <span className="field-err">{errs.fee}</span>}
         </label>
-        <p className="hint">% trên tiền hàng (giá ¥ × tỷ giá), điền sẵn khi tạo lô mới và sửa được trên từng lô; cộng vào giá nhập ₫ từng chiếc và phải trả trung gian. Đổi ở đây không làm đổi lô đã có.</p>
+        <p className="hint">% trên tiền hàng (giá ¥ × tỷ giá), điền sẵn khi nhập cối mới và sửa được trên từng cối; cộng vào giá nhập ₫ từng chiếc và phải trả trung gian. Đổi ở đây không làm đổi lô đã có.</p>
         <button className="btn btn-ghost" id="fee-save" style={{ alignSelf: 'flex-start' }} disabled={busy || !dirtyFee} onClick={saveFee}>Lưu phí mua hộ mặc định</button>
 
-        <p className="section-title">Ngưỡng ngày (tồn lâu, lô về trễ)</p>
+        <p className="section-title">Ngưỡng ngày (tồn lâu, cối về trễ)</p>
         <div className="two ov-two">
           <label className="f">Tồn lâu - cam sau (ngày)
             <input className={`input money ${errs.warn ? 'invalid' : ''}`} id="age-warn" inputMode="numeric" value={warn} onChange={(e) => setWarn(e.target.value)} />
@@ -233,7 +233,7 @@ export default function Settings() {
           <input className={`input money ${errs.late ? 'invalid' : ''}`} id="lot-late" inputMode="numeric" value={late} onChange={(e) => setLate(e.target.value)} />
           {errs.late && <span className="field-err">{errs.late}</span>}
         </label>
-        <p className="hint">Số ngày tồn trong Kho đổi màu cam / đỏ theo ngưỡng; Tổng quan nhắc chiếc tồn quá ngưỡng đỏ và lô đặt quá số ngày trên mà chưa nhận.</p>
+        <p className="hint">Số ngày tồn trong Kho đổi màu cam / đỏ theo ngưỡng; Tổng quan nhắc chiếc tồn quá ngưỡng đỏ và cối đặt quá số ngày trên mà chưa về.</p>
         <button className="btn btn-ghost" id="days-save" style={{ alignSelf: 'flex-start' }} disabled={busy || !dirtyDays} onClick={saveDays}>Lưu ngưỡng ngày</button>
 
         <p className="section-title">QR chuyển khoản (VietQR)</p>

@@ -7,6 +7,7 @@ import { Sheet, useToast } from '../ui/feedback.tsx'
 import { GrinderArt, shapeOf } from '../ui/icons.tsx'
 import { parseNum, tr } from '../ui/format.ts'
 import { HowTo, Row2, Tx, updateVersioned, useDesk, writeError } from './overview/common.tsx'
+import { MoneyInput } from '../ui/MoneyInput.tsx'
 
 /** Mã chiếc kế tiếp dự kiến (DB bỏ qua mã đã có / đã bỏ nên có thể nhảy số). */
 const nextCode = (m: Pick<ModelRow, 'code_prefix' | 'next_seq'>) => `${m.code_prefix}-${m.next_seq < 1000 ? String(m.next_seq).padStart(3, '0') : m.next_seq}`
@@ -133,7 +134,7 @@ function ModelSheet({ m, onClose }: { m?: ModelRow; onClose: () => void }) {
       {prefixChanged && used > 0 && <p className="warn-box">Đổi tiền tố chỉ áp cho chiếc nhập sau. {used} chiếc đã có giữ mã cũ ({m?.code_prefix}-…); số thứ tự tiếp tục, không đánh lại.</p>}
       <div className="two">
         <label className="f">Giá bán mặc định (₫)
-          <input className={`input money ${errs.price ? 'invalid' : ''}`} id="nm-price" inputMode="numeric" placeholder="điền sẵn cho chiếc mới" value={price} onChange={(e) => setPrice(e.target.value)} />
+          <MoneyInput className={`input money ${errs.price ? 'invalid' : ''}`} id="nm-price" placeholder="điền sẵn cho chiếc mới" value={price} onValue={(v) => setPrice(v)} />
           {errs.price && <span className="field-err">{errs.price}</span>}
         </label>
         <label className="f">“Sắp hết” khi bán được còn ≤

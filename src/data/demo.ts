@@ -54,6 +54,7 @@ export function demoSession(): Session {
 interface UnitSpec { model: string; cny: number; serial?: string; note?: string; override?: number; list?: number; cond?: UnitConditionDb }
 interface LotSpec {
   id: string; ago: number; receivedAgo?: number; status: LotStatusDb; rate: number; ship: number | null; fee: number
+  /** CR-009 ship Kho VN → Lumi (shop trả ngay) */ local?: number
   seller: string | null; title: string | null; itemId: string | null; note?: string; units: UnitSpec[]
 }
 interface OrderSpec {
@@ -103,11 +104,11 @@ const LOTS: LotSpec[] = [
     note: 'Người bán giao nhanh, có hoá đơn gốc.',
     units: [{ model: 'demo-m-ku', cny: 1080 }, { model: 'demo-m-ku', cny: 1080, note: 'Hộp móp nhẹ', cond: 'like_new' },
       { model: 'demo-m-ku', cny: 1080, override: 4200000, note: 'Thêm phí sửa núm chỉnh + thay ron' }] },
-  { id: 'demo-l-3', ago: 30, receivedAgo: 18, status: 'received', rate: 3600, ship: 1250000, fee: 2.5, seller: 'demo-s-4',
+  { id: 'demo-l-3', ago: 30, receivedAgo: 18, status: 'received', rate: 3600, ship: 1250000, fee: 2.5, local: 60000, seller: 'demo-s-4',
     title: '磨豆机 打包出 J-Ultra ×2 ZP6 ×2 泰摩 C3S Pro Max ×1', itemId: '780011223303',
     units: [{ model: 'demo-m-ju', cny: 1150, list: 7300000 }, { model: 'demo-m-ju', cny: 1150 }, { model: 'demo-m-zp6', cny: 740, list: 4500000 },
       { model: 'demo-m-zp6', cny: 740, list: 4550000 }, { model: 'demo-m-c3', cny: 420, list: 2200000, serial: 'TM-C3SPM-GR-20240917-000123456' }] },
-  { id: 'demo-l-4', ago: 20, receivedAgo: 8, status: 'received', rate: 3610, ship: 720000, fee: 0, seller: 'demo-s-1',
+  { id: 'demo-l-4', ago: 20, receivedAgo: 8, status: 'received', rate: 3610, ship: 720000, fee: 0, local: 35000, seller: 'demo-s-1',
     title: 'K Ultra 磨豆机 3台', itemId: '780011223304',
     units: [{ model: 'demo-m-ku', cny: 1010, list: 6700000 }, { model: 'demo-m-ku', cny: 1010, override: 3900000, note: 'Giá nhập sửa tay - được người bán giảm thêm ¥30 sau khi trả' },
       { model: 'demo-m-ku', cny: 1010 }] },
@@ -161,13 +162,13 @@ const ORDERS: OrderSpec[] = [
 const TRANSFERS: { ago: number; kind: 'transfer' | 'adjustment'; amount: number | 'payable' | 'goods'; lot?: string; note: string | null }[] = [
   { ago: 59, kind: 'transfer', amount: 'payable', lot: 'demo-l-1', note: 'CK Vietcombank' },
   { ago: 44, kind: 'transfer', amount: 'payable', lot: 'demo-l-2', note: null },
-  { ago: 29, kind: 'transfer', amount: 'payable', lot: 'demo-l-3', note: 'CK Techcombank - lô trộn JU/ZP6/C3' },
+  { ago: 29, kind: 'transfer', amount: 'payable', lot: 'demo-l-3', note: 'CK Techcombank - JU/ZP6/C3' },
   { ago: 19, kind: 'transfer', amount: 'payable', lot: 'demo-l-4', note: null },
   { ago: 16, kind: 'adjustment', amount: 50000, note: 'Phí chuyển khoản quốc tế' },
-  { ago: 12, kind: 'transfer', amount: 'payable', lot: 'demo-l-6', note: 'Trả khi tạo lô' },
+  { ago: 12, kind: 'transfer', amount: 'payable', lot: 'demo-l-6', note: 'Trả khi nhập cối' },
   { ago: 8, kind: 'transfer', amount: 'goods', lot: 'demo-l-7', note: 'Trả tiền hàng, ship trả sau' },
   { ago: 7, kind: 'adjustment', amount: -120000, note: 'Trung gian giảm phí do giao trễ' },
-  { ago: 5, kind: 'transfer', amount: 'payable', lot: 'demo-l-8', note: 'Trả khi tạo lô' },
+  { ago: 5, kind: 'transfer', amount: 'payable', lot: 'demo-l-8', note: 'Trả khi nhập cối' },
   { ago: 3, kind: 'transfer', amount: 2000000, note: 'Ứng trước cho trung gian' },
 ]
 
@@ -188,7 +189,7 @@ const NOTES: { ago: number; pinned: boolean; body: string }[] = [
     '3. Quay thử khô 20 vòng ở mỗi nấc: 1, 3, 5, 8 - nghe tiếng lạo xạo hoặc kẹt là để riêng, KHÔNG bán.',
     '4. Lau sạch burr bằng cọ, không dùng nước; phủ túi chống ẩm trước khi cất.',
     '5. Chụp 3 ảnh: toàn thân, burr, phụ kiện - đăng lên nhóm Facebook trong ngày.',
-    '6. Nhập phí ship thật của lô ngay khi trung gian báo để giá nhập không còn tạm tính.',
+    '6. Tất toán ship TQ → VN ở Sổ quỹ ngay khi trung gian báo để giá nhập không còn tạm tính.',
     'Lưu ý: hàng của người bán 老李的磨豆机 đã 2 lần móp hộp, nếu thấy link của người này thì bỏ qua. Lô nào mua hộ có phí thì nhớ nhập phí % để công nợ khớp với trung gian. Cuối tháng đối chiếu số dư công nợ với tin nhắn Zalo của trung gian, chênh lệch thì ghi Điều chỉnh kèm lý do rõ ràng.',
   ].join('\n') },
   { ago: 3, pinned: true, body: 'Tỷ giá trung gian tuần này: 3.625 ₫/¥ (chưa gồm phí 3%).' },
@@ -229,6 +230,7 @@ export function buildDemoData(): DbData {
       seller_id: s.seller, screenshot_path: null, listing_title: s.title, ordered_at: ordered, exchange_rate: s.rate, ship_fee_vnd: s.ship,
       status: s.status, received_at: s.receivedAgo != null ? ago(s.receivedAgo) : null,
       cancelled_at: s.status === 'cancelled' ? stamp(ago(s.ago - 3), 15) : null, note: s.note ?? null, buying_fee_pct: s.fee,
+      local_ship_vnd: s.local ?? null,
     })
     s.units.forEach((us, i) => {
       const m = MODELS.find((x) => x.id === us.model)!
@@ -277,7 +279,7 @@ export function buildDemoData(): DbData {
 
   // Ánh xạ sang kiểu domain để tính
   const dModels: Model[] = models.map((m) => ({ id: m.id, name: m.name, codePrefix: m.code_prefix, defaultListPrice: m.default_list_price_vnd, lowStockThreshold: m.low_stock_threshold, nextSeq: m.next_seq }))
-  const dLots: Lot[] = lots.map((l) => ({ id: l.id, orderedAt: l.ordered_at, rate: l.exchange_rate, shipFee: l.ship_fee_vnd, buyingFeePct: l.buying_fee_pct, status: l.status, receivedAt: l.received_at }))
+  const dLots: Lot[] = lots.map((l) => ({ id: l.id, orderedAt: l.ordered_at, rate: l.exchange_rate, shipFee: l.ship_fee_vnd, buyingFeePct: l.buying_fee_pct, status: l.status, receivedAt: l.received_at, localShip: l.local_ship_vnd }))
   const dUnits: Unit[] = units.map((u) => ({ id: u.id, code: u.code, modelId: u.model_id, lotId: u.lot_id, priceCny: u.price_cny, costOverride: u.cost_vnd_override, listPrice: u.list_price_vnd, serialNo: u.serial_no, note: u.note, condition: u.condition }))
   const orderCode = Object.fromEntries(orders.map((o, i) => [o.id, `D-${String(i + 1).padStart(3, '0')}`]))
   const lotCode = Object.fromEntries(lots.map((l, i) => [l.id, `L-${String(i + 1).padStart(3, '0')}`]))
@@ -311,8 +313,8 @@ export function buildDemoData(): DbData {
       holding_order_line_id: line?.id ?? null, holding_order_id: h?.id ?? null, holding_order_status: h?.status ?? null,
       holding_customer_id: h?.customer_id ?? null, holding_customer_name: h ? customerById.get(h.customer_id)!.fb_name : null,
       order_unit_price_vnd: v.salePrice, sold_price_vnd: sold ? v.salePrice : null, sold_at: h?.shipped_at ?? null,
-      // Như view SQL: lãi dự kiến = giá bán dự kiến − giá nhập hiệu lực
-      expected_profit_vnd: u.list_price_vnd == null ? null : u.list_price_vnd - v.cost.effective,
+      // Như view SQL (CR-009): lãi dự kiến = (giá chốt nếu đã giữ, ngược lại giá bán dự kiến) − giá nhập hiệu lực
+      expected_profit_vnd: v.expectedProfit,
       actual_profit_vnd: v.profit, days_in_stock: v.daysInStock, created_at: u.created_at, updated_at: u.updated_at, version: u.version,
       condition: u.condition, aging_level: v.agingLevel,
     }
@@ -417,6 +419,10 @@ export function buildDemoData(): DbData {
     if (o.status === 'returned' && o.return_ship_fee_vnd > 0)
       cash(`demo-ce-ret-${o.id}`, o.returned_at!, { direction: 'out', kind: 'return_ship', amount_vnd: o.return_ship_fee_vnd, order_id: o.id, is_auto: true })
   }
+  for (const l of lots) {
+    if (l.status !== 'cancelled' && (l.local_ship_vnd ?? 0) > 0)
+      cash(`demo-ce-local-${l.id}`, l.received_at ?? l.ordered_at, { direction: 'out', kind: 'local_ship', amount_vnd: l.local_ship_vnd!, lot_id: l.id, is_auto: true })
+  }
   CASH_MANUAL.forEach((m, i) => cash(`demo-ce-m${i + 1}`, ago(m.ago), { direction: m.dir, kind: m.kind, amount_vnd: m.amount, expense_category: m.cat ?? null, note: m.note ?? null, is_auto: false }))
   cashEntries.sort((a, b) => a.entry_date.localeCompare(b.entry_date) || a.created_at.localeCompare(b.created_at))
   const dCash: CashEntry[] = cashEntries.map((e) => ({ date: e.entry_date, direction: e.direction, kind: e.kind, amount: e.amount_vnd }))
@@ -424,14 +430,14 @@ export function buildDemoData(): DbData {
   const cashBal: CashBalanceRow = { total_in_vnd: cb.totalIn, total_out_vnd: cb.totalOut, balance_vnd: cb.balance, entry_count: cashEntries.length }
   // kiểm chéo: bút toán tự sinh dựng ở trên = luật domain (autoCashEntries) ⇒ số dư khớp
   const manualCash = dCash.filter((e) => e.kind === 'expense' || e.kind === 'capital_in' || e.kind === 'capital_out' || e.kind === 'adjustment')
-  if (cashBalance([...autoCashEntries(dOrders, dTransfers), ...manualCash]).balance !== cb.balance) throw new Error('demo: sổ quỹ không khớp domain')
+  if (cashBalance([...autoCashEntries(dOrders, dTransfers, dLots), ...manualCash]).balance !== cb.balance) throw new Error('demo: sổ quỹ không khớp domain')
   const sumKind = (rows: CashEntryRow[], ...kinds: CashKindDb[]) => rows.reduce((a, e) => a + (kinds.includes(e.kind) ? e.amount_vnd : 0), 0)
   const cashMonthly: CashMonthlyRow[] = cashByMonth(dCash).map((m) => {
     const rows = cashEntries.filter((e) => e.entry_date.slice(0, 7) === m.month.slice(0, 7))
     return {
       month: m.month, in_vnd: m.in, out_vnd: m.out, net_vnd: m.net,
       customer_in_vnd: sumKind(rows, 'customer_payment'), refund_out_vnd: sumKind(rows, 'customer_refund'), intermediary_out_vnd: sumKind(rows, 'intermediary'),
-      ship_out_vnd: sumKind(rows, 'ship_shop', 'return_ship'), expense_out_vnd: sumKind(rows, 'expense'), capital_in_vnd: sumKind(rows, 'capital_in'),
+      ship_out_vnd: sumKind(rows, 'ship_shop', 'return_ship', 'local_ship'), expense_out_vnd: sumKind(rows, 'expense'), capital_in_vnd: sumKind(rows, 'capital_in'),
       capital_out_vnd: sumKind(rows, 'capital_out'),
       adjustment_net_vnd: rows.reduce((a, e) => a + (e.kind === 'adjustment' ? (e.direction === 'in' ? e.amount_vnd : -e.amount_vnd) : 0), 0),
     }

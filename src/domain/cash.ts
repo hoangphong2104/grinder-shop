@@ -72,10 +72,11 @@ export function cashByMonth(entries: readonly Pick<CashEntry, 'date' | 'directio
 const hasShipped = (o: Pick<Order, 'status'>): boolean => o.status === 'shipped' || o.status === 'completed' || o.status === 'returned';
 
 /**
- * Bút toán tự sinh - same rules as the DB triggers (private.cash_sync_payment / _txn / _order).
- * Order: per order (payments in order, then ship_shop, return_ship), then transfers.
+ * Bút toán tự sinh - same rules as the DB triggers (private.cash_sync_payment / _txn / _order / _lot).
+ * Order: per order (payments in order, then ship_shop, return_ship), then transfers, then lots (CR-009 local_ship:
+ * ship Kho VN → Lumi of a non-cancelled lot - out, dated the receipt day, or the order day before receipt).
  */
-export function autoCashEntries(orders: readonly Order[], transfers: readonly Transfer[]): CashEntry[] {
+export function autoCashEntries(orders: readonly Order[], transfers: readonly Transfer[], lots: readonly Lot[] = []): CashEntry[] {
   const out: CashEntry[] = [];
   for (const o of orders) {
     for (const p of o.payments) {
@@ -95,6 +96,10 @@ export function autoCashEntries(orders: readonly Order[], transfers: readonly Tr
   for (const t of transfers) {
     if (t.kind !== 'transfer' || t.amount <= 0) continue;
     out.push({ date: t.date ?? null, direction: 'out', kind: 'intermediary', amount: t.amount, lotId: t.lotId ?? null, note: t.note ?? null, isAuto: true });
+  }
+  for (const l of lots) {
+    if (l.status === 'cancelled' || (l.localShip ?? 0) <= 0) continue;
+    out.push({ date: l.receivedAt ?? l.orderedAt ?? null, direction: 'out', kind: 'local_ship', amount: l.localShip!, lotId: l.id, isAuto: true });
   }
   return out;
 }

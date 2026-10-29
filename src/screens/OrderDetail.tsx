@@ -20,6 +20,7 @@ import { BANK_LINE_PLACEHOLDER, buildConfirmText } from './orders/confirmText.ts
 import { MoreIcon } from './orders/OrderRow.tsx'
 import { bankCfg, bankName, downloadPng, qrMessageLines, QrImg, useVietQr, type BankCfg } from './orders/vietqr.tsx'
 import '../styles/orders.css'
+import { MoneyInput } from '../ui/MoneyInput.tsx'
 
 type SheetKind = 'menu' | 'ship' | 'done' | 'cancel' | 'pay' | 'info' | 'cod' | 'return' | 'qr' | 'del1' | 'del2' | { copy: string } | { delPay: PaymentRow }
 const fmt = (n: number) => (n > 0 ? n.toLocaleString('vi-VN') : '')
@@ -70,7 +71,7 @@ function OrderDetailView({ id }: { id: string }) {
   })
   // Chiếc còn chưa về kho (lô chưa Đã nhận) - chặn chốt (A7) và gửi (A8).
   const notIn = rows.filter((r) => !r.u?.is_received)
-  const notInText = notIn.map((r) => r.u ? `${r.u.code} (${d.lotCode[r.u.lot_id] ?? 'lô'}, ${LOT_LABEL[r.u.lot_status]})` : '?').join(', ')
+  const notInText = notIn.map((r) => r.u ? `${r.u.code} (${LOT_LABEL[r.u.lot_status]})` : '?').join(', ')
   const provisional = rows.some((r) => r.u?.cost_is_provisional)
   const codesAll = codesText(s.unit_codes, 50)
   // CR-005 ý 12: QR chuyển khoản = số còn phải thu (trừ phần COD shipper đang thu hộ, tránh khách trả 2 lần).
@@ -143,7 +144,7 @@ function OrderDetailView({ id }: { id: string }) {
           {stepper}
           {o.status === 'preorder' && (s.all_units_received
             ? <div className="note-box"><span>Mọi chiếc của đơn đã về kho - bấm “Chốt đơn”.</span></div>
-            : <div className="note-box way"><span>Chờ hàng về - {notInText}. Khi lô được nhận vào kho, đơn tự chuyển Đã chốt.</span></div>)}
+            : <div className="note-box way"><span>Chờ hàng về - {notInText}. Khi cối được nhận vào Kho Lumi, đơn tự chuyển Đã chốt.</span></div>)}
           {o.status === 'cancelled' && (
             <div className="warn-box"><span>Đơn đã huỷ.{s.refund_due_vnd > 0 && <> Cần hoàn khách {vnd(s.refund_due_vnd)} - ghi “Hoàn tiền” khi đã trả lại.</>}</span></div>
           )}
@@ -217,7 +218,7 @@ function OrderDetailView({ id }: { id: string }) {
                   ))}
                   {o.ship_fee_payer === 'shop' && o.ship_fee_vnd > 0 && <div className="ln"><span>Ship shop chịu</span><span>−{vnd(o.ship_fee_vnd)}</span></div>}
                   <div className="ln total"><span>{profitLabel}</span><span>{profitText}</span></div>
-                  <div className="formula">Giá nhập theo từng chiếc - đổi nếu bạn sửa phí ship lô / sửa tay.{provisional ? ' Có chiếc giá nhập tạm tính (lô chưa có phí ship).' : ''}</div>
+                  <div className="formula">Giá nhập theo từng chiếc - đổi khi tất toán ship / sửa ship / sửa tay.{provisional ? ' Có chiếc giá nhập tạm tính (chưa tất toán ship TQ → VN ship).' : ''}</div>
                 </>}
               </div>
             </details>
@@ -376,7 +377,7 @@ function ShipSheet({ onClose, onOk, busy, tracking, shortText, codes, due }: {
       {shortText && <div className="warn-box"><span>Còn chiếc chưa về kho - chưa gửi được: {shortText}.</span></div>}
       <label className="f" htmlFor="sh-tracking">Mã vận đơn<input className="input" id="sh-tracking" value={tk} onChange={(e) => setTk(e.target.value)} placeholder="VD: GHTK 1234" maxLength={100} /></label>
       <label className="f" htmlFor="sh-cod">Tiền COD shipper thu (₫)
-        <input className="input money" id="sh-cod" inputMode="numeric" value={cod} onChange={(e) => setCod(e.target.value)} placeholder="0" aria-invalid={!!err} />
+        <MoneyInput className="input money" id="sh-cod" value={cod} onValue={(v) => setCod(v)} placeholder="0" aria-invalid={!!err} />
         {err && <span className="err-text">{err}</span>}
         <span className="hint">
           {codN != null && codN > due ? `Lớn hơn số còn phải thu (${vnd(due)}) - kiểm tra lại. ` : ''}
@@ -405,7 +406,7 @@ function CodSheet({ onClose, onOk, busy, cod, received, due, version }: {
     <Sheet title="Tiền COD" onClose={onClose}
       footer={<button className="btn btn-primary btn-block" disabled={busy} onClick={submit}>Lưu</button>}>
       <label className="f" htmlFor="cod-amt">Tiền COD shipper thu (₫)
-        <input className="input money" id="cod-amt" inputMode="numeric" value={v} onChange={(e) => setV(e.target.value)} placeholder="0" aria-invalid={!!err} />
+        <MoneyInput className="input money" id="cod-amt" value={v} onValue={(v) => setV(v)} placeholder="0" aria-invalid={!!err} />
         {err && <span className="err-text">{err}</span>}
         <span className="hint">Đã nhận COD {vnd(received)}, còn phải thu {vnd(due)}. Khi hãng chuyển tiền, ghi khoản thu hình thức “COD”.</span>
       </label>
@@ -454,7 +455,7 @@ function ReturnSheet({ onClose, onOk, busy, codes, paid, deposit, codPending, sh
         {err.keep && <span className="err-text">{err.keep}</span>}
       </div>
       <label className="f" htmlFor="rt-fee">Phí ship chiều về (₫)
-        <input className="input money" id="rt-fee" inputMode="numeric" value={fee} onChange={(e) => setFee(e.target.value)} placeholder="0" aria-invalid={!!err.fee} />
+        <MoneyInput className="input money" id="rt-fee" value={fee} onValue={(v) => setFee(v)} placeholder="0" aria-invalid={!!err.fee} />
         {err.fee && <span className="err-text">{err.fee}</span>}
         {shipCustomer > 0 && <span className="hint">Khách chịu ship đi ({vnd(shipCustomer)}) nhưng bom ⇒ nếu shop phải trả hãng, cộng cả phí đó vào đây.</span>}
       </label>
@@ -506,7 +507,7 @@ function PaySheet({ onClose, onOk, busy, prefill, defaultKind, defaultMethod, re
     <Sheet title={refundOnly ? 'Ghi hoàn tiền' : 'Ghi thu tiền'} onClose={onClose}
       footer={<button className="btn btn-primary btn-block" disabled={busy} onClick={submit}>{busy ? 'Đang lưu…' : 'Lưu'}</button>}>
       <label className="f" htmlFor="p-amt">Số tiền (₫)
-        <input className="input money" id="p-amt" inputMode="numeric" value={amt} onChange={(e) => setAmt(e.target.value)} aria-invalid={!!err} />
+        <MoneyInput className="input money" id="p-amt" value={amt} onValue={(v) => setAmt(v)} aria-invalid={!!err} />
         {err && <span className="err-text">{err}</span>}
       </label>
       {kinds.length > 1 && (

@@ -6,7 +6,7 @@ import { Shell } from '../ui/Shell.tsx'
 import { Icon } from '../ui/icons.tsx'
 import { dmy, todayVn, tr } from '../ui/format.ts'
 import {
-  Ident, unitPrice, OrderRow, Row2, Tx, UnitRow, codesText, daysSince, kpiAmount, lotModelsText, profitMonth, signed, sortedModelStock, thresholds, useDesk,
+  Ident, unitPrice, OrderRow, Row2, Tx, UnitRow, codesText, daysSince, kpiAmount, lotHref, lotModelsText, lotName, profitMonth, signed, sortedModelStock, thresholds, useDesk,
 } from './overview/common.tsx'
 import { PayLotButton } from './lots/PayLot.tsx'
 
@@ -86,11 +86,12 @@ export default function Home() {
     .sort((a, b) => (a.shipped_at ?? '').localeCompare(b.shipped_at ?? ''))
   add({ key: 'lateship', title: `Đã gửi > ${SHIP_LATE_DAYS} ngày chưa hoàn tất`, tone: 'way', count: lateShip.length, more: '/don?f=sent', rows: orderRows(lateShip, sentAgo) })
 
-  const noShip = d.lots.filter((l) => l.status === 'vn_warehouse' && l.ship_fee_vnd == null)
+  // CR-009: ship TQ → VN tất toán gộp ở Sổ quỹ - nhắc cối đã tới Kho VN / Kho Lumi mà chưa tất toán
+  const noShip = d.lots.filter((l) => (l.status === 'vn_warehouse' || l.status === 'received') && l.ship_fee_vnd == null)
   // CR-006: 1 lô = 1 cối ⇒ việc của lô hiện theo cối
   const unitsOf = (ids: string[]) => d.unitView.filter((u) => ids.includes(u.lot_id))
   const noShipU = unitsOf(noShip.map((l) => l.id))
-  add({ key: 'noship', title: 'Thiếu phí ship về VN', tone: 'bad', count: noShipU.length, more: '/kho?tt=vn', rows: noShipU.slice(0, PER_GROUP).map((u) => <UnitRow key={u.unit_id} d={d} u={u} />) })
+  add({ key: 'noship', title: 'Chưa tất toán ship TQ → VN', tone: 'way', count: noShipU.length, more: '/congno', rows: noShipU.slice(0, PER_GROUP).map((u) => <UnitRow key={u.unit_id} d={d} u={u} />) })
 
   const lateLotIds = new Set(d.lotSummary.filter((s) => s.is_lot_late).map((s) => s.lot_id))
   const lateLots = d.lots.filter((l) => lateLotIds.has(l.id)).sort((a, b) => a.ordered_at.localeCompare(b.ordered_at))
@@ -101,14 +102,14 @@ export default function Home() {
   const waitSub = (o: OrderSummaryRow) => {
     const lots = [...new Set(d.unitView.filter((u) => u.holding_order_id === o.order_id && !u.is_received).map((u) => u.lot_id))]
     const oldest = Math.max(0, ...lots.map((id) => daysSince(d.lots.find((l) => l.id === id)?.ordered_at) ?? 0))
-    return <>chờ {lots.map((id) => d.lotCode[id]).join(', ') || 'hàng về'}, lô đặt {oldest} ngày</>
+    return <>chờ {lots.map((id) => lotName(d, id)).join(', ') || 'hàng về'}, đặt {oldest} ngày</>
   }
   add({ key: 'wait', title: 'Chờ hàng về (đặt trước)', count: waiting.length, more: '/don?f=pre', rows: orderRows(waiting, waitSub) })
 
   const owing = d.lotSummary.filter((x) => x.status !== 'cancelled' && x.outstanding_vnd > 0).sort((a, b) => a.ordered_at.localeCompare(b.ordered_at))
   add({ key: 'pay', title: 'Trả trung gian', tone: 'bad', count: owing.length, sum: owing.reduce((a, x) => a + x.outstanding_vnd, 0), more: '/congno',
     rows: owing.slice(0, PER_GROUP).map((x) => (
-      <Row2 key={x.lot_id} a={<Link className="row" style={{ gap: 8, minWidth: 0, color: 'inherit', textDecoration: 'none' }} to={`/lo/${x.lot_id}`}><Ident id={codesText(d.unitView.filter((u) => u.lot_id === x.lot_id).map((u) => u.code), 2) || (d.lotCode[x.lot_id] ?? 'Lô')} text={lotModelsText(d, x.lot_id, 'short')} /></Link>}
+      <Row2 key={x.lot_id} a={<Link className="row" style={{ gap: 8, minWidth: 0, color: 'inherit', textDecoration: 'none' }} to={lotHref(d, x.lot_id)}><Ident id={lotName(d, x.lot_id)} text={lotModelsText(d, x.lot_id, 'short')} /></Link>}
         b={<span className="neg">{tr(x.outstanding_vnd)}</span>} c={<Tx>{x.paid_vnd > 0 ? `đã trả ${tr(x.paid_vnd)} / ${tr(x.payable_vnd)}` : `phải trả ${tr(x.payable_vnd)}`}</Tx>}
         d={<PayLotButton lotId={x.lot_id} id={`home-pay-${x.lot_id}`} />} />
     )) })
@@ -129,7 +130,7 @@ export default function Home() {
   const todo = (
     <div className="ov-todo">
       <p className="section-title">Việc cần làm <span className="muted">{todoCount}</span></p>
-      {groups.length === 0 && <div className="empty">Không có việc tồn - đơn, lô và kho đều ổn.</div>}
+      {groups.length === 0 && <div className="empty">Không có việc tồn - đơn và kho đều ổn.</div>}
       {groups.map((g) => (
         <section key={g.key} className="ov-todo" aria-label={g.title}>
           <h3 className={`ov-todo-h ${g.tone ?? ''}`}>

@@ -326,13 +326,10 @@ export function stockValue(units: readonly Unit[], lots: readonly Lot[], orders:
 
 const isOpenLot = (lot: Pick<Lot, 'status'>): boolean => lot.status !== 'received' && lot.status !== 'cancelled';
 
-/** BR-02 + Q-011 - a lot can be received from any open status, but only once its ship fee is entered. */
+/** Q-011 - a lot can be received from any open status. CR-009: the TQ→VN ship fee is settled later (no longer BR-02). */
 export function checkReceiveLot(lot: Lot): Result<true> {
   if (!isOpenLot(lot)) {
     return fail({ code: 'INVALID_TRANSITION', rule: 'Q-011', message: `Lô đang "${LOT_STATUS_LABEL[lot.status]}" - không nhận hàng được.`, lotId: lot.id });
-  }
-  if (lot.shipFee == null) {
-    return fail({ code: 'SHIP_FEE_REQUIRED', rule: 'BR-02', message: 'Nhập phí ship về VN của lô trước khi chuyển "Đã nhận".', field: 'shipFee', lotId: lot.id });
   }
   return ok(true);
 }

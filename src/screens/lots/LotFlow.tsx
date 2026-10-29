@@ -1,17 +1,20 @@
-// Thao tác trên lô dùng chung cho danh sách + chi tiết (v0.2, CR-001): chuyển bước, nhận vào kho (BR-02, Q-011,
-// A7 tự chốt đơn Đặt trước; CR-004 LOT-S1 tình trạng + seri từng chiếc), phí ship (trước nhận: save_lot; sau nhận: update_lot_ship_fee - A3, A10), huỷ lô
-// (LOT_HAS_RESERVED_UNITS ⇒ liệt kê đơn đang giữ chiếc).
+// Thao tác trên cối dùng chung cho danh sách + chi tiết (v0.2, CR-001): chuyển bước, nhận vào kho (Q-011,
+// A7 tự chốt đơn Đặt trước; CR-004 LOT-S1 tình trạng + seri từng chiếc), huỷ (LOT_HAS_RESERVED_UNITS ⇒ liệt kê đơn đang giữ chiếc).
+// CR-009: ô phí ship = ship kho VN → Lumi (shop trả ngay: set_lot_local_ship / receive_lot p_local_ship_vnd);
+// ship TQ → VN tất toán gộp ở Sổ quỹ (settle_cn_ship), không hỏi lúc nhận.
 import { useCallback, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useData, useStore } from '../../data/store.tsx'
-import type { DbData, LotRow, UnitConditionDb, UnitViewRow } from '../../data/types.ts'
+import type { LotRow, UnitConditionDb, UnitViewRow } from '../../data/types.ts'
 import { Sheet, useToast } from '../../ui/feedback.tsx'
 import { Icon } from '../../ui/icons.tsx'
 import { CONDITION_LABEL, CONDITION_ORDER, LOT_LABEL } from '../../ui/status.tsx'
 import { cny, dmy, parseNum, pct, todayVn, vnd } from '../../ui/format.ts'
-import { autoUnitCost, roundVnd } from '../../domain/index.ts'
+import { autoUnitCost } from '../../domain/index.ts'
 import { codesText, lotFeePct, nextStatus, unitsOfLot } from './common.tsx'
 import { errText, RpcError, useRpcDetail } from './rpc.ts'
+import { MoneyInput } from '../../ui/MoneyInput.tsx'
+import { lotName } from '../overview/common.tsx'
 
 /** save_lot nhận tối đa 1050 phần tử p_groups (≤ 1000 chiếc giữ lại + nhóm mới; lô tối đa 1000 chiếc). */
 export const MAX_GROUP_ITEMS = 1050
@@ -31,12 +34,6 @@ export function saveLotArgs(l: LotRow, units: UnitViewRow[], patch: { ship_fee_v
   }
 }
 
-/** Phí ship gợi ý = phí/chiếc lô gần nhất × số chiếc lô (BR-02). */
-export function suggestedShip(d: DbData, qty: number): number | null {
-  const per = d.suggestions.last_ship_fee_per_unit_vnd
-  return per != null && qty > 0 ? roundVnd(per * qty) : null
-}
-
 /** Đọc ô phí ship: số đồng nguyên ≥ 0, trống → null, sai → NaN. */
 function readFee(v: string): number | null {
   const n = parseNum(v)
@@ -44,14 +41,15 @@ function readFee(v: string): number | null {
   return Number.isInteger(n) && n >= 0 ? n : NaN
 }
 
-/** Xem trước giá nhập ₫ tự tính với phí ship mới (D2 + CR-003 phí mua hộ), gom theo model + giá ¥. Chiếc sửa tay giữ giá sửa tay. */
-function CostPreview({ units, rate, feePct, fee }: { units: UnitViewRow[]; rate: number; feePct: number; fee: number }) {
+/** Xem trước giá nhập ₫ tự tính với ship VN → Lumi mới (D2 + CR-003 phí mua hộ + CR-009), gom theo model + giá ¥. Chiếc sửa tay giữ giá sửa tay. */
+function CostPreview({ units, l, local }: { units: UnitViewRow[]; l: LotRow; local: number | null }) {
+  const rate = Number(l.exchange_rate), feePct = lotFeePct(l)
   if (!units.length) return null
   const groups = new Map<string, { label: string; codes: string[]; cost: number }>()
   for (const u of units) {
     if (u.cost_is_overridden) continue
     const k = `${u.model_id}|${Number(u.price_cny)}`
-    const g = groups.get(k) ?? { label: `${u.model_name} @ ${cny(Number(u.price_cny))}`, codes: [], cost: autoUnitCost({ priceCny: Number(u.price_cny) }, { rate, shipFee: fee, buyingFeePct: feePct }, units.length) }
+    const g = groups.get(k) ?? { label: `${u.model_name} @ ${cny(Number(u.price_cny))}`, codes: [], cost: autoUnitCost({ priceCny: Number(u.price_cny) }, { rate, shipFee: l.ship_fee_vnd, localShip: local, buyingFeePct: feePct }, units.length) }
     g.codes.push(u.code)
     groups.set(k, g)
   }
@@ -62,7 +60,7 @@ function CostPreview({ units, rate, feePct, fee }: { units: UnitViewRow[]; rate:
         <div className="ln" key={g.label}><span>{codesText(g.codes, 3)}, {g.label}</span><span>{vnd(g.cost)}</span></div>
       ))}
       {over.length > 0 && <div className="formula">Giữ giá sửa tay: {codesText(over.map((u) => u.code), 3)}</div>}
-      <div className="formula">= giá ¥ × tỷ giá × (1 + phí {pct(feePct)}) + ship lô ÷ {units.length} chiếc</div>
+      <div className="formula">= giá ¥ × tỷ giá × (1 + phí {pct(feePct)}) + ship TQ → VN {l.ship_fee_vnd != null ? vnd(l.ship_fee_vnd) : '(chưa tất toán)'} + ship VN → Lumi{units.length > 1 ? ` ÷ ${units.length} chiếc` : ''}</div>
     </div>
   )
 }
@@ -91,7 +89,7 @@ export function useLotFlow(): {
     setBusy(l.id)
     try {
       await rpc('set_lot_status', { p_lot_id: l.id, p_status: n, p_expected_version: l.version })
-      toast('Lô chuyển: ' + LOT_LABEL[n])
+      toast('Cối chuyển: ' + LOT_LABEL[n])
     } catch (e) { toast(errText(e)) } finally { setBusy(null) }
   }, [rpc, toast])
 
@@ -112,15 +110,15 @@ export function useLotFlow(): {
 
 interface RcUnit { condition: UnitConditionDb; serial: string }
 
-/** Nhận vào kho (từ bất kỳ bước mở nào - Q-011). CR-004 LOT-S1: liệt kê từng chiếc của lô với tình trạng
- *  (mặc định Mới) + seri (tuỳ chọn) → receive_lot p_units. Phí ship bắt buộc nếu lô chưa có (BR-02), sửa được nếu đã có.
+/** Nhận vào kho (từ bất kỳ bước mở nào - Q-011). CR-004 LOT-S1: tình trạng (mặc định Mới) + seri (tuỳ chọn) từng chiếc
+ *  → receive_lot p_units. CR-009: ship kho VN → Lumi (tuỳ chọn, shop trả ngay) → p_local_ship_vnd; ship TQ → VN không hỏi.
  *  Xong ⇒ báo đơn Đặt trước tự chốt (A7). */
 function ReceiveSheet({ lotId, onClose, onDone }: { lotId: string; onClose: () => void; onDone: (confirmedIds: string[]) => void }) {
   const d = useData()
   const { rpc } = useStore()
   const toast = useToast()
   const l = d.lots.find((x) => x.id === lotId)
-  const [fee, setFee] = useState(l?.ship_fee_vnd != null ? String(l.ship_fee_vnd) : '')
+  const [fee, setFee] = useState(l?.local_ship_vnd != null ? String(l.local_ship_vnd) : '')
   const [date, setDate] = useState(todayVn())
   const [rc, setRc] = useState<Record<string, RcUnit>>(() =>
     Object.fromEntries(unitsOfLot(d, lotId).map((u) => [u.unit_id, { condition: u.condition ?? 'new', serial: u.serial_no ?? '' }])))
@@ -128,7 +126,6 @@ function ReceiveSheet({ lotId, onClose, onDone }: { lotId: string; onClose: () =
   const [sending, setSending] = useState(false)
   if (!l) return null
   const units = unitsOfLot(d, l.id), qty = units.length
-  const sug = suggestedShip(d, qty)
   const feeVal = readFee(fee)
   const held = units.filter((u) => u.holding_order_status === 'preorder').length
   const cur = (u: UnitViewRow): RcUnit => rc[u.unit_id] ?? { condition: u.condition ?? 'new', serial: u.serial_no ?? '' }
@@ -141,41 +138,36 @@ function ReceiveSheet({ lotId, onClose, onDone }: { lotId: string; onClose: () =
   const allSame = units.length > 0 && units.every((u) => cur(u).condition === cur(units[0]).condition) ? cur(units[0]).condition : ''
 
   const submit = async () => {
-    if (feeVal == null) return setErr('Nhập phí ship về VN của cả lô (BR-02) - có thể dùng gợi ý.')
-    if (Number.isNaN(feeVal)) return setErr('Phí ship phải là số đồng nguyên ≥ 0.')
+    if (feeVal != null && Number.isNaN(feeVal)) return setErr('Phí ship phải là số đồng nguyên ≥ 0.')
     if (!date) return setErr('Chọn ngày nhận.')
     const long = units.find((u) => cur(u).serial.trim().length > 100)
     if (long) return setErr(`Seri của ${long.code} tối đa 100 ký tự.`)
     setErr(null); setSending(true)
     try {
       const r = await rpc<ReceiveResult>('receive_lot', {
-        p_lot_id: l.id, p_ship_fee_vnd: feeVal, p_received_at: date, p_expected_version: l.version,
+        p_lot_id: l.id, p_local_ship_vnd: feeVal ?? 0, p_received_at: date, p_expected_version: l.version,
         p_units: units.map((u) => ({ unit_id: u.unit_id, condition: cur(u).condition, serial_no: cur(u).serial.trim() })),
       })
       const ids = r.auto_confirmed_order_ids ?? []
-      toast(`Đã nhập kho ${r.units?.length ?? qty} chiếc${ids.length ? `, tự chốt ${ids.length} đơn đặt trước` : ''}`)
+      toast(`Đã nhận ${r.units?.length === 1 ? r.units[0].code : `${r.units?.length ?? qty} chiếc`} vào Kho Lumi${feeVal ? `, ghi chi ship ${vnd(feeVal)}` : ''}${ids.length ? `, tự chốt ${ids.length} đơn đặt trước` : ''}`)
       onDone(ids)
     } catch (e) { setErr(errText(e)); setSending(false) }
   }
 
   return (
-    <Sheet title={`Nhận ${d.lotCode[l.id] ?? 'lô'} vào Kho Lumi`} onClose={onClose}
+    <Sheet title={`Nhận ${codesText(units.map((u) => u.code), 2) || 'cối'} vào Kho Lumi`} onClose={onClose}
       footer={<button className="btn btn-primary btn-block" id="rc-submit" disabled={sending} onClick={submit}>{sending ? <><span className="spin" /> Đang nhận…</> : `Nhận vào Kho Lumi (${qty} chiếc)`}</button>}>
       <div className="two">
-        <label className="f"><span className="flab">Phí ship cả lô ₫{l.ship_fee_vnd == null && <span className="req"> *</span>}</span>
-          <input className="input money" id="rc-fee" inputMode="numeric" value={fee} placeholder={sug != null ? String(sug) : ''}
-            onChange={(e) => setFee(e.target.value)} />
+        <label className="f"><span className="flab">Ship kho VN → Lumi ₫</span>
+          <MoneyInput className="input money" id="rc-fee" value={fee} placeholder="0"
+            onValue={(v) => setFee(v)} />
         </label>
         <label className="f"><span className="flab">Ngày nhận</span>
           <input className="input" id="rc-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
       </div>
-      {l.ship_fee_vnd == null && (
-        <p className="hint two-hint">
-          Cần để tính giá nhập ₫ (BR-02). Gợi ý theo lô trước: {sug != null ? <>{vnd(sug)} <button type="button" className="link-btn small" onClick={() => setFee(String(sug))}>Dùng gợi ý</button></> : '-'}
-        </p>
-      )}
-      {feeVal != null && !Number.isNaN(feeVal) && <CostPreview units={units} rate={Number(l.exchange_rate)} feePct={lotFeePct(l)} fee={feeVal} />}
+      <p className="hint two-hint">Bạn trả ngay: cộng vào giá nhập và ghi chi ở Sổ quỹ. Ship TQ → VN tất toán gộp sau ở Sổ quỹ.</p>
+      {(feeVal == null || !Number.isNaN(feeVal)) && <CostPreview units={units} l={l} local={feeVal} />}
 
       {qty > 0 && (
         <>
@@ -216,58 +208,39 @@ function ReceiveSheet({ lotId, onClose, onDone }: { lotId: string; onClose: () =
   )
 }
 
-/** Phí ship về VN của lô. Chưa nhận: save_lot (để trống được). Đã nhận: update_lot_ship_fee (A3, A10). */
+/** CR-009 ship kho VN → Lumi của cối (shop trả ngay): set_lot_local_ship - giá nhập tính lại (A3), bút toán sổ quỹ theo. */
 function ShipFeeSheet({ lotId, onClose }: { lotId: string; onClose: () => void }) {
   const d = useData()
   const { rpc } = useStore()
   const toast = useToast()
   const l = d.lots.find((x) => x.id === lotId)
-  const [fee, setFee] = useState(l?.ship_fee_vnd != null ? String(l.ship_fee_vnd) : '')
+  const [fee, setFee] = useState(l?.local_ship_vnd != null ? String(l.local_ship_vnd) : '')
   const [err, setErr] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   if (!l) return null
-  const units = unitsOfLot(d, l.id), qty = units.length
-  const received = l.status === 'received'
+  const units = unitsOfLot(d, l.id)
   const val = readFee(fee)
-  const sug = suggestedShip(d, qty)
   const soldAuto = units.filter((u) => u.status === 'sold' && !u.cost_is_overridden).length
-  const overridden = units.filter((u) => u.cost_is_overridden).length
-  const tooMany = !received && qty > MAX_GROUP_ITEMS
 
   const submit = async () => {
     if (val != null && Number.isNaN(val)) return setErr('Phí ship phải là số đồng nguyên ≥ 0.')
-    if (received && val == null) return setErr('Lô đã nhận phải có phí ship (BR-02).')
-    if (tooMany) return setErr(`Lô có ${qty} chiếc - quá ${MAX_GROUP_ITEMS} chiếc nên chưa sửa phí ship trước khi nhận được. Nhập phí ship lúc bấm "Nhận vào Kho Lumi".`)
     setErr(null); setSending(true)
     try {
-      if (received) await rpc('update_lot_ship_fee', { p_lot_id: l.id, p_ship_fee_vnd: val, p_expected_version: l.version })
-      else await rpc('save_lot', saveLotArgs(l, units, { ship_fee_vnd: val }))
-      toast(received ? 'Đã lưu phí ship, giá nhập ₫ các chiếc đã tính lại' : 'Đã lưu phí ship')
+      await rpc('set_lot_local_ship', { p_lot_id: l.id, p_local_ship_vnd: val ?? 0, p_expected_version: l.version })
+      toast(val ? `Đã lưu ship ${vnd(val)}, giá nhập đã tính lại` : 'Đã bỏ phí ship VN → Lumi')
       onClose()
     } catch (e) { setErr(errText(e)); setSending(false) }
   }
 
   return (
-    <Sheet title="Phí ship về VN" onClose={onClose}
+    <Sheet title="Ship kho VN → Lumi" onClose={onClose}
       footer={<button className="btn btn-primary btn-block" disabled={sending} onClick={submit}>{sending ? <><span className="spin" /> Đang lưu…</> : 'Lưu'}</button>}>
-      <label className="f">Phí ship cả lô (₫)
-        <input className="input money" id="sh-fee" inputMode="numeric" value={fee} placeholder={received ? '' : 'để trống'}
-          onChange={(e) => setFee(e.target.value)} />
+      <label className="f">Phí ship (₫)
+        <MoneyInput className="input money" id="sh-fee" value={fee} placeholder="0" onValue={(v) => setFee(v)} />
       </label>
-      <p className="hint">
-        Chia đều {qty} chiếc; công nợ trung gian tự cập nhật.
-        {sug != null && <> Lô trước khoảng {vnd(sug)} cho {qty} chiếc.</>}
-      </p>
-      {received && (
-        <div className="note-box way">
-          <span>
-            Lô đã nhận: giá nhập ₫ của <b>mọi chiếc không sửa tay</b> được tính lại theo phí ship mới - kể cả chiếc đã bán
-            {soldAuto > 0 ? ` (${soldAuto} chiếc - lãi của đơn đã gửi đổi theo)` : ''} (A3).
-            {overridden > 0 ? ` ${overridden} chiếc có giá sửa tay giữ nguyên.` : ''}
-          </span>
-        </div>
-      )}
-      {val != null && !Number.isNaN(val) && <CostPreview units={units} rate={Number(l.exchange_rate)} feePct={lotFeePct(l)} fee={val} />}
+      <p className="hint">Bạn trả ngay: cộng vào giá nhập và ghi chi ở Sổ quỹ (sửa / xoá theo). Không tính vào nợ trung gian.</p>
+      {soldAuto > 0 && <div className="note-box way"><span>Cối đã bán: lãi của đơn đổi theo giá nhập mới (A3).</span></div>}
+      {(val == null || !Number.isNaN(val)) && <CostPreview units={units} l={l} local={val} />}
       {err && <p className="err-text" role="alert">{err}</p>}
     </Sheet>
   )
@@ -284,7 +257,7 @@ function CancelSheet({ lotId, onClose }: { lotId: string; onClose: () => void })
   const [blocked, setBlocked] = useState<ReservedDetail | null>(null)
   const [sending, setSending] = useState(false)
   if (!l) return null
-  const code = d.lotCode[l.id]
+  const code = lotName(d, l.id)
   const submit = async () => {
     setErr(null); setBlocked(null); setSending(true)
     try {
@@ -307,8 +280,8 @@ function CancelSheet({ lotId, onClose }: { lotId: string; onClose: () => void })
   const unitsByOrder = (oid: string) => unitsOfLot(d, l.id).filter((u) => u.holding_order_id === oid).map((u) => u.code)
   return (
     <Sheet title="Huỷ lô?" onClose={onClose}
-      footer={blocked ? undefined : <button className="btn btn-danger btn-block" disabled={sending} onClick={submit}>{sending ? <><span className="spin" /> Đang huỷ…</> : 'Huỷ lô'}</button>}>
-      {!blocked && <p className="muted" style={{ textAlign: 'center', margin: 0 }}>{code} và {unitsOfLot(d, l.id).length} chiếc của lô sẽ chuyển Huỷ - không tính vào hàng đang về và công nợ trung gian. Không hoàn tác được.</p>}
+      footer={blocked ? undefined : <button className="btn btn-danger btn-block" disabled={sending} onClick={submit}>{sending ? <><span className="spin" /> Đang huỷ…</> : 'Huỷ cối'}</button>}>
+      {!blocked && <p className="muted" style={{ textAlign: 'center', margin: 0 }}>{code} sẽ chuyển Huỷ - không tính vào hàng đang về và công nợ trung gian. Không hoàn tác được.</p>}
       {blocked && (
         <>
           <div className="warn-box"><Icon name="warn" size={18} /><span>Chưa huỷ được {code}: có chiếc đang được giữ cho đơn{blocked.unit_codes?.length ? ` (${codesText(blocked.unit_codes, 6)})` : ''}. Đổi chiếc trong đơn hoặc huỷ đơn trước, rồi huỷ lô.</span></div>

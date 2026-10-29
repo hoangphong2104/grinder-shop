@@ -134,12 +134,9 @@ test('A9: a model with no units has 0 sellable → low stock (threshold ≥ 0)',
 
 /* ---------- Lot guards ---------- */
 
-test('BR-02 + Q-011: receive from any open status, ship fee required', () => {
+test('Q-011 + CR-009: receive from any open status, TQ→VN ship fee no longer required', () => {
   assert.equal(checkReceiveLot(lot({ status: 'cn_warehouse', receivedAt: null })).ok, true);
-  const r = checkReceiveLot(lot({ status: 'vn_warehouse', shipFee: null, receivedAt: null }));
-  assert.ok(!r.ok);
-  assert.equal(r.error.code, 'SHIP_FEE_REQUIRED');
-  assert.equal(r.error.rule, 'BR-02');
+  assert.equal(checkReceiveLot(lot({ status: 'vn_warehouse', shipFee: null, receivedAt: null })).ok, true);
   assert.equal(checkReceiveLot(lot()).ok, false); // already received
   assert.equal(checkReceiveLot(lot({ status: 'cancelled' })).ok, false);
 });

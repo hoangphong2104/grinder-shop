@@ -109,14 +109,14 @@ export function UnitChipShort({ u, holder }: { u: UnitViewRow; holder?: string }
   return <span className={`pill ${UNIT_TONE[u.status]}`}>{t}</span>
 }
 
-/** Giá nhập ₫ của chiếc + dấu "sửa tay" / "tạm tính" (ship lô chưa nhập). */
+/** Giá nhập ₫ của chiếc + dấu "sửa tay" / "tạm tính" (chưa tất toán ship TQ → VN). */
 export function CostCell({ u, short }: { u: UnitViewRow; short?: boolean }) {
   return (
     <>
       {short ? tr(u.cost_vnd) : vnd(u.cost_vnd)}
       {u.cost_is_overridden
         ? <> <span className="pill" title="Giá nhập đã sửa tay">sửa tay</span></>
-        : u.cost_is_provisional ? <> <span className="pill way" title="Lô chưa có phí ship - giá nhập tạm tính">tạm tính</span></> : null}
+        : u.cost_is_provisional ? <> <span className="pill way" title="Chưa tất toán ship TQ → VN - giá nhập tạm tính">tạm tính</span></> : null}
     </>
   )
 }
@@ -126,6 +126,18 @@ export function unitProfit(u: UnitViewRow): { value: number | null; actual: bool
   if (u.status === 'sold') return { value: u.actual_profit_vnd, actual: true }
   if (u.status === 'cancelled') return { value: null, actual: false }
   return { value: u.expected_profit_vnd, actual: false }
+}
+
+/** CR-009 bỏ khái niệm lô: tên hiển thị của 1 lô = mã các cối trong đó ("KU-007", "KU-007, KU-008 +1"); không có cối ⇒ "Cối". */
+export function lotName(d: DbData, lotId: string | null | undefined): string {
+  if (!lotId) return 'Cối'
+  const codes = d.unitView.filter((u) => u.lot_id === lotId).map((u) => u.code).sort()
+  return codes.length ? codesText(codes, 2) : 'Cối'
+}
+/** Link tới cối: lô 1 cối ⇒ trang cối; lô cũ nhiều cối ⇒ trang mua chung. */
+export function lotHref(d: DbData, lotId: string): string {
+  const us = d.unitView.filter((u) => u.lot_id === lotId)
+  return us.length === 1 ? `/kho/${us[0].unit_id}` : `/lo/${lotId}`
 }
 
 /** "2 × K Ultra, 1 × ZP6" từ v_lot_summary.models. short: dùng tiền tố mã ("2 × KU, 1 × ZP6"). */
@@ -194,15 +206,15 @@ export function UnitRow({ d, u, right2, sub }: { d: DbData; u: UnitViewRow; righ
   )
 }
 
-/** Dòng lô (research §3.4): mã lô + model … phải trả · chip bước + đặt N ngày / nhận dd/mm + cảnh báo … số chiếc. */
+/** Dòng cối mua (research §3.4): mã cối + model … phải trả · chip bước + đặt N ngày / nhận dd/mm + cảnh báo … số chiếc. */
 export function LotRow({ d, l, noChip }: { d: DbData; l: LotDbRow; noChip?: boolean }) {
   const s = d.lotSummary.find((x) => x.lot_id === l.id)
   const open = l.status !== 'received' && l.status !== 'cancelled'
   const when = open ? `đặt ${daysSince(l.ordered_at) ?? 0} ngày` : l.status === 'received' ? `nhận ${dmyShort(l.received_at)}` : `đặt ${dmyShort(l.ordered_at)}`
-  const warn = open && l.ship_fee_vnd == null && l.status === 'vn_warehouse' ? 'thiếu ship' : s?.is_lot_late ? 'về trễ' : null
+  const warn = open && l.ship_fee_vnd == null && l.status === 'vn_warehouse' ? 'chưa tất toán ship' : s?.is_lot_late ? 'về trễ' : null
   return (
-    <Row2 to={`/lo/${l.id}`}
-      a={<Ident id={d.lotCode[l.id] ?? 'Lô'} text={lotModelsText(d, l.id, 'short')} />}
+    <Row2 to={lotHref(d, l.id)}
+      a={<Ident id={lotName(d, l.id)} text={lotModelsText(d, l.id, 'short')} />}
       b={tr(s?.payable_vnd ?? 0)}
       c={<>{!noChip && <LotChip s={l.status} />}<Tx className={s?.is_lot_late && open ? 'age-alert' : ''}>{when}{warn ? <>, <span className="neg">⚠ {warn}</span></> : null}</Tx></>}
       d={`${s?.total_qty ?? 0} chiếc`} />
@@ -250,7 +262,7 @@ export function GoRow({ to, children, className }: { to: string; children: React
 export function writeError(e: unknown, what = 'Mục này'): string {
   const err = (e ?? {}) as { code?: string; message?: string }
   const msg = String(err.message ?? e ?? '')
-  if (err.code === '23503') return `${what} đã có lô / chiếc cối / đơn dùng tới - không xoá được, hãy Ẩn (BR-14).`
+  if (err.code === '23503') return `${what} đã có chiếc cối / đơn dùng tới - không xoá được, hãy Ẩn (BR-14).`
   if (err.code === '23505') return /prefix/i.test(msg) ? 'Tiền tố mã này đã dùng cho model khác - chọn tiền tố khác.' : 'Tên này đã có - chọn tên khác.'
   if (err.code === '23514') return 'Dữ liệu nhập chưa hợp lệ (độ dài / số âm / ký tự).'
   if (err.code === '42501') return 'Không có quyền thực hiện thao tác này.'

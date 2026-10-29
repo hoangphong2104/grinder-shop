@@ -141,8 +141,12 @@ export interface Lot {
   orderedAt?: IsoDate;
   /** Tỷ giá ₫ per ¥ (entered per lot, BR-03). */
   rate: number;
-  /** Phí ship về VN of the whole lot, ₫. Null until known; required to receive (BR-02). */
+  /** Phí ship Kho TQ → Kho VN of the whole lot, ₫ (in the intermediary payable). Null until settled - CR-009: settled
+   *  later for many grinders at once (settle_cn_ship), no longer required to receive; while null the cost is provisional. */
   shipFee: Vnd | null;
+  /** CR-009 ship Kho VN → Lumi, ₫ - paid by the shop right away: in the unit cost and the cash book ('local_ship'),
+   *  NOT in the intermediary payable. Missing / null = 0. */
+  localShip?: Vnd | null;
   /**
    * Phí mua hộ % (CR-003) on the goods value, 0..100 (2 decimals, e.g. 2,5). Missing = 0.
    * Defaults from settings for a new lot; locked after the lot is received (like the rate, Q-014 / A10).
@@ -247,9 +251,10 @@ export type CashKind =
   | 'expense'
   | 'capital_in'
   | 'capital_out'
-  | 'adjustment';
+  | 'adjustment'
+  | 'local_ship';
 
-export const AUTO_CASH_KINDS: readonly CashKind[] = ['customer_payment', 'customer_refund', 'intermediary', 'ship_shop', 'return_ship'];
+export const AUTO_CASH_KINDS: readonly CashKind[] = ['customer_payment', 'customer_refund', 'intermediary', 'ship_shop', 'return_ship', 'local_ship'];
 export const MANUAL_CASH_KINDS: readonly CashKind[] = ['expense', 'capital_in', 'capital_out', 'adjustment'];
 
 export const CASH_KIND_LABEL: Readonly<Record<CashKind, string>> = {
@@ -262,6 +267,7 @@ export const CASH_KIND_LABEL: Readonly<Record<CashKind, string>> = {
   capital_in: 'Nạp vốn',
   capital_out: 'Rút vốn',
   adjustment: 'Điều chỉnh',
+  local_ship: 'Ship kho VN → Lumi',
 };
 
 /** One cash-book line. `amount` > 0; the direction gives the sign. */

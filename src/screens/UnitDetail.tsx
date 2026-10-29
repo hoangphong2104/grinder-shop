@@ -14,6 +14,7 @@ import { useLotFlow } from './lots/LotFlow.tsx'
 import { PayLotButton } from './lots/PayLot.tsx'
 import { goofishHref, Screenshot } from './LotDetail.tsx'
 import '../styles/lots.css'
+import { MoneyInput } from '../ui/MoneyInput.tsx'
 
 const fullDate = (iso: string | null | undefined) => (iso ? `${dmy(iso)}/${iso.slice(0, 4)}` : '-')
 const numStr = (n: number | null | undefined) => (n == null ? '' : String(n))
@@ -28,7 +29,7 @@ export default function UnitDetail() {
   const d = useData()
   const u = d.unitView.find((x) => x.unit_id === id)
   if (!u) {
-    return <Shell section="kho" title="Không tìm thấy" back="/kho"><div className="empty"><b>Không tìm thấy chiếc cối này</b><br />Có thể chiếc đã bị bỏ khỏi lô - quay lại Kho.</div></Shell>
+    return <Shell section="kho" title="Không tìm thấy" back="/kho"><div className="empty"><b>Không tìm thấy chiếc cối này</b><br />Có thể cối đã bị xoá - quay lại Kho.</div></Shell>
   }
   return <UnitView u={u} />
 }
@@ -66,12 +67,9 @@ function UnitView({ u }: { u: UnitViewRow }) {
   let savebar
   if (lot && next) {
     savebar = (
-      <>
-        <button className="btn btn-ghost" id="u-ship" style={{ flex: 1 }} onClick={() => flow.shipFee(lot)}>Phí ship</button>
-        <button className="btn btn-primary" id="u-next" style={{ flex: 2 }} disabled={flow.busy === lot.id} onClick={() => flow.next(lot)}>
-          {flow.busy === lot.id ? <><span className="spin" /> Đang chuyển…</> : next === 'received' ? 'Nhận vào Kho Lumi' : `Chuyển sang ${LOT_SHORT[next]}`}
-        </button>
-      </>
+      <button className="btn btn-primary btn-block" id="u-next" disabled={flow.busy === lot.id} onClick={() => flow.next(lot)}>
+        {flow.busy === lot.id ? <><span className="spin" /> Đang chuyển…</> : next === 'received' ? 'Nhận vào Kho Lumi' : `Chuyển sang ${LOT_SHORT[next]}`}
+      </button>
     )
   } else if (u.status === 'in_stock') savebar = <Link className="btn btn-primary btn-block" id="u-sell" to={`/don/new?chiec=${u.unit_id}`}>Bán chiếc này</Link>
   else if (order && (u.status === 'reserved' || step === 3)) savebar = <Link className="btn btn-primary btn-block" id="u-order" to={`/don/${order.id}`}>Mở đơn {holder}</Link>
@@ -110,7 +108,8 @@ function UnitView({ u }: { u: UnitViewRow }) {
           <div className="calc">
             <div className="ln"><span>Giá web, {cny(Number(u.price_cny))} × {Number(u.exchange_rate).toLocaleString('vi-VN')}</span><span>{vnd(roundVnd(Number(u.price_cny) * Number(u.exchange_rate)))}</span></div>
             <div className="ln"><span>Phí mua hộ {pct(feePct)}</span><span>{vnd(roundVnd(Number(u.price_cny) * Number(u.exchange_rate) * feePct / 100))}</span></div>
-            <div className="ln"><span>Ship về VN{single ? '' : ` (lô ${qty} chiếc, chia đều)`}</span><span>{ls?.ship_per_unit_vnd != null ? vnd(ls.ship_per_unit_vnd) : <span className="req">chưa nhập</span>}</span></div>
+            <div className="ln"><span>Ship TQ → VN{single ? '' : ` (${qty} chiếc, chia đều)`}</span><span>{ls?.ship_per_unit_vnd != null ? vnd(ls.ship_per_unit_vnd) : <span className="muted">chưa tất toán</span>}</span></div>
+            <div className="ln"><span>Ship kho VN → Lumi{single ? '' : ` (${qty} chiếc, chia đều)`}</span><span>{lot?.local_ship_vnd ? vnd(roundVnd(lot.local_ship_vnd / qty)) : <span className="muted">chưa có</span>}</span></div>
             <div className="ln total"><span>Giá nhập</span><span><CostCell u={u} /></span></div>
             <div className="ln"><span>Giá bán dự kiến</span><span>{vnd(u.list_price_vnd)}</span></div>
             {u.order_unit_price_vnd != null && <div className="ln"><span>{u.status === 'sold' ? 'Giá chốt' : 'Giá chốt trên đơn'}</span><span>{vnd(u.order_unit_price_vnd)}</span></div>}
@@ -121,7 +120,7 @@ function UnitView({ u }: { u: UnitViewRow }) {
             <>
               <p className="section-title">Trả trung gian</p>
               <div className="calc">
-                <div className="ln"><span>Phải trả{single ? '' : ` (cả lô ${d.lotCode[u.lot_id] ?? ''})`}</span><span>{vnd(ls.payable_vnd)}</span></div>
+                <div className="ln"><span>Phải trả{single ? '' : ` (cả ${qty} chiếc mua cùng)`}</span><span>{vnd(ls.payable_vnd)}</span></div>
                 <div className="ln"><span>Đã trả</span><span>{vnd(ls.paid_vnd)}</span></div>
                 <div className="ln total"><span>{ls.outstanding_vnd < 0 ? 'Trả dư' : 'Còn nợ'}</span><span className={ls.outstanding_vnd > 0 ? 'req' : 'ok-t'}>{ls.outstanding_vnd === 0 ? 'đã trả đủ' : vnd(Math.abs(ls.outstanding_vnd))}</span></div>
               </div>
@@ -139,7 +138,7 @@ function UnitView({ u }: { u: UnitViewRow }) {
             {u.received_at ? <><dt>Ngày nhận</dt><dd>{fullDate(u.received_at)}</dd></> : u.status !== 'cancelled' && <><dt>Ngày nhận</dt><dd>Đang về</dd></>}
             {u.days_in_stock != null && <><dt>{u.status === 'sold' ? 'Số ngày tồn (tới lúc gửi)' : 'Số ngày tồn'}</dt><dd className="num"><Aging u={u} /></dd></>}
             {u.status === 'sold' && <><dt>Ngày gửi khách</dt><dd>{fullDate(u.sold_at)}</dd></>}
-            {!single && <><dt>Lô</dt><dd><Link className="link-btn" style={{ padding: 0 }} to={`/lo/${u.lot_id}`}>{d.lotCode[u.lot_id] ?? 'Lô'}</Link> <span className="muted small">({qty} chiếc)</span></dd></>}
+            {!single && <><dt>Mua cùng</dt><dd><Link className="link-btn" style={{ padding: 0 }} to={`/lo/${u.lot_id}`}>{qty} chiếc</Link></dd></>}
             {lot?.note && <><dt>Ghi chú mua</dt><dd className="small">{lot.note}</dd></>}
           </dl>
           {lot?.screenshot_path && <Screenshot path={lot.screenshot_path} />}
@@ -160,7 +159,7 @@ function UnitView({ u }: { u: UnitViewRow }) {
             {isOpen(lot.status) && <button className="li" id="m-edit" onClick={act(() => nav(`/lo/${lot.id}/sua`))}><div className="main"><b>Sửa thông tin mua</b><div className="s">Link, người bán, giá ¥, tỷ giá, phí mua hộ</div></div><Icon name="chev" size={16} /></button>}
             {next && next !== 'received' && <button className="li" id="m-receive" onClick={act(() => flow.receive(lot))}><div className="main"><b>Nhận vào Kho Lumi ngay</b><div className="s">Bỏ qua Kho VN</div></div><Icon name="chev" size={16} /></button>}
             {u.status === 'incoming' && <Link className="li" id="m-preorder" to={`/don/new?chiec=${u.unit_id}`}><div className="main"><b>Bán trước (khách đặt)</b><div className="s">Tạo đơn đặt trước, giữ cối này</div></div><Icon name="chev" size={16} /></Link>}
-            {lot.status === 'received' && <button className="li" id="m-ship" onClick={act(() => flow.shipFee(lot))}><div className="main"><b>Sửa phí ship về VN</b><div className="s">{lot.ship_fee_vnd != null ? vnd(lot.ship_fee_vnd) : 'chưa nhập'}</div></div><Icon name="chev" size={16} /></button>}
+            {lot.status !== 'cancelled' && <button className="li" id="m-ship" onClick={act(() => flow.shipFee(lot))}><div className="main"><b>Sửa ship kho VN → Lumi</b><div className="s">{lot.local_ship_vnd ? vnd(lot.local_ship_vnd) : 'chưa có'}</div></div><Icon name="chev" size={16} /></button>}
             {isOpen(lot.status) && single && <button className="li menu-danger" id="m-cancel" onClick={act(() => flow.cancel(lot))}><div className="main"><b>Huỷ cối này</b><div className="s">Không mua nữa - không hoàn tác được</div></div></button>}
           </div>
         </Sheet>
@@ -245,12 +244,12 @@ function UnitEditor({ u }: { u: UnitViewRow }) {
       </div>
       <div className="two ov-two">
         <label className="f">Giá nhập (sửa tay, ₫)
-          <input className={`input money ${errs.cost ? 'invalid' : ''}`} id="u-cost" inputMode="numeric" placeholder={`tự tính ${vnd(u.cost_vnd_auto)}`}
-            value={cost} onChange={(e) => setCost(e.target.value)} />
+          <MoneyInput className={`input money ${errs.cost ? 'invalid' : ''}`} id="u-cost" placeholder={`tự tính ${vnd(u.cost_vnd_auto)}`}
+            value={cost} onValue={(v) => setCost(v)} />
           {errs.cost && <span className="field-err">{errs.cost}</span>}
         </label>
         <label className="f">Giá bán dự kiến (₫)
-          <input className={`input money ${errs.price ? 'invalid' : ''}`} id="u-price" inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value)} />
+          <MoneyInput className={`input money ${errs.price ? 'invalid' : ''}`} id="u-price" value={price} onValue={(v) => setPrice(v)} />
           {errs.price && <span className="field-err">{errs.price}</span>}
         </label>
       </div>
