@@ -18,7 +18,7 @@ import { dmy, parseNum, todayVn, tr, vnd } from '../ui/format.ts'
 import { codesText, isSentStatus, makeLookup, PAY_LABEL, payState, profitStr, useIsDesk, VERSION_CONFLICT_MSG } from './orders/common.ts'
 import { BANK_LINE_PLACEHOLDER, buildConfirmText } from './orders/confirmText.ts'
 import { MoreIcon } from './orders/OrderRow.tsx'
-import { bankCfg, bankName, downloadPng, qrContent, qrMessageLines, QrImg, useVietQr, type BankCfg } from './orders/vietqr.tsx'
+import { bankCfg, bankName, downloadPng, qrMessageLines, QrImg, useVietQr, type BankCfg } from './orders/vietqr.tsx'
 import '../styles/orders.css'
 
 type SheetKind = 'menu' | 'ship' | 'done' | 'cancel' | 'pay' | 'info' | 'cod' | 'return' | 'qr' | 'del1' | 'del2' | { copy: string } | { delPay: PaymentRow }
@@ -86,9 +86,9 @@ function OrderDetailView({ id }: { id: string }) {
   const onDone = () => (due !== 0 ? setSheet('done') : complete(false))
 
   // DON-S2: sao chép ngay trong lúc bấm (giữ "user activation"); không được ⇒ sheet có ô chữ để tự chọn / sao chép.
-  // CR-005: withQr = thay dòng STK bằng dòng chuyển khoản VietQR (ngân hàng · STK · số tiền · nội dung = mã đơn).
+  // CR-005: withQr = thay dòng STK bằng dòng chuyển khoản VietQR (ngân hàng · STK · số tiền; nội dung để mặc định).
   const copyConfirm = (withQr = false) => {
-    const qrLines = withQr && cfg && qrAmount > 0 ? qrMessageLines(cfg, qrAmount, code) : null
+    const qrLines = withQr && cfg && qrAmount > 0 ? qrMessageLines(cfg, qrAmount) : null
     const text = buildConfirmText({ code, o, s, c, lines: rows.map(({ x, u }) => ({ code: u?.code ?? '?', model: u?.model_name ?? '', price: x.unit_price_vnd })), bankLine: d.settings?.bank_info, qrLines })
     const ok = () => { setSheet(null); toast(text.includes(BANK_LINE_PLACEHOLDER) ? 'Đã sao chép - điền STK trước khi gửi khách' : qrLines ? 'Đã sao chép tin kèm dòng chuyển khoản - gửi khách cùng ảnh QR' : 'Đã sao chép tin xác nhận - dán vào Messenger / Zalo') }
     const fallback = () => setSheet({ copy: text })
@@ -239,7 +239,7 @@ function OrderDetailView({ id }: { id: string }) {
               <button className="li" onClick={() => setSheet('pay')}><span className="main"><b>{closedMoney ? 'Ghi hoàn tiền' : 'Ghi khoản thu / hoàn tiền'}</b><span className="s">Chuyển khoản, Tiền mặt, COD</span></span><Icon name="chev" size={16} /></button>
             )}
             {qrAmount > 0 && (
-              <button className="li" onClick={() => setSheet('qr')}><span className="main"><b>QR chuyển khoản</b><span className="s">{cfg ? `Khách quét trả ${vnd(qrAmount)}, nội dung ${qrContent(code)}` : 'Cần cài tài khoản ngân hàng trong Cài đặt'}</span></span><Icon name="chev" size={16} /></button>
+              <button className="li" onClick={() => setSheet('qr')}><span className="main"><b>QR chuyển khoản</b><span className="s">{cfg ? `Khách quét trả ${vnd(qrAmount)}` : 'Cần cài tài khoản ngân hàng trong Cài đặt'}</span></span><Icon name="chev" size={16} /></button>
             )}
             <button className="li" onClick={() => copyConfirm()}><span className="main"><b>Sao chép tin xác nhận đơn</b><span className="s">Mã chiếc, giá, ship, cọc, còn lại - dán Messenger / Zalo</span></span><Icon name="chev" size={16} /></button>
             {o.status === 'shipped' && (
@@ -569,24 +569,23 @@ function InfoSheet({ onClose, onOk, busy, tracking, note, version }: {
   )
 }
 
-/** CR-005 ý 12: QR VietQR (số tiền + nội dung = mã đơn) - lưu ảnh PNG / sao chép STK / sao chép tin kèm dòng chuyển khoản. */
+/** CR-005 ý 12: QR VietQR (số tiền; không ghi nội dung - app ngân hàng tự điền mặc định) - lưu ảnh PNG / sao chép STK / sao chép tin kèm dòng chuyển khoản. */
 function QrSheet({ onClose, cfg, amount, code, codPending, onOpenSettings, onCopyMsg }: {
   onClose: () => void; cfg: BankCfg | null; amount: number; code: string; codPending: number; onOpenSettings: () => void; onCopyMsg: () => void
 }) {
   const toast = useToast()
-  const content = qrContent(code)
-  const caption = cfg ? [vnd(amount), `${bankName(cfg.bin)}, ${cfg.accountNo}`, `${cfg.accountName ? `${cfg.accountName}, ` : ''}ND: ${content}`] : []
-  const { img, error } = useVietQr(cfg, amount, content, caption)
+  const caption = cfg ? [vnd(amount), `${bankName(cfg.bin)}, ${cfg.accountNo}`, ...(cfg.accountName ? [cfg.accountName] : [])] : []
+  const { img, error } = useVietQr(cfg, amount, '', caption)
   if (!cfg) {
     return (
       <Sheet title="QR chuyển khoản" onClose={onClose}
         footer={<button className="btn btn-primary btn-block" id="qr-settings" onClick={onOpenSettings}>Mở Cài đặt</button>}>
-        <p className="muted" style={{ margin: 0 }}>Chưa có tài khoản nhận tiền. Vào Cài đặt › “QR chuyển khoản (VietQR)” chọn ngân hàng, nhập số tài khoản và tên chủ tài khoản - sau đó mỗi đơn có mã QR đúng số tiền còn phải thu, nội dung là mã đơn.</p>
+        <p className="muted" style={{ margin: 0 }}>Chưa có tài khoản nhận tiền. Vào Cài đặt › “QR chuyển khoản (VietQR)” chọn ngân hàng, nhập số tài khoản và tên chủ tài khoản - sau đó mỗi đơn có mã QR đúng số tiền còn phải thu.</p>
       </Sheet>
     )
   }
   const save = () => {
-    if (img && downloadPng(img.dataUrl, `QR-${content || 'don'}.png`)) toast('Đã tải ảnh QR')
+    if (img && downloadPng(img.dataUrl, `QR-${code || 'don'}.png`)) toast('Đã tải ảnh QR')
     else toast('Không tải được - bấm giữ vào mã QR rồi chọn “Lưu ảnh”')
   }
   const copyStk = () => {
@@ -605,17 +604,16 @@ function QrSheet({ onClose, cfg, amount, code, codPending, onOpenSettings, onCop
         <button className="btn btn-ghost btn-block" id="qr-copy-msg" onClick={onCopyMsg}>Sao chép tin xác nhận kèm dòng chuyển khoản</button>
       </div>}>
       <div className="o-qr">
-        {img ? <QrImg src={img.dataUrl} label={`Mã QR chuyển ${vnd(amount)} tới ${bankName(cfg.bin)} ${cfg.accountNo}, nội dung ${content}`} />
+        {img ? <QrImg src={img.dataUrl} label={`Mã QR chuyển ${vnd(amount)} tới ${bankName(cfg.bin)} ${cfg.accountNo}`} />
           : <div className="warn-box"><span>{error}</span></div>}
         <div className="o-qr-amt">{vnd(amount)}</div>
         <dl className="o-qr-info">
           <dt>Ngân hàng</dt><dd>{bankName(cfg.bin)}</dd>
           <dt>Số TK</dt><dd className="num" style={{ userSelect: 'all' }}>{cfg.accountNo}</dd>
           {cfg.accountName && <><dt>Chủ TK</dt><dd>{cfg.accountName}</dd></>}
-          <dt>Nội dung</dt><dd className="num">{content}</dd>
         </dl>
         <p className="hint" style={{ margin: 0 }}>
-          Khách quét bằng app ngân hàng: điền sẵn số tiền và nội dung. Trên điện thoại có thể bấm giữ mã QR › “Lưu ảnh”.
+          Khách quét bằng app ngân hàng: điền sẵn số tiền, nội dung để mặc định. Trên điện thoại có thể bấm giữ mã QR › “Lưu ảnh”.
           {codPending > 0 ? ` Đã trừ ${vnd(codPending)} COD shipper thu hộ.` : ''} Khi tiền về, bấm “Thu tiền” để ghi.
         </p>
       </div>

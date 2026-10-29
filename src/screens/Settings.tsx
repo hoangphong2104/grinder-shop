@@ -158,7 +158,7 @@ export default function Settings() {
       empty ? 'Đã xoá tài khoản VietQR' : 'Đã lưu tài khoản VietQR')
   }
   const qrOk = !checkVietQr({ bin: curBin, accountNo: curNo })
-  const qrPreview = useVietQr(qrOk ? { bin: curBin, accountNo: curNo, accountName: curName } : null, QR_SAMPLE_VND, 'D-001', [])
+  const qrPreview = useVietQr(qrOk ? { bin: curBin, accountNo: curNo, accountName: curName } : null, QR_SAMPLE_VND, '', [])
   const dirtyQr = curBin !== (st?.bank_bin ?? '') || curNo !== (st?.bank_account_no ?? '') || curName !== (st?.bank_account_name ?? '')
 
   function pickTheme(t: ThemeChoice) { setTheme(t); setThemeState(t) }
@@ -237,7 +237,7 @@ export default function Settings() {
         <button className="btn btn-ghost" id="days-save" style={{ alignSelf: 'flex-start' }} disabled={busy || !dirtyDays} onClick={saveDays}>Lưu ngưỡng ngày</button>
 
         <p className="section-title">QR chuyển khoản (VietQR)</p>
-        <p className="hint" style={{ marginTop: 0 }}>Tài khoản nhận tiền của shop. Chi tiết đơn có nút “QR” tạo mã đúng số tiền còn phải thu, nội dung là mã đơn - khách quét bằng app ngân hàng.</p>
+        <p className="hint" style={{ marginTop: 0 }}>Tài khoản nhận tiền của shop. Chi tiết đơn có nút “QR” tạo mã đúng số tiền còn phải thu (nội dung để mặc định) - khách quét bằng app ngân hàng.</p>
         <div className="two ov-two">
           <label className="f">Ngân hàng
             <select className={`input ${errs.qBin ? 'invalid' : ''}`} id="qr-bank" value={qBank} onChange={(e) => setQBank(e.target.value)}>
@@ -269,7 +269,7 @@ export default function Settings() {
           {qrPreview.img
             ? <QrImg src={qrPreview.img.dataUrl} label="Mã QR xem trước" />
             : <div className="note-box" style={{ flex: 1 }}><span>Chọn ngân hàng và nhập số tài khoản để xem trước mã QR.</span></div>}
-          {qrPreview.img && <p className="hint" style={{ margin: 0, flex: 1, minWidth: 160 }}>Mã mẫu {vnd(QR_SAMPLE_VND)}, nội dung “D-001”. Thử quét bằng app ngân hàng: phải hiện đúng ngân hàng, số TK và tên chủ tài khoản trước khi lưu.</p>}
+          {qrPreview.img && <p className="hint" style={{ margin: 0, flex: 1, minWidth: 160 }}>Mã mẫu {vnd(QR_SAMPLE_VND)}. Thử quét bằng app ngân hàng: phải hiện đúng ngân hàng, số TK và tên chủ tài khoản trước khi lưu.</p>}
         </div>
         <button className="btn btn-ghost" id="qr-save-settings" style={{ alignSelf: 'flex-start' }} disabled={busy || !dirtyQr} onClick={saveQr}>Lưu tài khoản VietQR</button>
 
