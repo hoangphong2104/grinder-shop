@@ -185,3 +185,14 @@ test('VietQR: content without diacritics / symbols, max 25; input checks', () =>
   assert.equal(checkVietQr({ bin: '970436', accountNo: '1', amount: 100 }), null);
   assert.throws(() => buildVietQrPayload({ bin: 'abc', accountNo: '1' }), RangeError);
 });
+
+test('CR-009: local_ship auto entry per non-cancelled lot (receipt day, else order day)', () => {
+  const lots: Lot[] = [
+    { id: 'a', rate: 1, shipFee: null, status: 'received', receivedAt: '2026-10-20', orderedAt: '2026-10-01', localShip: 50000 },
+    { id: 'b', rate: 1, shipFee: null, status: 'cn_warehouse', receivedAt: null, orderedAt: '2026-10-05', localShip: 40000 },
+    { id: 'c', rate: 1, shipFee: null, status: 'cancelled', receivedAt: null, orderedAt: '2026-10-05', localShip: 40000 },
+    { id: 'd', rate: 1, shipFee: null, status: 'received', receivedAt: '2026-10-20', localShip: 0 },
+  ];
+  assert.deepEqual(autoCashEntries([], [], lots).map((e) => `${e.lotId}/${e.kind}/${e.direction}/${e.amount}/${e.date}`),
+    ['a/local_ship/out/50000/2026-10-20', 'b/local_ship/out/40000/2026-10-05']);
+});

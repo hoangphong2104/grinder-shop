@@ -137,7 +137,7 @@ test('scenario A3: L-003 ship 600.000 → 800.000 moves D-004 profit and October
 
 test('scenario A7: receiving L-005 auto-confirms D-005 only; then L-006 confirms D-008', () => {
   const l5 = lots.find((l) => l.id === 'l5')!;
-  assert.equal(checkReceiveLot(l5).ok, false); // BR-02: ship fee missing
+  assert.equal(checkReceiveLot(l5).ok, true); // CR-009: ship TQ→VN settled later, not required to receive
   const l5r: Lot = { ...l5, shipFee: 700000, status: 'received', receivedAt: '2026-10-23' };
   assert.equal(checkReceiveLot({ ...l5, shipFee: 700000 }).ok, true);
   const after5 = lots.map((l) => (l.id === 'l5' ? l5r : l));

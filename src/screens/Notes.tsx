@@ -177,7 +177,7 @@ function NoteEditor({ note, onClose }: { note: NoteRow | null; onClose: () => vo
       </header>
       <div className="nk-ebody">
         <textarea ref={ta} className="nk-ta" id="note-body" maxLength={10000} value={body} onChange={(e) => setBody(e.target.value)}
-          placeholder={'Tiêu đề (dòng đầu)\nNội dung ghi chú…\n\nVD: KU đen lô L-004 - khách Đức Anh đã cọc 1tr, hẹn giao trước 30/10'} />
+          placeholder={'Tiêu đề (dòng đầu)\nNội dung ghi chú…\n\nVD: KU-004 đen - khách Đức Anh đã cọc 1tr, hẹn giao trước 30/10'} />
         {err && <div className="err-text" role="alert">{err}</div>}
       </div>
       <footer className="nk-efoot">

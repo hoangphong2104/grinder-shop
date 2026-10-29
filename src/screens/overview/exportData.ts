@@ -5,6 +5,7 @@ import type { DbData } from '../../data/types.ts'
 import { LOT_LABEL, ORDER_LABEL, UNIT_LABEL } from '../../ui/status.tsx'
 import { todayVn } from '../../ui/format.ts'
 import { downloadXlsx, type SheetData } from './xlsx.ts'
+import { lotName } from './common.tsx'
 
 const PAY_LABEL = { deposit: 'Cọc', payment: 'Thanh toán', refund: 'Hoàn tiền' } as const
 const TXN_LABEL = { payable: 'Phải trả (lô)', transfer: 'Đã chuyển', adjustment: 'Điều chỉnh' } as const
@@ -24,20 +25,20 @@ export function exportExcel(d: DbData): void {
 
   const sheets: SheetData[] = [
     {
-      name: 'Lô nhập',
-      rows: [['Mã lô', 'Ngày đặt', 'Người bán', 'Trạng thái', 'Model', 'Số chiếc', 'Tỷ giá', 'Tổng ¥', 'Tiền hàng ₫', 'Phí mua hộ %', 'Phí mua hộ ₫', 'Phí ship ₫', 'Ship / chiếc ₫', 'Phải trả ₫', 'Tổng giá nhập ₫', 'Giá nhập tạm tính', 'Ngày nhận', 'Mã tin Goofish', 'Link', 'Tiêu đề tin', 'Ghi chú'],
+      name: 'Mua hàng',
+      rows: [['Mã cối', 'Ngày đặt', 'Người bán', 'Trạng thái', 'Model', 'Số chiếc', 'Tỷ giá', 'Tổng ¥', 'Tiền hàng ₫', 'Phí mua hộ %', 'Phí mua hộ ₫', 'Ship TQ → VN ₫', 'Ship TQ → VN / chiếc ₫', 'Ship kho VN → Lumi ₫', 'Phải trả ₫', 'Tổng giá nhập ₫', 'Giá nhập tạm tính', 'Ngày nhận', 'Mã tin Goofish', 'Link', 'Tiêu đề tin', 'Ghi chú'],
         ...d.lots.map((l) => {
           const s = lotSum.get(l.id)
-          return [d.lotCode[l.id], l.ordered_at, seller.get(l.seller_id ?? '') ?? '', LOT_LABEL[l.status],
+          return [lotName(d, l.id), l.ordered_at, seller.get(l.seller_id ?? '') ?? '', LOT_LABEL[l.status],
             (s?.models ?? []).map((m) => `${m.qty} × ${m.model_name}`).join(', '), s?.total_qty, Number(l.exchange_rate), Number(s?.total_cny ?? 0),
-            s?.goods_vnd, feePct(l.id), s?.buying_fee_vnd ?? 0, l.ship_fee_vnd, s?.ship_per_unit_vnd, s?.payable_vnd, s?.total_cost_vnd, s?.cost_is_provisional ?? false,
+            s?.goods_vnd, feePct(l.id), s?.buying_fee_vnd ?? 0, l.ship_fee_vnd, s?.ship_per_unit_vnd, l.local_ship_vnd, s?.payable_vnd, s?.total_cost_vnd, s?.cost_is_provisional ?? false,
             day(l.received_at), l.goofish_item_id, l.goofish_url, l.listing_title, l.note]
         })],
     },
     {
       name: 'Chiếc cối',
-      rows: [['Mã chiếc', 'Model', 'Số seri', 'Lô', 'Trạng thái', 'Đơn', 'Khách', 'Giá ¥', 'Tỷ giá', 'Phí mua hộ %', 'Giá nhập tự tính ₫', 'Giá nhập sửa tay ₫', 'Giá nhập ₫', 'Tạm tính (chưa có ship)', 'Giá bán dự kiến ₫', 'Giá chốt ₫', 'Ngày gửi', 'Lãi dự kiến ₫', 'Lãi thực tế ₫', 'Ngày đặt', 'Ngày nhận', 'Số ngày tồn', 'Ghi chú'],
-        ...d.unitView.map((u) => [u.code, u.model_name, u.serial_no, d.lotCode[u.lot_id], UNIT_LABEL[u.status], holder(u.holding_order_id), u.holding_customer_name,
+      rows: [['Mã chiếc', 'Model', 'Số seri', 'Trạng thái', 'Đơn', 'Khách', 'Giá ¥', 'Tỷ giá', 'Phí mua hộ %', 'Giá nhập tự tính ₫', 'Giá nhập sửa tay ₫', 'Giá nhập ₫', 'Tạm tính (chưa tất toán ship TQ → VN)', 'Giá bán dự kiến ₫', 'Giá chốt ₫', 'Ngày gửi', 'Lãi dự kiến ₫', 'Lãi thực tế ₫', 'Ngày đặt', 'Ngày nhận', 'Số ngày tồn', 'Ghi chú'],
+        ...d.unitView.map((u) => [u.code, u.model_name, u.serial_no, UNIT_LABEL[u.status], holder(u.holding_order_id), u.holding_customer_name,
           Number(u.price_cny), Number(u.exchange_rate), feePct(u.lot_id), u.cost_vnd_auto, u.cost_vnd_override, u.cost_vnd, u.cost_is_provisional, u.list_price_vnd,
           u.order_unit_price_vnd, day(u.sold_at), u.status === 'sold' ? null : u.expected_profit_vnd, u.actual_profit_vnd,
           u.ordered_at, day(u.received_at), u.days_in_stock, u.note])],
@@ -78,11 +79,11 @@ export function exportExcel(d: DbData): void {
       rows: (() => {
         let bal = 0
         const asc = [...d.txns].sort((a, b) => a.txn_date.localeCompare(b.txn_date) || a.created_at.localeCompare(b.created_at))
-        return [['Ngày', 'Loại', 'Lô', 'Số tiền ₫', 'Ảnh hưởng dư nợ ₫', 'Dư nợ sau ₫', 'Ghi chú'],
+        return [['Ngày', 'Loại', 'Cối', 'Số tiền ₫', 'Ảnh hưởng dư nợ ₫', 'Dư nợ sau ₫', 'Ghi chú'],
           ...asc.map((t) => {
             const eff = t.kind === 'transfer' ? -t.amount_vnd : t.amount_vnd
             bal += eff
-            return [t.txn_date, TXN_LABEL[t.kind], t.lot_id ? d.lotCode[t.lot_id] : '', t.amount_vnd, eff, bal, t.note]
+            return [t.txn_date, TXN_LABEL[t.kind], t.lot_id ? lotName(d, t.lot_id) : '', t.amount_vnd, eff, bal, t.note]
           })]
       })(),
     },

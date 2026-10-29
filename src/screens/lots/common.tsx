@@ -148,9 +148,9 @@ export function LotRow2({ d, l, busy, onNext }: { d: DbData; l: LotRow; busy: bo
   )
 }
 
-/** Cảnh báo ngắn nhất cho dòng lô (tối đa 1): thiếu ship → người bán tránh → có đặt trước. */
+/** Cảnh báo ngắn nhất cho dòng cối (tối đa 1): chưa tất toán ship TQ → VN → người bán tránh → có đặt trước. */
 export function shortWarning(d: DbData, l: LotRow): [string, string] | null {
-  if (l.ship_fee_vnd == null && LOT_FLOW.indexOf(l.status) >= 1 && isOpen(l.status)) return ['thiếu ship', 'bad']
+  if (l.ship_fee_vnd == null && LOT_FLOW.indexOf(l.status) >= 1 && isOpen(l.status)) return ['chưa tất toán ship', 'way']
   const sm = summaryOf(d, l.id)
   if (sm && l.status !== 'cancelled' && sm.outstanding_vnd > 0) return [`nợ TG ${tr(sm.outstanding_vnd)}`, 'bad']
   if (sellerOf(d, l)?.is_avoided) return ['người bán tránh', 'bad']

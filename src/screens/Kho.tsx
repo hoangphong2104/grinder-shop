@@ -17,6 +17,7 @@ import '../styles/lots.css'
 // SC_03 Kho (CR-006): gộp Lô nhập vào Kho - 1 màn theo trạng thái như bảng lô cũ.
 // CR-006 vòng 3: 1 lô = 1 cối ⇒ mọi cột đều là từng CỐI; ở Kho TQ / Kho VN có nút bước kế (chuyển cả lô của cối).
 // Máy tính: bảng 5 cột. Điện thoại: chip trạng thái + danh sách. Số đếm = số cối trong cột.
+// CR-009: chip "Tất cả" (mặc định) - mọi cối, nhóm theo trạng thái.
 type Stage = 'tq' | 'vn' | 'lumi' | 'giao' | 'ban'
 const STAGES: [Stage, string, string][] = [
   ['tq', 'Kho TQ', 'var(--way)'], ['vn', 'Kho VN', 'var(--hold)'], ['lumi', 'Kho Lumi', 'var(--ok)'],
@@ -25,6 +26,7 @@ const STAGES: [Stage, string, string][] = [
 /** Link cũ (?tt=…) → cột mới. */
 const ALIAS: Record<string, Stage> = { in_stock: 'lumi', avail: 'lumi', giu: 'lumi', reserved: 'lumi', incoming: 'tq', ve: 'tq', sold: 'ban', xong: 'ban' }
 const isStage = (s: string | null): s is Stage => STAGES.some(([k]) => k === s)
+type Tab = Stage | 'all'
 const isSort = (s: string | null): s is UnitSort => UNIT_SORTS.some(([k]) => k === s)
 const isCond = (s: string | null): s is UnitConditionDb => CONDITION_ORDER.includes(s as UnitConditionDb)
 const SOLD_PAGE = 20
@@ -113,8 +115,9 @@ export default function Kho() {
       </button>
     )
   }
-  // Điện thoại: cột đang chọn - mặc định Kho Lumi, trống thì cột đầu có hàng
-  const stage: Stage = isStage(ttRaw) ? ttRaw : (ttRaw && ALIAS[ttRaw]) || (cols.lumi.length ? 'lumi' : STAGES.find(([k]) => cols[k].length)?.[0] ?? 'lumi')
+  // Điện thoại: tab đang chọn - mặc định Tất cả (CR-009)
+  const stage: Tab = isStage(ttRaw) ? ttRaw : (ttRaw && ALIAS[ttRaw]) || 'all'
+  const allCount = STAGES.reduce((a, [k]) => a + cols[k].length, 0)
   const filtering = modelF !== 'all' || condF != null || sx !== 'ma'
 
   const top = (
@@ -128,6 +131,9 @@ export default function Kho() {
       </div>
       {!desk && (
         <div className="chips stage-chips" role="group" aria-label="Lọc theo trạng thái">
+          <button type="button" className="chip" id="kho-tt-all" aria-pressed={stage === 'all'} onClick={() => setParam('tt', null)}>
+            Tất cả<span className="c">{allCount}</span>
+          </button>
           {STAGES.map(([k, t]) => (
             <button key={k} type="button" className="chip" id={`kho-tt-${k}`} aria-pressed={stage === k} onClick={() => setParam('tt', k)}>
               {t}<span className="c">{cols[k].length}</span>
@@ -167,6 +173,21 @@ export default function Kho() {
         })}
       </div>
     )
+  } else if (stage === 'all') {
+    body = allCount ? (
+      <div className="ov-list">
+        {STAGES.map(([k, t]) => cols[k].length > 0 && (
+          <Fragment key={k}>
+            <div className="ov-gh"><span>{t}</span><span className="muted">{cols[k].length} cối</span></div>
+            {cols[k].map((u) => {
+              const m = hit.get(u.unit_id)
+              return <UnitRow key={u.unit_id} d={d} u={u} sub={m === 'serial' && q.trim() ? <>seri {u.serial_no}</> : undefined}
+                right2={k === 'tq' || k === 'vn' ? nextBtn(u, 'btn btn-ghost nx') : undefined} />
+            })}
+          </Fragment>
+        ))}
+      </div>
+    ) : <div className="empty">{needle || filtering ? 'Không có cối nào khớp bộ lọc.' : 'Chưa có cối nào.'}</div>
   } else {
     const us = cols[stage]
     body = us.length ? (

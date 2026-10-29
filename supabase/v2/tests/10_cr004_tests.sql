@@ -247,7 +247,9 @@ reset role;
 select t.eq((select string_agg(p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')', ' | ' order by p.proname)
                from pg_proc p join pg_namespace n on n.oid = p.pronamespace
               where n.nspname = 'public' and p.proname in ('receive_lot','ship_order','return_order','set_order_cod')),
-            'receive_lot(p_lot_id uuid, p_ship_fee_vnd bigint, p_received_at date, p_expected_version integer, p_units jsonb) | '
+            'receive_lot(p_lot_id uuid, p_ship_fee_vnd bigint, p_received_at date, p_expected_version integer, p_units jsonb'
+            -- CR-009 (008) thêm p_local_ship_vnd ở cuối
+            || case when to_regprocedure('public.set_lot_local_ship(uuid, bigint, int)') is not null then ', p_local_ship_vnd bigint' else '' end || ') | '
             || 'return_order(p_order_id uuid, p_keep_deposit boolean, p_return_ship_fee_vnd bigint, p_returned_at date, p_note text, p_expected_version integer) | '
             || 'set_order_cod(p_order_id uuid, p_cod_amount_vnd bigint, p_expected_version integer) | '
             || 'ship_order(p_order_id uuid, p_tracking_no text, p_shipped_at date, p_expected_version integer, p_cod_amount_vnd bigint)',

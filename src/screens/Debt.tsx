@@ -6,21 +6,24 @@ import { supabase } from '../lib/supabase.ts'
 import { Shell } from '../ui/Shell.tsx'
 import { Sheet, useToast } from '../ui/feedback.tsx'
 import { Icon } from '../ui/icons.tsx'
-import { CASH_KIND_LABEL, LotChip } from '../ui/status.tsx'
+import { CASH_KIND_LABEL, LOT_LABEL, LotChip } from '../ui/status.tsx'
 import { dmy, parseNum, todayVn, tr, vnd } from '../ui/format.ts'
-import { CONFLICT_MSG, Ident, Row2, Tx, lotModelsText, useDesk, writeError } from './overview/common.tsx'
-import { codesText } from './lots/common.tsx'
+import { CONFLICT_MSG, Ident, Row2, Tx, lotHref, lotName, useDesk, writeError } from './overview/common.tsx'
+import { errText } from './lots/rpc.ts'
 import { PayLotButton } from './lots/PayLot.tsx'
+import { MoneyInput } from '../ui/MoneyInput.tsx'
 
 // SC_10 Sổ quỹ (CR-005 ý 15, 1, 2, 5) - thay "Công nợ trung gian".
 // - Một quỹ chung bắt đầu từ 0: số dư (v_cash_balance), vào / ra tháng này (v_cash_monthly).
 // - Bút toán: tự sinh (thu khách, hoàn tiền, trả trung gian, ship shop chịu, ship chiều về - chỉ đọc, "sửa ở nguồn")
 //   + ghi tay (Chi phí khác có loại, Nạp vốn, Rút vốn; Điều chỉnh chỉ còn cho khoản cũ - CR-006) - thêm / sửa / xoá (bảng cash_entries).
-// - Công nợ trung gian: tổng còn nợ + từng lô còn nợ với nút "Đã thanh toán" (RPC pay_lot); sửa / xoá khoản Đã chuyển / Điều chỉnh.
+// - Công nợ trung gian: tổng còn nợ + từng cối còn nợ với nút "Đã thanh toán" (RPC pay_lot); sửa / xoá khoản Đã chuyển / Điều chỉnh.
+// - CR-009: "Tất toán ship TQ → VN" gộp nhiều cối (RPC settle_cn_ship: chia đều vào giá nhập + ghi Đã chuyển từng cối);
+//   bút toán tự sinh 'local_ship' (ship kho VN → Lumi) nằm trong lọc Ship.
 
 type Filter = 'all' | 'thu' | 'tg' | 'ship' | 'hoan' | 'chi' | 'von'
 const FILTERS: [Filter, string, CashKindDb[]][] = [
-  ['all', 'Tất cả', []], ['thu', 'Thu khách', ['customer_payment']], ['tg', 'Trả trung gian', ['intermediary']], ['ship', 'Ship', ['ship_shop', 'return_ship']],
+  ['all', 'Tất cả', []], ['thu', 'Thu khách', ['customer_payment']], ['tg', 'Trả trung gian', ['intermediary']], ['ship', 'Ship', ['ship_shop', 'return_ship', 'local_ship']],
   ['hoan', 'Hoàn tiền', ['customer_refund']], ['chi', 'Chi phí', ['expense']], ['von', 'Vốn', ['capital_in', 'capital_out', 'adjustment']],
 ]
 type ManualKind = 'expense' | 'capital_in' | 'capital_out' | 'adjustment'
@@ -33,7 +36,7 @@ const TXN_LABEL = { payable: 'Phải trả', transfer: 'Đã chuyển', adjustme
 const amountText = (e: CashEntryRow) => (e.direction === 'in' ? `+${tr(e.amount_vnd)}` : `−${tr(e.amount_vnd)}`)
 const dayLabel = (iso: string) => (iso === todayVn() ? 'Hôm nay' : `${dmy(iso)}/${iso.slice(0, 4)}`)
 
-/** Nguồn của bút toán tự sinh: [mô tả, link] - đơn (thu / hoàn / ship) hoặc lô (trả trung gian). */
+/** Nguồn của bút toán tự sinh: [mô tả, link] - đơn (thu / hoàn / ship) hoặc cối (trả trung gian, ship VN → Lumi). */
 function sourceOf(d: DbData, e: CashEntryRow): { text: string; to: string | null } {
   const orderId = e.order_id ?? (e.payment_id ? d.payments.find((p) => p.id === e.payment_id)?.order_id ?? null : null)
   if (orderId) {
@@ -41,8 +44,8 @@ function sourceOf(d: DbData, e: CashEntryRow): { text: string; to: string | null
     return { text: `${d.orderCode[orderId] ?? 'Đơn'}${o ? `, ${o.customer_name}` : ''}`, to: `/don/${orderId}` }
   }
   const lotId = e.lot_id ?? (e.txn_id ? d.txns.find((t) => t.id === e.txn_id)?.lot_id ?? null : null)
-  if (lotId) return { text: `${d.lotCode[lotId] ?? 'Lô'}, ${lotModelsText(d, lotId, 'short')}`, to: `/lo/${lotId}` }
-  return { text: e.kind === 'intermediary' ? 'không gắn lô' : '', to: null }
+  if (lotId) return { text: `${lotName(d, lotId)}, ${d.unitView.find((u) => u.lot_id === lotId)?.model_name ?? ''}`, to: lotHref(d, lotId) }
+  return { text: e.kind === 'intermediary' ? 'không gắn cối' : '', to: null }
 }
 
 export default function Debt() {
@@ -53,6 +56,7 @@ export default function Debt() {
   const [cashForm, setCashForm] = useState<{ kind: ManualKind; entry?: CashEntryRow } | null>(null)
   const [autoInfo, setAutoInfo] = useState<CashEntryRow | null>(null)
   const [txnForm, setTxnForm] = useState<{ kind: 'transfer' | 'adjustment'; txn?: TxnRow } | null>(params.get('chuyen') === '1' ? { kind: 'transfer' } : null)
+  const [settle, setSettle] = useState(false)
 
   // ?chuyen=1 (link cũ) mở ngay sheet ghi chuyển tiền trung gian
   useEffect(() => {
@@ -61,6 +65,7 @@ export default function Debt() {
   const closeCash = useCallback(() => setCashForm(null), [])
   const closeAuto = useCallback(() => setAutoInfo(null), [])
   const closeTxn = useCallback(() => setTxnForm(null), [])
+  const closeSettle = useCallback(() => setSettle(false), [])
 
   const entries = [...(d.cashEntries ?? [])].sort((a, b) => b.entry_date.localeCompare(a.entry_date) || b.created_at.localeCompare(a.created_at))
   const bal = d.cashBalance ?? { balance_vnd: 0, total_in_vnd: 0, total_out_vnd: 0, entry_count: 0 }
@@ -70,7 +75,7 @@ export default function Debt() {
   const match = (e: CashEntryRow, f: Filter) => f === 'all' || kindsOf(f).includes(e.kind)
   const shown = entries.filter((e) => match(e, filter))
 
-  // Công nợ trung gian theo lô
+  // Công nợ trung gian theo cối
   const owing = d.lotSummary.filter((s) => s.status !== 'cancelled' && s.outstanding_vnd > 0)
     .sort((a, b) => a.ordered_at.localeCompare(b.ordered_at))
   const debt = d.balance.balance_vnd
@@ -110,18 +115,19 @@ export default function Debt() {
     <div className="stack">
       <p className="section-title">Công nợ trung gian <span className={debt > 0 ? 'neg' : 'muted'}>{debt > 0 ? `còn nợ ${tr(debt)}` : debt < 0 ? `trả dư ${tr(-debt)}` : 'hết nợ'}</span></p>
       {owing.length === 0
-        ? <p className="muted small" style={{ margin: 0 }}>Không lô nào còn nợ trung gian.</p>
+        ? <p className="muted small" style={{ margin: 0 }}>Không cối nào còn nợ trung gian.</p>
         : (
           <div className="ov-list">
             {owing.map((s) => (
               <Row2 key={s.lot_id}
-                a={<Link className="row" style={{ gap: 8, minWidth: 0, color: 'inherit', textDecoration: 'none' }} to={`/lo/${s.lot_id}`}><Ident id={codesText(d.unitView.filter((u) => u.lot_id === s.lot_id).map((u) => u.code), 2) || (d.lotCode[s.lot_id] ?? 'Lô')} text={d.unitView.find((u) => u.lot_id === s.lot_id)?.model_name ?? lotModelsText(d, s.lot_id, 'short')} /></Link>}
+                a={<Link className="row" style={{ gap: 8, minWidth: 0, color: 'inherit', textDecoration: 'none' }} to={lotHref(d, s.lot_id)}><Ident id={lotName(d, s.lot_id)} text={d.unitView.find((u) => u.lot_id === s.lot_id)?.model_name ?? ''} /></Link>}
                 b={<span className="neg">{tr(s.outstanding_vnd)}</span>}
                 c={<><LotChip s={s.status} /><Tx>{s.paid_vnd > 0 ? `đã trả ${tr(s.paid_vnd)} / ${tr(s.payable_vnd)}` : `phải trả ${tr(s.payable_vnd)}`}</Tx></>}
                 d={<PayLotButton lotId={s.lot_id} id={`pay-${s.lot_id}`} />} />
             ))}
           </div>
         )}
+      <button className="btn btn-primary" id="debt-settle" onClick={() => setSettle(true)}>Tất toán ship TQ → VN</button>
       <div className="btn-row">
         <button className="btn btn-ghost" id="debt-transfer" onClick={() => setTxnForm({ kind: 'transfer' })}>Ghi đã chuyển</button>
         <button className="btn btn-ghost" id="debt-adjust" onClick={() => setTxnForm({ kind: 'adjustment' })}>Điều chỉnh nợ</button>
@@ -135,7 +141,7 @@ export default function Debt() {
         <div className="ov-list">
           {manualTxns.map((t) => (
             <Row2 key={t.id} onClick={() => setTxnForm({ kind: t.kind as 'transfer' | 'adjustment', txn: t })}
-              a={<><b className="id muted">{dmy(t.txn_date)}</b><span className="tx"><b>{TXN_LABEL[t.kind]}</b>{t.lot_id ? `, ${d.lotCode[t.lot_id] ?? ''}` : ''}</span></>}
+              a={<><b className="id muted">{dmy(t.txn_date)}</b><span className="tx"><b>{TXN_LABEL[t.kind]}</b>{t.lot_id ? `, ${lotName(d, t.lot_id)}` : ''}</span></>}
               b={t.kind === 'transfer' ? tr(t.amount_vnd) : `${t.amount_vnd > 0 ? '+' : '−'}${tr(Math.abs(t.amount_vnd))}`}
               c={<Tx>{t.note || (t.kind === 'adjustment' ? (t.amount_vnd > 0 ? 'tăng nợ' : 'giảm nợ') : '-')}</Tx>}
               d="sửa / xoá" />
@@ -188,6 +194,7 @@ export default function Debt() {
       {cashForm && <CashSheet kind={cashForm.kind} entry={cashForm.entry} onClose={closeCash} />}
       {autoInfo && <AutoSheet e={autoInfo} onClose={closeAuto} />}
       {txnForm && <TxnSheet kind={txnForm.kind} txn={txnForm.txn} onClose={closeTxn} />}
+      {settle && <SettleShipSheet onClose={closeSettle} />}
     </Shell>
   )
 }
@@ -258,7 +265,7 @@ function CashSheet({ kind: kind0, entry, onClose }: { kind: ManualKind; entry?: 
         </div>
       )}
       <label className="f">Số tiền (₫)
-        <input className={`input money ${err.amt ? 'invalid' : ''}`} id="cash-amt" inputMode="numeric" value={amt} onChange={(e) => setAmt(e.target.value)} />
+        <MoneyInput className={`input money ${err.amt ? 'invalid' : ''}`} id="cash-amt" value={amt} onValue={(v) => setAmt(v)} />
         {err.amt && <span className="field-err">{err.amt}</span>}
       </label>
       {kind === 'expense' && (
@@ -362,19 +369,19 @@ function TxnSheet({ kind, txn, onClose }: { kind: 'transfer' | 'adjustment'; txn
         </div>
       )}
       <label className="f">{kind === 'transfer' ? 'Số tiền đã chuyển (₫)' : 'Số tiền điều chỉnh (₫)'}
-        <input className={`input money ${err.amt ? 'invalid' : ''}`} id="t-amt" inputMode="numeric" value={amt} onChange={(e) => setAmt(e.target.value)} />
+        <MoneyInput className={`input money ${err.amt ? 'invalid' : ''}`} id="t-amt" value={amt} onValue={(v) => setAmt(v)} />
         {err.amt && <span className="field-err">{err.amt}</span>}
       </label>
       {kind === 'transfer' && (
-        <label className="f">Trả cho lô (tuỳ chọn)
+        <label className="f">Trả cho cối (tuỳ chọn)
           <select className="input" id="t-lot" value={lotId} onChange={(e) => {
             const v = e.target.value
             setLotId(v)
             const s = d.lotSummary.find((x) => x.lot_id === v)
             if (s && !amt && s.outstanding_vnd > 0) setAmt(String(s.outstanding_vnd))
           }}>
-            <option value="">Không gắn lô</option>
-            {lots.map((s) => <option key={s.lot_id} value={s.lot_id}>{d.lotCode[s.lot_id]}, còn nợ {tr(s.outstanding_vnd)}</option>)}
+            <option value="">Không gắn cối</option>
+            {lots.map((s) => <option key={s.lot_id} value={s.lot_id}>{lotName(d, s.lot_id)}, còn nợ {tr(s.outstanding_vnd)}</option>)}
           </select>
         </label>
       )}
@@ -387,6 +394,84 @@ function TxnSheet({ kind, txn, onClose }: { kind: 'transfer' | 'adjustment'; txn
       </label>
       {confirmDel && <p className="warn-box">Xoá khoản này? Công nợ trung gian {kind === 'transfer' ? 'tăng' : 'đổi'} {vnd(Math.abs(txn?.amount_vnd ?? 0))}{kind === 'transfer' ? ', quỹ tăng lại' : ''}. Không hoàn tác được.</p>}
       {err.form && <p className="err-text">{err.form}</p>}
+    </Sheet>
+  )
+}
+
+/** CR-009 Tất toán ship Kho TQ → Kho VN gộp nhiều cối: nhập tổng tiền, chọn cối ⇒ RPC settle_cn_ship chia đều (đồng lẻ cho cối
+ *  đặt sớm), cộng vào giá nhập từng cối và ghi Đã chuyển từng cối (sổ quỹ tiền ra). Mặc định chỉ hiện cối chưa có ship TQ → VN. */
+function SettleShipSheet({ onClose }: { onClose: () => void }) {
+  const d = useData()
+  const { rpc } = useStore()
+  const toast = useToast()
+  const [amt, setAmt] = useState('')
+  const [date, setDate] = useState(todayVn())
+  const [note, setNote] = useState('')
+  const [pick, setPick] = useState<Set<string>>(new Set())
+  const [showAll, setShowAll] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const unitOf = (lotId: string) => d.unitView.find((u) => u.lot_id === lotId)
+  const rows = d.lots
+    .filter((l) => l.status !== 'cancelled' && (showAll || l.ship_fee_vnd == null || pick.has(l.id)))
+    .sort((a, b) => a.ordered_at.localeCompare(b.ordered_at) || a.id.localeCompare(b.id))
+  const total = parseNum(amt)
+  const n = pick.size
+  const share = total != null && total > 0 && n > 0 ? Math.floor(total / n) : null
+  const toggle = (id: string) => setPick((p) => { const x = new Set(p); if (x.has(id)) x.delete(id); else x.add(id); return x })
+  const allPicked = rows.length > 0 && rows.every((l) => pick.has(l.id))
+
+  async function save() {
+    if (total == null || total <= 0 || !Number.isInteger(total)) return setErr('Nhập tổng tiền ship lớn hơn 0, đơn vị đồng.')
+    if (n === 0) return setErr('Chọn ít nhất 1 cối.')
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > todayVn()) return setErr('Chọn ngày trả (không sau hôm nay).')
+    setErr(null); setBusy(true)
+    try {
+      await rpc('settle_cn_ship', { p_lot_ids: [...pick], p_total_vnd: total, p_paid_at: date, p_note: note.trim() || null })
+      toast(`Đã tất toán ship ${tr(total)} cho ${n} cối`)
+      onClose()
+    } catch (e) { setErr(errText(e)); setBusy(false) }
+  }
+
+  return (
+    <Sheet title="Tất toán ship TQ → VN" onClose={onClose}
+      footer={<button className="btn btn-primary btn-block" id="st-save" onClick={save} disabled={busy}>{busy ? 'Đang lưu…' : n ? `Tất toán cho ${n} cối` : 'Tất toán'}</button>}>
+      <p className="muted small confirm-text">Chia đều tổng tiền cho các cối đã chọn: cộng vào giá nhập từng cối và ghi khoản đã trả (tiền ra Sổ quỹ).</p>
+      <div className="two">
+        <label className="f">Tổng tiền ship (₫)
+          <MoneyInput className="input money" id="st-amt" value={amt} onValue={setAmt} />
+        </label>
+        <label className="f">Ngày trả
+          <input className="input" id="st-date" type="date" max={todayVn()} value={date} onChange={(e) => setDate(e.target.value)} />
+        </label>
+      </div>
+      <label className="f">Ghi chú
+        <input className="input" id="st-note" maxLength={1000} placeholder="VD: Đợt ship 28/10, 5 kiện" value={note} onChange={(e) => setNote(e.target.value)} />
+      </label>
+      <div className="row" style={{ justifyContent: 'space-between' }}>
+        <b>Chọn cối <span className="muted">{n}/{rows.length}</span></b>
+        {rows.length > 0 && <button type="button" className="link-btn small" id="st-all" onClick={() => setPick(allPicked ? new Set() : new Set(rows.map((l) => l.id)))}>{allPicked ? 'Bỏ chọn hết' : 'Chọn hết'}</button>}
+      </div>
+      {rows.length === 0
+        ? <p className="muted small" style={{ margin: 0 }}>Không có cối nào chưa tất toán ship TQ → VN.</p>
+        : (
+          <div className="list settle-list">
+            {rows.map((l) => {
+              const u = unitOf(l.id)
+              return (
+                <label key={l.id} className="li" htmlFor={`st-${l.id}`}>
+                  <input type="checkbox" id={`st-${l.id}`} checked={pick.has(l.id)} onChange={() => toggle(l.id)} />
+                  <span className="main"><b>{lotName(d, l.id)}</b><span className="s">{[u?.model_name, LOT_LABEL[l.status], l.ship_fee_vnd != null ? `đã có ship ${tr(l.ship_fee_vnd)}` : null].filter(Boolean).join(', ')}</span></span>
+                  {pick.has(l.id) && share != null && <span className="v">~{tr(share)}</span>}
+                </label>
+              )
+            })}
+          </div>
+        )}
+      <button type="button" className="link-btn small" id="st-show-all" style={{ alignSelf: 'flex-start' }} onClick={() => setShowAll((v) => !v)}>
+        {showAll ? 'Chỉ hiện cối chưa có ship TQ → VN' : 'Hiện cả cối đã có ship (cộng thêm)'}
+      </button>
+      {err && <p className="err-text" role="alert">{err}</p>}
     </Sheet>
   )
 }

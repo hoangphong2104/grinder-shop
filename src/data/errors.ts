@@ -3,14 +3,15 @@ const MSG: Record<string, string> = {
   NOT_AUTHENTICATED: 'Phiên đăng nhập đã hết. Đăng nhập lại.',
   VERSION_CONFLICT: 'Dữ liệu vừa được sửa trên máy khác. App đã tải lại - thử lại thao tác.',
   EXCHANGE_RATE_REQUIRED: 'Nhập tỷ giá.',
-  SHIP_FEE_REQUIRED: 'Nhập phí ship về VN của lô trước khi nhận hàng (BR-02).',
+  SHIP_FEE_REQUIRED: 'Nhập phí ship trước khi nhận hàng.',
   LOT_HAS_NO_LINES: 'Lô cần ít nhất một chiếc cối.',
-  LOT_NOT_FOUND: 'Không tìm thấy lô.',
+  LOT_NOT_FOUND: 'Không tìm thấy cối.',
+  DUPLICATE_LOT: 'Một cối được chọn 2 lần.',
   LOT_ALREADY_RECEIVED: 'Lô đã nhận vào kho.',
   LOT_NOT_RECEIVED: 'Lô chưa nhận vào kho.',
   LOT_CANCELLED: 'Lô đã huỷ.',
   LOT_ALREADY_PAID: 'Lô đã thanh toán đủ cho trung gian.',
-  INVALID_STATUS_TRANSITION: 'Lô chỉ chuyển tới (Kho TQ → Kho VN). Sai thì sửa lô.',
+  INVALID_STATUS_TRANSITION: 'Cối chỉ chuyển tới (Kho TQ → Kho VN). Sai thì sửa thông tin mua.',
   LOT_LOCKED: 'Lô đã nhận: không thêm / bớt chiếc, không đổi giá ¥ / tỷ giá. Sửa phí ship ở trang lô; giá nhập ₫ sửa tay, giá bán, seri sửa ở từng chiếc.',
   ORDER_NOT_FOUND: 'Không tìm thấy đơn.',
   ORDER_HAS_NO_LINES: 'Đơn cần ít nhất một chiếc cối.',
@@ -26,12 +27,12 @@ const MSG: Record<string, string> = {
   TOO_MANY_LINES: 'Quá nhiều chiếc trong một đơn (tối đa 50).',
   MODEL_NOT_FOUND: 'Không tìm thấy model.',
   UNIT_NOT_FOUND: 'Không tìm thấy chiếc cối.',
-  UNIT_NOT_AVAILABLE: 'Chiếc cối này đã bán, đã được giữ cho đơn khác hoặc thuộc lô đã huỷ.',
+  UNIT_NOT_AVAILABLE: 'Chiếc cối này đã bán, đã được giữ cho đơn khác hoặc đã huỷ.',
   UNIT_RESERVED: 'Chiếc cối đang được giữ cho một đơn - huỷ / sửa đơn đó trước.',
   UNIT_NOT_RECEIVED: 'Có chiếc chưa về kho - chưa chốt / gửi được.',
   UNIT_PRICE_REQUIRED: 'Nhập giá bán cho từng chiếc.',
   DUPLICATE_UNIT: 'Một chiếc chỉ được chọn một lần trong đơn.',
-  LOT_HAS_RESERVED_UNITS: 'Lô có chiếc đang được giữ cho đơn - huỷ các đơn đó trước khi huỷ lô.',
+  LOT_HAS_RESERVED_UNITS: 'Cối đang được giữ cho đơn - huỷ đơn đó trước khi huỷ cối.',
   INVALID_QTY: 'Số lượng phải từ 1 đến 1000.',
   TOO_MANY_UNITS: 'Lô quá nhiều chiếc (tối đa 1000).',
   SELLER_NOT_FOUND: 'Không tìm thấy người bán.',
@@ -52,7 +53,7 @@ export function errorMessage(e: unknown): string {
   const raw = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e)
   const code = Object.keys(MSG).find((k) => raw.includes(k))
   if (code) return (code === 'INVALID_INPUT' || code === 'INVALID_AMOUNT' ? fieldMessage(e) : null) ?? MSG[code] + detailSuffix(e)
-  if (raw.includes('23503') || /foreign key/i.test(raw)) return 'Mục này đã có chiếc cối, lô hoặc đơn dùng tới - hãy Ẩn thay vì xoá (BR-14).'
+  if (raw.includes('23503') || /foreign key/i.test(raw)) return 'Mục này đã có chiếc cối hoặc đơn dùng tới - hãy Ẩn thay vì xoá (BR-14).'
   // CR-005: check của sổ quỹ / cài đặt VietQR (23514) → câu cụ thể
   if (/cash_kind_direction/.test(raw)) return 'Chiều tiền không khớp loại (chi phí / rút vốn là tiền ra, nạp vốn là tiền vào).'
   if (/cash_expense_category/.test(raw)) return 'Loại chi phí chỉ dùng cho "Chi phí khác".'

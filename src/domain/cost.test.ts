@@ -159,3 +159,11 @@ test('CR-003: decimals (2,5% / 1,75%), ship blank (provisional), cancelled lot =
   assert.equal(lotPayable(lot({ buyingFeePct: 3, status: 'cancelled' }), crUnits()), 0);
   assert.equal(lotPayable(lot({ buyingFeePct: 100, shipFee: null }), [unit('A', { priceCny: 10 })]), 72000);
 });
+
+test('CR-009: ship Kho VN → Lumi is in the unit cost, not in the lot payable (same numbers as DB test 16)', () => {
+  const one = [unit('A', { priceCny: 1000 })];
+  assert.equal(autoUnitCost(one[0]!, lot({ shipFee: null, localShip: 50000 }), 1), 3650000);
+  assert.equal(lotPayable(lot({ shipFee: null, localShip: 50000 }), one), 3600000);
+  assert.equal(autoUnitCost(one[0]!, lot({ shipFee: 33333, localShip: 30000 }), 1), 3663333);
+  assert.equal(isCostProvisional(one[0]!, lot({ shipFee: null, localShip: 50000 })), true);
+});

@@ -20,12 +20,13 @@ export type ShipPayerDb = 'customer' | 'shop'
 /** CR-005 sổ quỹ: chiều tiền + loại bút toán (5 loại đầu tự sinh - chỉ đọc; 4 loại sau ghi tay). */
 export type CashDirectionDb = 'in' | 'out'
 export type CashKindDb = 'customer_payment' | 'customer_refund' | 'intermediary' | 'ship_shop' | 'return_ship'
-  | 'expense' | 'capital_in' | 'capital_out' | 'adjustment'
+  | 'expense' | 'capital_in' | 'capital_out' | 'adjustment' | 'local_ship'
 
 interface Row { id: string; user_id: string; created_at: string; updated_at: string; version: number }
 export interface ModelRow extends Row { name: string; brand: string; image_path: string | null; aliases: string[]; code_prefix: string; default_list_price_vnd: number | null; low_stock_threshold: number; next_seq: number; is_active: boolean; sort_order: number }
 export interface SellerRow extends Row { nickname: string; region: string | null; profile_url: string | null; reputation_note: string | null; is_avoided: boolean; is_hidden: boolean }
-export interface LotRow extends Row { goofish_url: string | null; goofish_item_id: string | null; seller_id: string | null; screenshot_path: string | null; listing_title: string | null; ordered_at: string; exchange_rate: number; ship_fee_vnd: number | null; status: LotStatusDb; received_at: string | null; cancelled_at: string | null; note: string | null; /** CR-003 phí mua hộ % (0..100) */ buying_fee_pct: number }
+export interface LotRow extends Row { goofish_url: string | null; goofish_item_id: string | null; seller_id: string | null; screenshot_path: string | null; listing_title: string | null; ordered_at: string; exchange_rate: number; ship_fee_vnd: number | null; status: LotStatusDb; received_at: string | null; cancelled_at: string | null; note: string | null; /** CR-003 phí mua hộ % (0..100) */ buying_fee_pct: number
+  /** CR-009 ship Kho VN → Lumi (shop trả ngay - vào giá nhập + sổ quỹ, không vào nợ trung gian); ship_fee_vnd = ship TQ→VN */ local_ship_vnd: number | null }
 export interface UnitRow extends Row { code: string; model_id: string; lot_id: string; price_cny: number; cost_vnd_auto: number; cost_vnd_override: number | null; list_price_vnd: number | null; serial_no: string | null; note: string | null; /** CR-004 (sửa qua update_unit / receive_lot p_units) */ condition: UnitConditionDb }
 /** lot_id: payable luôn có; CR-005 transfer có thể gắn lô (client ghi / sửa được); adjustment luôn null. */
 export interface TxnRow extends Row { txn_date: string; kind: TxnKindDb; amount_vnd: number; lot_id: string | null; note: string | null }

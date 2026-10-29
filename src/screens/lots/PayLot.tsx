@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useData, useStore } from '../../data/store.tsx'
 import { useToast } from '../../ui/feedback.tsx'
 import { todayVn, tr } from '../../ui/format.ts'
+import { lotName } from '../overview/common.tsx'
 
 export function PayLotButton({ lotId, className, id, label }: { lotId: string; className?: string; id?: string; label?: string }) {
   const d = useData()
@@ -19,7 +20,7 @@ export function PayLotButton({ lotId, className, id, label }: { lotId: string; c
     setBusy(true)
     try {
       await rpc('pay_lot', { p_lot_id: lotId, p_paid_at: todayVn(), p_note: shipOnly ? 'Trả phí ship' : null })
-      toast(`Đã ghi trả ${d.lotCode[lotId] ?? 'lô'}: ${tr(due)}`)
+      toast(`Đã ghi trả ${lotName(d, lotId)}: ${tr(due)}`)
     } catch (e) {
       toast(e instanceof Error ? e.message : String(e))
     } finally {
