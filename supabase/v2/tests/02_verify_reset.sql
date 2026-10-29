@@ -57,11 +57,12 @@ select t.ok(to_regclass('public.units') is not null and to_regclass('public.note
             and to_regclass('public.v_units') is not null and to_regclass('public.v_model_stock') is not null
             and to_regclass('private.unit_code_retired') is not null, 'v2: units, notes, v_units, v_model_stock, unit_code_retired có');
 select t.eq((select count(*) from public.models)::int, 0, 'v2: dữ liệu v1 đã xoá (A11) — models rỗng');
--- CR-005: cài mới (001 có sổ quỹ) thêm cash_entries; DB nâng cấp (fixture pre-003) chưa có
+-- CR-005 / CR-008: cài mới (001 có sổ quỹ + danh bạ kho) thêm cash_entries + warehouses; DB nâng cấp (fixture pre-003) chưa có
 select t.eq((select string_agg(tablename, ',' order by tablename) from pg_publication_tables where pubname = 'supabase_realtime'),
             case when to_regclass('public.cash_entries') is not null then 'cash_entries,' else '' end
-            || 'customers,intermediary_txns,lots,models,notes,order_lines,orders,payments,sellers,settings,units',
-            'realtime: đúng các bảng v2 (11 + cash_entries nếu có CR-005)');
+            || 'customers,intermediary_txns,lots,models,notes,order_lines,orders,payments,sellers,settings,units'
+            || case when to_regclass('public.warehouses') is not null then ',warehouses' else '' end,
+            'realtime: đúng các bảng v2 (11 + cash_entries nếu có CR-005 + warehouses nếu có CR-008)');
 select t.eq((select count(*) from pg_policies where schemaname = 'storage' and tablename = 'objects')::int, 4,
             'storage: 4 policy private_images_*');
 select t.eq((select count(*) from storage.buckets where id = 'private-images')::int, 1, 'storage: bucket giữ nguyên');

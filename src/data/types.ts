@@ -44,6 +44,8 @@ export interface OrderRow extends Row { customer_id: string; order_date: string;
 /** cancelled = dòng đã nhả chiếc (đơn huỷ hoặc Hoàn hàng). */
 export interface OrderLineRow extends Row { order_id: string; line_no: number; unit_id: string; unit_price_vnd: number; cancelled: boolean }
 export interface PaymentRow extends Row { order_id: string; paid_at: string; kind: PaymentKindDb; amount_vnd: number; note: string | null; /** CR-004, ghi trực tiếp được */ method: PaymentMethodDb }
+/** CR-008 (007_warehouses.sql) danh bạ kho - client ghi trực tiếp (name, phone, address, note). */
+export interface WarehouseRow extends Row { name: string; phone: string | null; address: string | null; note: string | null }
 export type NoteColor = 'default' | 'yellow' | 'green' | 'blue' | 'pink' | 'purple'
 export interface NoteRow { id: string; user_id: string; body: string; is_pinned: boolean; created_at: string; updated_at: string; version: number ; /** 004: màu thẻ */ color: NoteColor }
 export interface SettingsRow { user_id: string; ai_scan_enabled: boolean; ai_scan_monthly_cap: number; ai_confidence_threshold: number; default_ship_fee_payer: ShipPayerDb; /** CR-003 phí mua hộ mặc định % cho lô mới */ default_buying_fee_pct: number
@@ -91,6 +93,8 @@ export interface DbData {
   balance: BalanceRow; suggestions: SuggestionsRow
   /** CR-005 sổ quỹ (tuỳ chọn tới khi store.tsx tải: cash_entries, v_cash_balance, v_cash_monthly) */
   cashEntries?: CashEntryRow[]; cashBalance?: CashBalanceRow; cashMonthly?: CashMonthlyRow[]
+  /** CR-008 danh bạ kho */
+  warehouses?: WarehouseRow[]
   /** Mã hiển thị L-001 / D-001 theo thứ tự tạo (DB không có cột mã). */
   lotCode: Record<string, string>; orderCode: Record<string, string>
 }

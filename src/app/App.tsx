@@ -11,6 +11,7 @@ import OrderDetail from '../screens/OrderDetail.tsx'
 import OrderNew from '../screens/OrderNew.tsx'
 import Debt from '../screens/Debt.tsx'
 import Customers from '../screens/Customers.tsx'
+import Warehouses from '../screens/Warehouses.tsx'
 import Catalog from '../screens/Catalog.tsx'
 import Settings from '../screens/Settings.tsx'
 import MoreMenu from '../screens/MoreMenu.tsx'
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="/don/:id/sua" element={<OrderNew />} />
           <Route path="/congno" element={<Debt />} />
           <Route path="/khach" element={<Customers />} />
+          <Route path="/danhbakho" element={<Warehouses />} />
           <Route path="/danhmuc" element={<Catalog />} />
           <Route path="/caidat" element={<Settings />} />
           <Route path="/ghichu" element={<Notes />} />

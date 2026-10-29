@@ -13,6 +13,7 @@ export default function MoreMenu() {
   const info: Record<string, [string, string | null]> = {
     '/congno': [`Thu chi, quỹ${debt > 0 ? `, nợ trung gian ${tr(debt)}` : ''}`, `${cash < 0 ? '−' : ''}${tr(Math.abs(cash))}`],
     '/khach': ['Khách Facebook, công nợ', `${d.customers.filter((c) => !c.is_hidden).length}`],
+    '/danhbakho': ['Địa chỉ, SĐT các kho', `${(d.warehouses ?? []).length}`],
     '/danhmuc': ['Tiền tố mã, giá mặc định, ngưỡng sắp hết', `${d.models.filter((m) => m.is_active).length}`],
     '/caidat': ['Giao diện, AI, ngưỡng ngày, STK, xuất Excel', null],
   }

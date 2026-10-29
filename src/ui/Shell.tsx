@@ -5,12 +5,13 @@ import { useData, useStore } from '../data/store.tsx'
 import { Brandmark, Icon } from './icons.tsx'
 import { Sheet } from './feedback.tsx'
 
-export type Section = 'home' | 'kho' | 'don' | 'ghichu' | 'congno' | 'khach' | 'danhmuc' | 'caidat' | ''
+export type Section = 'home' | 'kho' | 'don' | 'ghichu' | 'congno' | 'khach' | 'dbkho' | 'danhmuc' | 'caidat' | ''
 // CR-006: Lô nhập gộp vào Kho (/kho?tt=tq) → tab đáy điện thoại: Tổng quan, Kho, +, Đơn bán, Ghi chú, Sổ quỹ.
 export const NAV: [string, string, Section, string][] = [
   ['/', 'Tổng quan', 'home', 'home'], ['/kho', 'Kho', 'kho', 'box'], ['/don', 'Đơn bán', 'don', 'receipt'], ['/ghichu', 'Ghi chú', 'ghichu', 'note'],
   ['/congno', 'Sổ quỹ', 'congno', 'wallet'],
-  ['/khach', 'Khách', 'khach', 'user'], ['/danhmuc', 'Model', 'danhmuc', 'tag'], ['/caidat', 'Cài đặt', 'caidat', 'gear'],
+  ['/khach', 'Khách', 'khach', 'user'], ['/danhbakho', 'Danh bạ kho', 'dbkho', 'store'],
+  ['/danhmuc', 'Model', 'danhmuc', 'tag'], ['/caidat', 'Cài đặt', 'caidat', 'gear'],
 ]
 
 /** CR-005 ý 3: quay lại = về đúng màn trước (lịch sử trong app); mở thẳng link (không có lịch sử) thì về màn cha. */
