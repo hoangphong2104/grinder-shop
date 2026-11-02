@@ -157,6 +157,7 @@ function UnitView({ u }: { u: UnitViewRow }) {
         <Sheet title={`Thao tác ${u.code}`} onClose={() => setMenu(false)}>
           <div className="list">
             {isOpen(lot.status) && <button className="li" id="m-edit" onClick={act(() => nav(`/lo/${lot.id}/sua`))}><div className="main"><b>Sửa thông tin mua</b><div className="s">Link, người bán, giá ¥, tỷ giá, phí mua hộ</div></div><Icon name="chev" size={16} /></button>}
+            {lot.status === 'vn_warehouse' && <button className="li" id="m-back" onClick={act(() => flow.back(lot))}><div className="main"><b>Quay lại Kho TQ</b><div className="s">Lỡ chuyển nhầm sang Kho VN</div></div><Icon name="chev" size={16} /></button>}
             {next && next !== 'received' && <button className="li" id="m-receive" onClick={act(() => flow.receive(lot))}><div className="main"><b>Nhận vào Kho Lumi ngay</b><div className="s">Bỏ qua Kho VN</div></div><Icon name="chev" size={16} /></button>}
             {u.status === 'incoming' && <Link className="li" id="m-preorder" to={`/don/new?chiec=${u.unit_id}`}><div className="main"><b>Bán trước (khách đặt)</b><div className="s">Tạo đơn đặt trước, giữ cối này</div></div><Icon name="chev" size={16} /></Link>}
             {lot.status !== 'cancelled' && <button className="li" id="m-ship" onClick={act(() => flow.shipFee(lot))}><div className="main"><b>Sửa ship kho VN → Lumi</b><div className="s">{lot.local_ship_vnd ? vnd(lot.local_ship_vnd) : 'chưa có'}</div></div><Icon name="chev" size={16} /></button>}
