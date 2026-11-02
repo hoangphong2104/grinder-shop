@@ -8,3 +8,4 @@
 006_note_history.sql
 007_warehouses.sql
 008_local_ship.sql
+009_revert.sql

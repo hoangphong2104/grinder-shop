@@ -75,7 +75,7 @@ begin
                      'bootstrap_user','save_lot','set_lot_status','receive_lot','update_lot_ship_fee','cancel_lot',
                      'update_unit','save_order','confirm_preorder','ship_order','cancel_order','complete_order',
                      'ai_scan_reserve','ai_scan_finish','set_order_cod','return_order','pay_lot','delete_order',
-                     'set_lot_local_ship','settle_cn_ship'))
+                     'set_lot_local_ship','settle_cn_ship','revert_lot','revert_order'))
                or (n.nspname = 'private' and p.proname in (
                      'today_vn','require_uid','check_version','touch_row','touch_model',
                      'recalc_lot','replay_variant_avg','lock_variants','variant_incoming','variant_reserved',

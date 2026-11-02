@@ -21,13 +21,13 @@ export const MAX_GROUP_ITEMS = 1050
 
 /** Đối số save_lot giữ nguyên mọi trường + mọi chiếc của lô chưa nhận, chỉ đổi phần truyền vào.
  *  Không gửi buying_fee_pct ⇒ DB giữ nguyên phí mua hộ của lô (CR-003). */
-export function saveLotArgs(l: LotRow, units: UnitViewRow[], patch: { ship_fee_vnd?: number | null; status?: 'cn_warehouse' | 'vn_warehouse' }) {
+export function saveLotArgs(l: LotRow, units: UnitViewRow[], patch: { ship_fee_vnd?: number | null }) {
   return {
     p_lot_id: l.id,
     p_lot: {
       goofish_url: l.goofish_url, goofish_item_id: l.goofish_item_id, seller_id: l.seller_id, screenshot_path: l.screenshot_path,
       listing_title: l.listing_title, ordered_at: l.ordered_at, exchange_rate: Number(l.exchange_rate),
-      ship_fee_vnd: 'ship_fee_vnd' in patch ? patch.ship_fee_vnd : l.ship_fee_vnd, status: patch.status ?? l.status, note: l.note,
+      ship_fee_vnd: 'ship_fee_vnd' in patch ? patch.ship_fee_vnd : l.ship_fee_vnd, status: l.status, note: l.note,
     },
     p_groups: units.map((u) => ({ unit_id: u.unit_id })),
     p_expected_version: l.version,
@@ -74,15 +74,13 @@ interface ReceiveResult { units?: { unit_id: string; code: string; cost_vnd: num
 
 export function useLotFlow(): {
   next: (l: LotRow) => void; receive: (l: LotRow) => void; shipFee: (l: LotRow) => void; cancel: (l: LotRow) => void
-  /** Chuyển nhầm sang Kho VN ⇒ quay lại Kho TQ (save_lot status cn_warehouse; set_lot_status chỉ đi tới) */
+  /** CR-010 lùi 1 bước khi chuyển nhầm (revert_lot): Kho VN → Kho TQ, Kho Lumi → Kho VN, Huỷ → Kho TQ */
   back: (l: LotRow) => void
   busy: string | null; sheets: ReactNode
 } {
   const { rpc } = useStore()
-  const d = useData()
   const toast = useToast()
   const [open, setOpen] = useState<Open>(null)
-  const unitsOfLotRows = useCallback((lotId: string) => unitsOfLot(d, lotId), [d])
   const [busy, setBusy] = useState<string | null>(null)
   const close = useCallback(() => setOpen(null), [])
 
@@ -98,13 +96,14 @@ export function useLotFlow(): {
   }, [rpc, toast])
 
   const back = useCallback(async (l: LotRow) => {
-    if (l.status !== 'vn_warehouse') return
+    if (l.status === 'cn_warehouse') return
     setBusy(l.id)
     try {
-      await rpc('save_lot', saveLotArgs(l, unitsOfLotRows(l.id), { status: 'cn_warehouse' }))
-      toast('Đã quay lại Kho TQ')
+      const r = await rpc<{ status: LotRow['status']; reverted_order_ids?: string[] }>('revert_lot', { p_lot_id: l.id, p_expected_version: l.version })
+      const n = r.reverted_order_ids?.length ?? 0
+      toast(`Đã quay lại ${LOT_LABEL[r.status]}${n ? `, ${n} đơn về Đặt trước` : ''}`)
     } catch (e) { toast(errText(e)) } finally { setBusy(null) }
-  }, [rpc, toast, unitsOfLotRows])
+  }, [rpc, toast])
 
   let sheets: ReactNode = null
   if (open?.kind === 'receive') sheets = <ReceiveSheet lotId={open.lotId} onClose={close} onDone={(ids) => setOpen(ids.length ? { kind: 'confirmed', ids } : null)} />

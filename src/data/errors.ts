@@ -12,6 +12,8 @@ const MSG: Record<string, string> = {
   LOT_CANCELLED: 'Lô đã huỷ.',
   LOT_ALREADY_PAID: 'Lô đã thanh toán đủ cho trung gian.',
   INVALID_STATUS_TRANSITION: 'Lỡ chuyển nhầm sang Kho VN: mở cối, bấm ⋯ › "Quay lại Kho TQ".',
+  NOTHING_TO_REVERT: 'Đang ở bước đầu - không còn bước nào để quay lại.',
+  LOT_HAS_SOLD_UNITS: 'Cối đang giao / đã giao cho khách - mở đơn, bấm ⋯ › "Quay lại Đã chốt" trước, rồi mới đưa cối về Kho VN.',
   LOT_LOCKED: 'Lô đã nhận: không thêm / bớt chiếc, không đổi giá ¥ / tỷ giá. Sửa phí ship ở trang lô; giá nhập ₫ sửa tay, giá bán, seri sửa ở từng chiếc.',
   ORDER_NOT_FOUND: 'Không tìm thấy đơn.',
   ORDER_HAS_NO_LINES: 'Đơn cần ít nhất một chiếc cối.',
