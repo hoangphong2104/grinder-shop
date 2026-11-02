@@ -193,3 +193,11 @@ export function codesText(codes: string[], max = 4): string {
 export function rangeText(codes: string[], max = 3): string {
   return codes.length <= max ? codes.join(', ') : `${codes[0]} … ${codes[codes.length - 1]}`
 }
+
+/** CR-010: mục "quay lại" trong menu cối - [tiêu đề, mô tả] hoặc null khi không lùi được (Kho TQ). */
+export function revertLabel(status: LotRow['status']): [string, string] | null {
+  if (status === 'vn_warehouse') return ['Quay lại Kho TQ', 'Lỡ chuyển nhầm sang Kho VN']
+  if (status === 'received') return ['Đưa về Kho VN', 'Lỡ nhận nhầm vào Kho Lumi - bỏ ngày nhận']
+  if (status === 'cancelled') return ['Khôi phục cối', 'Lỡ huỷ nhầm - về lại Kho TQ']
+  return null
+}

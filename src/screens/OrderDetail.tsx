@@ -78,6 +78,12 @@ function OrderDetailView({ id }: { id: string }) {
   const cfg = bankCfg(d.settings)
   const qrAmount = closedMoney ? 0 : Math.max(due - s.cod_pending_vnd, 0)
 
+  // CR-010: lùi 1 bước khi chuyển nhầm (Huỷ ⇒ Đặt trước / Đã chốt tuỳ hàng đã về)
+  const revertTo: string | null = o.status === 'shipped' ? ORDER_LABEL.confirmed : o.status === 'completed' || o.status === 'returned' ? ORDER_LABEL.shipped
+    : o.status === 'cancelled' ? 'đơn đang mở' : null
+  const revert = () => run(() => rpc('revert_order', { p_order_id: o.id, p_expected_version: o.version }),
+    o.status === 'cancelled' ? `Đã khôi phục ${code}` : `${code}: đã quay lại ${revertTo}`)
+
   async function run(fn: () => Promise<unknown>, ok: string) {
     setBusy(true)
     try { await fn(); setSheet(null); toast(ok) } catch (e) { toast(e instanceof Error ? e.message : errorMessage(e)) } finally { setBusy(false) }
@@ -245,6 +251,9 @@ function OrderDetailView({ id }: { id: string }) {
             <button className="li" onClick={() => copyConfirm()}><span className="main"><b>Sao chép tin xác nhận đơn</b><span className="s">Mã chiếc, giá, ship, cọc, còn lại - dán Messenger / Zalo</span></span><Icon name="chev" size={16} /></button>
             {o.status === 'shipped' && (
               <button className="li danger" onClick={() => setSheet('return')}><span className="main"><b>Hoàn hàng / khách không nhận</b><span className="s">Chiếc về lại kho, chọn giữ hay hoàn cọc</span></span><Icon name="chev" size={16} /></button>
+            )}
+            {revertTo && (
+              <button className="li" id="o-revert" disabled={busy} onClick={revert}><span className="main"><b>{o.status === 'cancelled' ? 'Khôi phục đơn' : `Quay lại ${revertTo}`}</b><span className="s">{o.status === 'cancelled' ? 'Lỡ huỷ nhầm - giữ lại chiếc cho đơn' : o.status === 'returned' ? 'Lỡ ghi hoàn hàng nhầm - bỏ thông tin hoàn, giữ lại chiếc' : 'Lỡ chuyển nhầm trạng thái'}</span></span><Icon name="chev" size={16} /></button>
             )}
             {(o.status === 'preorder' || o.status === 'confirmed') && (
               <button className="li danger" onClick={() => setSheet('cancel')}><span className="main"><b>Huỷ đơn</b><span className="s">Bỏ giữ chiếc; tiền đã thu thành “cần hoàn”</span></span><Icon name="chev" size={16} /></button>
