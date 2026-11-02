@@ -165,6 +165,7 @@ export default function LotDetail() {
         <Sheet title={`Thao tác ${lotName(d, l.id)}`} onClose={() => setMenu(false)}>
           <div className="list">
             {open && <button className="li" id="m-edit" onClick={act(() => nav(`/lo/${l.id}/sua`))}><div className="main"><b>Sửa lô</b><div className="s">Link, người bán, tỷ giá, nhóm chiếc</div></div><Icon name="chev" size={16} /></button>}
+            {l.status === 'vn_warehouse' && <button className="li" id="m-back" onClick={act(() => flow.back(l))}><div className="main"><b>Quay lại Kho TQ</b><div className="s">Lỡ chuyển nhầm sang Kho VN</div></div><Icon name="chev" size={16} /></button>}
             {open && next !== 'received' && <button className="li" id="m-receive" onClick={act(() => flow.receive(l))}><div className="main"><b>Nhận vào Kho Lumi ngay</b><div className="s">Bỏ qua các bước còn lại</div></div><Icon name="chev" size={16} /></button>}
             <button className="li" id="m-note" onClick={act(() => setNoteOpen(true))}><div className="main"><b>Ghi chú lô</b><div className="s">{l.note || 'Chưa có ghi chú'}</div></div><Icon name="chev" size={16} /></button>
             {open && <button className="li menu-danger" id="m-cancel" onClick={act(() => flow.cancel(l))}><div className="main"><b>Huỷ lô</b><div className="s">Không hoàn tác được</div></div></button>}
