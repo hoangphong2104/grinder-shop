@@ -92,6 +92,9 @@ export function autoCashEntries(orders: readonly Order[], transfers: readonly Tr
     if (o.status === 'returned' && (o.returnShipFee ?? 0) > 0) {
       out.push({ date: o.returnedAt ?? null, direction: 'out', kind: 'return_ship', amount: o.returnShipFee!, orderId: o.id, isAuto: true });
     }
+    if (hasShipped(o) && (o.fee ?? 0) > 0) {   // CR-011 phí COD / phí khác
+      out.push({ date: o.shippedAt ?? null, direction: 'out', kind: 'order_fee', amount: o.fee!, orderId: o.id, isAuto: true });
+    }
   }
   for (const t of transfers) {
     if (t.kind !== 'transfer' || t.amount <= 0) continue;

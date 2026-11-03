@@ -10,6 +10,12 @@ insert into auth.users (id, email) values ('10101010-1010-1010-1010-101010101010
 set role authenticated;
 select set_config('request.jwt.claim.sub', '10101010-1010-1010-1010-101010101010', false);
 select public.bootstrap_user();
+-- CR-011 (010): tắt phí COD mặc định để số lãi / sổ quỹ của test cũ giữ nguyên (test 18 kiểm tra phí)
+do $$ begin
+  if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'settings' and column_name = 'default_cod_fee_vnd') then
+    execute 'update public.settings set default_cod_fee_vnd = 0';
+  end if;
+end $$;
 select id as m_ku from public.models where code_prefix = 'KU' \gset
 select (private.today_vn() - 20)::text as d20, (private.today_vn() - 10)::text as d10, (private.today_vn() - 2)::text as d2 \gset
 

@@ -24,13 +24,14 @@ import { MoneyInput } from '../ui/MoneyInput.tsx'
 type Filter = 'all' | 'thu' | 'tg' | 'ship' | 'hoan' | 'chi' | 'von'
 const FILTERS: [Filter, string, CashKindDb[]][] = [
   ['all', 'Tất cả', []], ['thu', 'Thu khách', ['customer_payment']], ['tg', 'Trả trung gian', ['intermediary']], ['ship', 'Ship', ['ship_shop', 'return_ship', 'local_ship']],
-  ['hoan', 'Hoàn tiền', ['customer_refund']], ['chi', 'Chi phí', ['expense']], ['von', 'Vốn', ['capital_in', 'capital_out', 'adjustment']],
+  ['hoan', 'Hoàn tiền', ['customer_refund']], ['chi', 'Chi phí', ['expense', 'order_fee']], ['von', 'Vốn', ['capital_in', 'capital_out', 'adjustment']],
 ]
 type ManualKind = 'expense' | 'capital_in' | 'capital_out' | 'adjustment'
 const MANUAL: [ManualKind, string][] = [['expense', 'Chi phí'], ['capital_in', 'Nạp vốn'], ['capital_out', 'Rút vốn'], ['adjustment', 'Điều chỉnh']]
 /** CR-006: ghi mới chỉ Chi phí / Nạp vốn / Rút vốn - "Điều chỉnh" trùng ý với nạp / rút nên ẩn; khoản Điều chỉnh cũ vẫn hiện để sửa / xoá. */
 const MANUAL_NEW = MANUAL.filter(([k]) => k !== 'adjustment')
-const EXPENSE_HINTS = ['Đóng gói', 'Phí sàn / quảng cáo', 'Ship nội thành', 'Sửa chữa', 'Dụng cụ']
+// CR-011: các loại phí hay gặp (phí riêng của đơn - phí COD - ghi ở đơn › Phí đơn, tự vào đây)
+const EXPENSE_HINTS = ['Phí rút tiền', 'Phí chuyển khoản', 'Phí COD', 'Đóng gói', 'Phí sàn / quảng cáo', 'Ship nội thành', 'Sửa chữa', 'Dụng cụ']
 const TXN_LABEL = { payable: 'Phải trả', transfer: 'Đã chuyển', adjustment: 'Điều chỉnh nợ' } as const
 
 const amountText = (e: CashEntryRow) => (e.direction === 'in' ? `+${tr(e.amount_vnd)}` : `−${tr(e.amount_vnd)}`)
@@ -274,6 +275,11 @@ function CashSheet({ kind: kind0, entry, onClose }: { kind: ManualKind; entry?: 
           <datalist id="cash-cats">{cats.map((c) => <option key={c} value={c} />)}</datalist>
           {err.cat && <span className="field-err">{err.cat}</span>}
         </label>
+      )}
+      {kind === 'expense' && (
+        <div className="chips" role="group" aria-label="Chọn nhanh loại chi phí">
+          {cats.slice(0, 8).map((c) => <button key={c} type="button" className="chip" aria-pressed={cat === c} onClick={() => setCat(c)}>{c}</button>)}
+        </div>
       )}
       <label className="f">Ngày
         <input className={`input ${err.date ? 'invalid' : ''}`} id="cash-date" type="date" max={todayVn()} value={date} onChange={(e) => setDate(e.target.value)} />

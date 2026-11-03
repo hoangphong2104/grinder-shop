@@ -10,6 +10,8 @@
 --   sổ quỹ 'local_ship'), nhận cối không bắt buộc ship TQ→VN (tất toán gộp sau: settle_cn_ship), set_lot_local_ship,
 --   lãi dự kiến chiếc đã giữ = giá chốt trên đơn − giá nhập.
 -- Gộp thêm CR-010 (009_revert.sql): revert_lot / revert_order — lùi 1 bước trạng thái cối / đơn khi chuyển nhầm.
+-- Gộp thêm CR-011 (010_order_fee.sql): orders.fee_vnd (phí COD / phí khác shop chịu: trừ lãi + bút toán 'order_fee'),
+--   settings.default_cod_fee_vnd (mặc định 5.500 — ship_order có COD tự điền), set_order_fee.
 -- Gộp thêm CR-002 (CR file §6): bảng public.notes (tab Ghi chú) — client ghi trực tiếp, RLS theo user, có realtime.
 -- Gộp thêm CR-003 (CR file §7, v0.3): phí mua hộ % — settings.default_buying_fee_pct, lots.buying_fee_pct (cột cuối
 --   bảng, để cài mới = v2 + 002_buying_fee.sql). DB đang chạy v2 có dữ liệu: chạy 002_buying_fee.sql (cộng thêm).
@@ -330,6 +332,7 @@ create table public.orders (
   return_ship_fee_vnd bigint not null default 0 check (return_ship_fee_vnd >= 0), -- ship chiều về (trừ lãi)
   keep_deposit       boolean not null default false,                             -- hoàn hàng: shop giữ cọc
   return_note        text check (length(return_note) <= 1000),
+  fee_vnd            bigint not null default 0 check (fee_vnd >= 0),            -- CR-011: phí COD / phí khác shop chịu
   unique (id, user_id),
   foreign key (customer_id, user_id) references public.customers (id, user_id) on delete restrict,  -- BR-14
   constraint orders_shipped_has_date check (status not in ('shipped','completed','returned') or shipped_at is not null),
@@ -394,6 +397,7 @@ create table public.settings (
   bank_bin                 text check (bank_bin ~ '^[0-9]{6}$'),                   -- CR-005 VietQR: mã BIN NAPAS 6 số
   bank_account_no          text check (bank_account_no ~ '^[0-9A-Za-z]{1,19}$'),   -- CR-005 VietQR: số tài khoản
   bank_account_name        text check (length(btrim(bank_account_name)) between 1 and 50),   -- CR-005 VietQR: tên chủ TK
+  default_cod_fee_vnd      bigint not null default 5500 check (default_cod_fee_vnd >= 0),   -- CR-011: phí COD mặc định
   constraint settings_aging_days_order check (aging_warn_days < aging_alert_days)
 );
 
@@ -436,7 +440,7 @@ create table public.cash_entries (
   direction         text not null check (direction in ('in','out')),
   amount_vnd        bigint not null check (amount_vnd > 0),
   kind              text not null check (kind in ('customer_payment','customer_refund','intermediary','ship_shop','return_ship',
-                                                  'expense','capital_in','capital_out','adjustment','local_ship')),
+                                                  'expense','capital_in','capital_out','adjustment','local_ship','order_fee')),
   expense_category  text check (length(btrim(expense_category)) between 1 and 60),
   note              text check (length(note) <= 1000),
   payment_id        uuid references public.payments(id) on delete cascade,
@@ -449,14 +453,14 @@ create table public.cash_entries (
   version           int not null default 1,
   constraint cash_kind_direction check (
     (kind in ('customer_payment','capital_in') and direction = 'in')
-    or (kind in ('customer_refund','intermediary','ship_shop','return_ship','expense','capital_out','local_ship') and direction = 'out')
+    or (kind in ('customer_refund','intermediary','ship_shop','return_ship','expense','capital_out','local_ship','order_fee') and direction = 'out')
     or kind = 'adjustment'),
-  constraint cash_auto_kind check (is_auto = (kind in ('customer_payment','customer_refund','intermediary','ship_shop','return_ship','local_ship'))),
+  constraint cash_auto_kind check (is_auto = (kind in ('customer_payment','customer_refund','intermediary','ship_shop','return_ship','local_ship','order_fee'))),
   constraint cash_expense_category check (kind = 'expense' or expense_category is null),
   constraint cash_auto_source check (
     (kind not in ('customer_payment','customer_refund') or payment_id is not null)
     and (kind <> 'intermediary' or txn_id is not null)
-    and (kind not in ('ship_shop','return_ship') or order_id is not null)
+    and (kind not in ('ship_shop','return_ship','order_fee') or order_id is not null)
     and (kind <> 'local_ship' or lot_id is not null)),
   constraint cash_manual_no_source check (is_auto or (payment_id is null and txn_id is null and order_id is null and lot_id is null))
 );
@@ -467,6 +471,7 @@ create index cash_entries_user_date_idx     on public.cash_entries (user_id, ent
 create index cash_entries_order_idx         on public.cash_entries (order_id);
 create index cash_entries_lot_idx           on public.cash_entries (lot_id);
 create unique index cash_entries_local_ship_uq on public.cash_entries (lot_id) where kind = 'local_ship';   -- CR-009
+create unique index cash_entries_order_fee_uq on public.cash_entries (order_id) where kind = 'order_fee';   -- CR-011
 
 -- Trigger updated_at/version
 create trigger models_touch before insert or update on public.models
@@ -737,11 +742,11 @@ select o.id as order_id, o.user_id, o.customer_id, c.fb_name as customer_name, o
        mo.receivable_vnd,                                               -- âm = khách trả dư (Q-010)
        mo.refund_due_vnd,
        case when o.status in ('shipped','completed')
-            then agg.goods_vnd - agg.cost_vnd - case when o.ship_fee_payer = 'shop' then o.ship_fee_vnd else 0 end
+            then agg.goods_vnd - agg.cost_vnd - case when o.ship_fee_payer = 'shop' then o.ship_fee_vnd else 0 end - o.fee_vnd
             when o.status = 'returned'
             then coalesce(p.paid_vnd, 0) - mo.refund_due_vnd
-                 - case when o.ship_fee_payer = 'shop' then o.ship_fee_vnd else 0 end - o.return_ship_fee_vnd
-       end as profit_vnd,
+                 - case when o.ship_fee_payer = 'shop' then o.ship_fee_vnd else 0 end - o.return_ship_fee_vnd - o.fee_vnd
+       end as profit_vnd,                                               -- CR-011: trừ phí COD / phí khác
        o.cod_amount_vnd,
        coalesce(p.cod_received_vnd, 0) as cod_received_vnd,
        case when o.status in ('shipped','completed','returned')
@@ -754,7 +759,8 @@ select o.id as order_id, o.user_id, o.customer_id, c.fb_name as customer_name, o
        o.return_note,
        case when o.status = 'returned' then coalesce(p.paid_vnd, 0) - mo.refund_due_vnd end as kept_vnd,
        case when o.status in ('shipped','completed') then o.shipped_at
-            when o.status = 'returned' then o.returned_at end as profit_date
+            when o.status = 'returned' then o.returned_at end as profit_date,
+       o.fee_vnd                                                        -- CR-011
 from public.orders o
 join public.customers c on c.id = o.customer_id
 left join lateral (
@@ -839,7 +845,7 @@ select e.user_id,
        coalesce(sum(e.amount_vnd) filter (where e.kind = 'customer_refund'), 0)::bigint           as refund_out_vnd,
        coalesce(sum(e.amount_vnd) filter (where e.kind = 'intermediary'), 0)::bigint              as intermediary_out_vnd,
        coalesce(sum(e.amount_vnd) filter (where e.kind in ('ship_shop','return_ship','local_ship')), 0)::bigint as ship_out_vnd,
-       coalesce(sum(e.amount_vnd) filter (where e.kind = 'expense'), 0)::bigint                   as expense_out_vnd,
+       coalesce(sum(e.amount_vnd) filter (where e.kind in ('expense','order_fee')), 0)::bigint    as expense_out_vnd,
        coalesce(sum(e.amount_vnd) filter (where e.kind = 'capital_in'), 0)::bigint                as capital_in_vnd,
        coalesce(sum(e.amount_vnd) filter (where e.kind = 'capital_out'), 0)::bigint               as capital_out_vnd,
        coalesce(sum(case when e.direction = 'in' then e.amount_vnd else -e.amount_vnd end)
@@ -976,7 +982,7 @@ begin
          is distinct from (excluded.user_id, excluded.entry_date, excluded.amount_vnd, excluded.note, excluded.lot_id);
 end $$;
 
--- Đơn → bút toán ship: 'ship_shop' khi đơn đã gửi (shipped / completed / returned), shop chịu ship, phí > 0 (ngày gửi);
+-- Đơn → bút toán ship + phí: 'ship_shop' khi đơn đã gửi (shipped / completed / returned), shop chịu ship, phí > 0 (ngày gửi);
 -- 'return_ship' khi đơn Hoàn hàng có phí ship chiều về > 0 (ngày hoàn). Hết điều kiện ⇒ xoá bút toán.
 create or replace function private.cash_sync_order(p_order_id uuid) returns void
 language plpgsql security definer set search_path = '' as $$
@@ -1004,6 +1010,16 @@ begin
      where (c.user_id, c.entry_date, c.amount_vnd) is distinct from (excluded.user_id, excluded.entry_date, excluded.amount_vnd);
   else
     delete from public.cash_entries where order_id = p_order_id and kind = 'return_ship';
+  end if;
+  -- CR-011 phí COD / phí khác shop chịu: khi đơn đã gửi, ngày gửi
+  if o.status in ('shipped','completed','returned') and o.fee_vnd > 0 then
+    insert into public.cash_entries as c (user_id, entry_date, direction, amount_vnd, kind, order_id, is_auto)
+    values (o.user_id, o.shipped_at, 'out', o.fee_vnd, 'order_fee', o.id, true)
+    on conflict (order_id) where kind = 'order_fee' do update
+       set user_id = excluded.user_id, entry_date = excluded.entry_date, amount_vnd = excluded.amount_vnd
+     where (c.user_id, c.entry_date, c.amount_vnd) is distinct from (excluded.user_id, excluded.entry_date, excluded.amount_vnd);
+  else
+    delete from public.cash_entries where order_id = p_order_id and kind = 'order_fee';
   end if;
 end $$;
 
@@ -1064,7 +1080,7 @@ end $$;
 
 drop trigger if exists orders_cash on public.orders;
 create trigger orders_cash
-  after insert or update of status, ship_fee_vnd, ship_fee_payer, shipped_at, returned_at, return_ship_fee_vnd on public.orders
+  after insert or update of status, ship_fee_vnd, ship_fee_payer, shipped_at, returned_at, return_ship_fee_vnd, fee_vnd on public.orders
   for each row execute function private.cash_on_order();
 drop trigger if exists lots_cash on public.lots;
 create trigger lots_cash
@@ -1757,6 +1773,26 @@ begin
                             'version', (select version from public.orders where id = p_order_id));
 end $$;
 
+-- CR-011 set_order_fee(p_order_id, p_fee_vnd bigint ≥ 0, p_expected_version) → { order_id, fee_vnd, version }
+-- Phí COD / phí khác shop chịu của đơn (mọi trạng thái trừ Huỷ): trừ vào lãi đơn; đơn đã gửi ⇒ bút toán sổ quỹ 'order_fee'.
+create or replace function public.set_order_fee(p_order_id uuid, p_fee_vnd bigint, p_expected_version int default null)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  v_uid   uuid := private.require_uid();
+  v_order public.orders%rowtype;
+begin
+  if p_fee_vnd is null or p_fee_vnd < 0 then
+    raise exception using errcode = 'P0001', message = 'INVALID_AMOUNT', detail = 'fee_vnd';
+  end if;
+  select * into v_order from public.orders where id = p_order_id and user_id = v_uid for update;
+  if not found then raise exception using errcode = 'P0001', message = 'ORDER_NOT_FOUND'; end if;
+  if v_order.status = 'cancelled' then raise exception using errcode = 'P0001', message = 'ORDER_LOCKED'; end if;
+  perform private.check_version(p_expected_version, v_order.version);
+  update public.orders set fee_vnd = p_fee_vnd where id = p_order_id and fee_vnd is distinct from p_fee_vnd;
+  return jsonb_build_object('order_id', p_order_id, 'fee_vnd', p_fee_vnd,
+                            'version', (select version from public.orders where id = p_order_id));
+end $$;
+
 -- cancel_lot(p_lot_id, p_expected_version) → { lot_id, status: 'cancelled', payable_vnd: 0, version }
 -- Huỷ lô trước Đã nhận. QUYẾT ĐỊNH: TỪ CHỐI nếu còn chiếc thuộc đơn chưa huỷ (LOT_HAS_RESERVED_UNITS,
 -- detail {order_ids, unit_codes}) — người dùng đổi chiếc trong đơn (save_order) hoặc huỷ đơn trước.
@@ -2082,10 +2118,16 @@ begin
          tracking_no = coalesce(nullif(btrim(p_tracking_no), ''), tracking_no),
          cod_amount_vnd = coalesce(p_cod_amount_vnd, cod_amount_vnd)
    where id = p_order_id;
+  -- CR-011: đơn có COD mà chưa có phí ⇒ phí COD mặc định trong Cài đặt
+  update public.orders o
+     set fee_vnd = (select st.default_cod_fee_vnd from public.settings st where st.user_id = v_uid)
+   where o.id = p_order_id and o.cod_amount_vnd > 0 and o.fee_vnd = 0
+     and coalesce((select st.default_cod_fee_vnd from public.settings st where st.user_id = v_uid), 0) > 0;
 
   return jsonb_build_object('order_id', p_order_id, 'status', 'shipped',
                             'shipped_at', (select shipped_at from public.orders where id = p_order_id),
                             'cod_amount_vnd', (select cod_amount_vnd from public.orders where id = p_order_id),
+                            'fee_vnd', (select fee_vnd from public.orders where id = p_order_id),
                             'version', (select version from public.orders where id = p_order_id));
 end $$;
 
@@ -2327,6 +2369,7 @@ grant execute on function
   public.settle_cn_ship(uuid[], bigint, date, text),
   public.revert_lot(uuid, int),
   public.revert_order(uuid, int),
+  public.set_order_fee(uuid, bigint, int),
   public.cancel_lot(uuid, int),
   public.update_unit(uuid, jsonb, int),
   public.save_order(uuid, jsonb, jsonb, int),

@@ -43,7 +43,7 @@ có thể bán (model)   = in_stock + incoming (both already exclude reserved); 
 giá trị tồn          = Σ giá nhập ₫ hiệu lực of received, not-sold units (reserved included)
 còn phải thu         = Σ giá chốt + ship khách trả − Σ đã thu; đơn huỷ → 0                BR-10, Q-009
 cần hoàn (đơn huỷ)   = max(0, đã thu ròng)                                                 Q-009
-lãi đơn              = Σ(giá chốt − giá nhập ₫ hiệu lực HIỆN TẠI) − ship shop chịu; chỉ Đã gửi/Hoàn tất   BR-11, A8, Q-015
+lãi đơn              = Σ(giá chốt − giá nhập ₫ hiệu lực HIỆN TẠI) − ship shop chịu − phí đơn (CR-011); chỉ Đã gửi/Hoàn tất   BR-11, A8, Q-015
 còn nợ trung gian    = Σ phải trả − Σ đã chuyển + Σ điều chỉnh (có dấu)                   BR-12
 --- CR-004 ---
 đơn Hoàn hàng        = chỉ từ Đã gửi; nhả chiếc (về Trong kho, bán lại được); còn phải thu 0

@@ -265,7 +265,7 @@ export function orderMargin(o: Order, costs: ReadonlyMap<string, Vnd>): Vnd {
     if (c == null) throw new Error(`orderMargin: no cost for unit ${l.unitId} of order ${orderRef(o)}`);
     m += l.price - c;
   }
-  return m - orderShipCost(o);
+  return m - orderShipCost(o) - (o.fee ?? 0);   // CR-011 phí COD / phí khác
 }
 
 /**
@@ -273,7 +273,7 @@ export function orderMargin(o: Order, costs: ReadonlyMap<string, Vnd>): Vnd {
  * Unit costs are not involved (the units are back in stock). Computed on the money KEPT, so recording the
  * refund later does not change it.
  */
-export const returnedOrderProfit = (o: Order): Vnd => (orderKept(o) ?? 0) - orderShipCost(o) - (o.returnShipFee ?? 0);
+export const returnedOrderProfit = (o: Order): Vnd => (orderKept(o) ?? 0) - orderShipCost(o) - (o.returnShipFee ?? 0) - (o.fee ?? 0);
 
 /**
  * BR-11 + A8 - Lãi đơn = Σ(giá chốt − giá nhập ₫ hiện tại của chiếc) − phí ship shop chịu.

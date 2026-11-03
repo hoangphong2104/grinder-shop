@@ -20,7 +20,7 @@ export type ShipPayerDb = 'customer' | 'shop'
 /** CR-005 sổ quỹ: chiều tiền + loại bút toán (5 loại đầu tự sinh - chỉ đọc; 4 loại sau ghi tay). */
 export type CashDirectionDb = 'in' | 'out'
 export type CashKindDb = 'customer_payment' | 'customer_refund' | 'intermediary' | 'ship_shop' | 'return_ship'
-  | 'expense' | 'capital_in' | 'capital_out' | 'adjustment' | 'local_ship'
+  | 'expense' | 'capital_in' | 'capital_out' | 'adjustment' | 'local_ship' | 'order_fee'
 
 interface Row { id: string; user_id: string; created_at: string; updated_at: string; version: number }
 export interface ModelRow extends Row { name: string; brand: string; image_path: string | null; aliases: string[]; code_prefix: string; default_list_price_vnd: number | null; low_stock_threshold: number; next_seq: number; is_active: boolean; sort_order: number }
@@ -41,7 +41,8 @@ export interface CashEntryRow extends Row { entry_date: string; direction: CashD
 export interface CustomerRow extends Row { fb_name: string; fb_url: string | null; phone: string | null; address: string | null; note: string | null; is_hidden: boolean }
 export interface OrderRow extends Row { customer_id: string; order_date: string; status: OrderStatusDb; tracking_no: string | null; ship_fee_vnd: number; ship_fee_payer: ShipPayerDb; shipped_at: string | null; completed_at: string | null; completion_forced: boolean; cancelled_at: string | null; note: string | null
   /** CR-004 COD hãng ship thu hộ (ship_order p_cod_amount_vnd / set_order_cod) */ cod_amount_vnd: number
-  /** CR-004 Hoàn hàng (return_order) */ returned_at: string | null; return_ship_fee_vnd: number; keep_deposit: boolean; return_note: string | null }
+  /** CR-004 Hoàn hàng (return_order) */ returned_at: string | null; return_ship_fee_vnd: number; keep_deposit: boolean; return_note: string | null
+  /** CR-011 phí COD / phí khác shop chịu (set_order_fee; ship_order có COD tự điền mặc định) */ fee_vnd: number }
 /** cancelled = dòng đã nhả chiếc (đơn huỷ hoặc Hoàn hàng). */
 export interface OrderLineRow extends Row { order_id: string; line_no: number; unit_id: string; unit_price_vnd: number; cancelled: boolean }
 export interface PaymentRow extends Row { order_id: string; paid_at: string; kind: PaymentKindDb; amount_vnd: number; note: string | null; /** CR-004, ghi trực tiếp được */ method: PaymentMethodDb }
@@ -54,7 +55,8 @@ export interface SettingsRow { user_id: string; ai_scan_enabled: boolean; ai_sca
   aging_warn_days: number; aging_alert_days: number; lot_late_days: number
   updated_at: string; version: number ; /** CR-004 DON-S2: STK / ngân hàng cho tin xác nhận đơn */ bank_info: string | null
   /** CR-005 VietQR: mã BIN NAPAS 6 số / số TK (1..19 chữ số) / tên chủ TK (1..50) - null = chưa cài */
-  bank_bin: string | null; bank_account_no: string | null; bank_account_name: string | null }
+  bank_bin: string | null; bank_account_no: string | null; bank_account_name: string | null
+  /** CR-011 phí COD mặc định (ship_order có COD tự điền vào đơn) */ default_cod_fee_vnd: number }
 
 export type UnitStatusDb = 'incoming' | 'in_stock' | 'reserved' | 'sold' | 'cancelled'
 /** v_units - 1 dòng / chiếc (CR-001 A5). */
@@ -78,7 +80,8 @@ export interface OrderSummaryRow { order_id: string; customer_id: string; custom
   /** Σ khoản cọc */ deposit_vnd: number
   /** CR-004 Hoàn hàng */ returned_at: string | null; return_ship_fee_vnd: number; keep_deposit: boolean; return_note: string | null
   /** tiền shop giữ của đơn Hoàn hàng (null đơn khác) */ kept_vnd: number | null
-  /** ngày tính lãi: shipped_at (Đã gửi / Hoàn tất), returned_at (Hoàn hàng), null khác */ profit_date: string | null }
+  /** ngày tính lãi: shipped_at (Đã gửi / Hoàn tất), returned_at (Hoàn hàng), null khác */ profit_date: string | null
+  /** CR-011 phí COD / phí khác (đã trừ trong profit_vnd) */ fee_vnd: number }
 export interface BalanceRow { total_payable_vnd: number; total_transferred_vnd: number; total_adjustment_vnd: number; balance_vnd: number }
 /** CR-005 v_cash_balance - 1 dòng / người dùng; quỹ bắt đầu từ 0. */
 export interface CashBalanceRow { total_in_vnd: number; total_out_vnd: number; balance_vnd: number; entry_count: number }

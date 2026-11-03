@@ -8,6 +8,12 @@ insert into auth.users (id, email) values ('12121212-1212-1212-1212-121212121212
 set role authenticated;
 select set_config('request.jwt.claim.sub', '12121212-1212-1212-1212-121212121212', false);
 select public.bootstrap_user();
+-- CR-011 (010): tắt phí COD mặc định để số lãi / sổ quỹ của test cũ giữ nguyên (test 18 kiểm tra phí)
+do $$ begin
+  if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'settings' and column_name = 'default_cod_fee_vnd') then
+    execute 'update public.settings set default_cod_fee_vnd = 0';
+  end if;
+end $$;
 select id as m_ku from public.models where code_prefix = 'KU' \gset
 select (private.today_vn() - 10)::text as d10, (private.today_vn() - 3)::text as d3 \gset
 insert into public.customers (fb_name) values ('Khách CR-010') returning id as cu \gset

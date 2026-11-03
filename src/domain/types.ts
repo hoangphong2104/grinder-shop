@@ -214,6 +214,8 @@ export interface Order {
   returnShipFee?: Vnd;
   /** CR-004 - on return: true = shop keeps the deposits (Σ `deposit`), false = everything paid is refunded. */
   keepDeposit?: boolean;
+  /** CR-011 - phí COD / phí khác shop chịu (₫): trừ lãi; cash entry 'order_fee' once shipped. Missing = 0. */
+  fee?: Vnd;
 }
 
 /**
@@ -252,9 +254,10 @@ export type CashKind =
   | 'capital_in'
   | 'capital_out'
   | 'adjustment'
-  | 'local_ship';
+  | 'local_ship'
+  | 'order_fee';
 
-export const AUTO_CASH_KINDS: readonly CashKind[] = ['customer_payment', 'customer_refund', 'intermediary', 'ship_shop', 'return_ship', 'local_ship'];
+export const AUTO_CASH_KINDS: readonly CashKind[] = ['customer_payment', 'customer_refund', 'intermediary', 'ship_shop', 'return_ship', 'local_ship', 'order_fee'];
 export const MANUAL_CASH_KINDS: readonly CashKind[] = ['expense', 'capital_in', 'capital_out', 'adjustment'];
 
 export const CASH_KIND_LABEL: Readonly<Record<CashKind, string>> = {
@@ -268,6 +271,7 @@ export const CASH_KIND_LABEL: Readonly<Record<CashKind, string>> = {
   capital_out: 'Rút vốn',
   adjustment: 'Điều chỉnh',
   local_ship: 'Ship kho VN → Lumi',
+  order_fee: 'Phí đơn (COD…)',
 };
 
 /** One cash-book line. `amount` > 0; the direction gives the sign. */
