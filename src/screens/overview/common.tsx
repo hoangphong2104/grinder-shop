@@ -58,7 +58,7 @@ export const seqOf = (code: string) => Number(code.slice(code.lastIndexOf('-') +
 
 /** KHO-M3 kiểu sắp xếp: mã · tồn lâu nhất · mới nhập · giá bán cao → thấp · lãi dự kiến cao → thấp. */
 export type UnitSort = 'ma' | 'ton' | 'moi' | 'gia' | 'lai'
-export const UNIT_SORTS: [UnitSort, string][] = [['ma', 'Mã (theo model)'], ['ton', 'Tồn lâu nhất'], ['moi', 'Mới nhập'], ['gia', 'Giá bán cao → thấp'], ['lai', 'Lãi dự kiến cao → thấp']]
+export const UNIT_SORTS: [UnitSort, string][] = [['ma', 'Mã (theo model)'], ['ton', 'Tồn lâu nhất'], ['moi', 'Mới nhập'], ['gia', 'Giá nhập cao → thấp'], ['lai', 'Lãi dự kiến cao → thấp']]
 /** Giá bên phải dòng: chiếc đã bán = giá chốt, còn lại = giá bán dự kiến. */
 export const unitPrice = (u: UnitViewRow) => (u.status === 'sold' ? u.sold_price_vnd : u.list_price_vnd)
 /** Tuổi để sắp "tồn lâu": đã về = số ngày tồn; đang về = số ngày từ lúc đặt (xếp sau chiếc đã về). */
@@ -78,7 +78,7 @@ export function sortUnits(d: DbData, list: UnitViewRow[], sx: UnitSort = 'ma'): 
   }
   const cmp = sx === 'ton' ? desc(ageKey)
     : sx === 'moi' ? (a: UnitViewRow, b: UnitViewRow) => (b.received_at ?? b.ordered_at).localeCompare(a.received_at ?? a.ordered_at) || seqOf(b.code) - seqOf(a.code)
-      : sx === 'gia' ? desc(unitPrice)
+      : sx === 'gia' ? desc((u) => u.cost_vnd)
         : sx === 'lai' ? desc((u) => unitProfit(u).value)
           : byCode
   return [...list].sort(cmp)
@@ -189,6 +189,7 @@ export const Profit = ({ n, est, full, prefix }: { n: number | null | undefined;
     : <span className={n < 0 ? 'neg' : n > 0 ? 'pos' : ''}>{prefix}{full ? signedVnd(n) : signed(n)}{est ? ' dự kiến' : ''}</span>
 
 /** Dòng 1 chiếc (research §2.4): mã + model … giá bán · chip + tuổi tồn … nhập (đã bán: lãi). */
+/** Dòng chiếc: số chính = giá nhập (CR-011); dòng 2 phải: lãi (đã bán) / giá chốt (khách đặt). */
 export function UnitRow({ d, u, right2, sub }: { d: DbData; u: UnitViewRow; right2?: ReactNode; sub?: ReactNode }) {
   const holder = holderCode(d, u)
   const age = u.status === 'incoming'
@@ -200,9 +201,9 @@ export function UnitRow({ d, u, right2, sub }: { d: DbData; u: UnitViewRow; righ
   return (
     <Row2 to={`/kho/${u.unit_id}`}
       a={<Ident id={u.code} text={u.model_name} />}
-      b={unitPrice(u) != null ? tr(unitPrice(u)) : '-'}
+      b={<>{tr(u.cost_vnd)}{u.cost_is_provisional && <span className="muted small"> tạm</span>}</>}
       c={<><UnitChipShort u={u} holder={holder} />{cond}<Tx>{sub ?? age}</Tx></>}
-      d={right2 ?? (u.status === 'sold' ? <Profit n={p.value} prefix="lãi " /> : <>nhập {tr(u.cost_vnd)}</>)} />
+      d={right2 ?? (u.status === 'sold' ? <Profit n={p.value} prefix="lãi " /> : u.order_unit_price_vnd != null ? <>chốt {tr(u.order_unit_price_vnd)}</> : null)} />
   )
 }
 
