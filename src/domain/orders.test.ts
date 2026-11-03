@@ -18,6 +18,7 @@ import {
   preordersToAutoConfirm,
   profitForMonth,
 } from './orders.ts';
+import { autoCashEntries } from './cash.ts';
 
 const received: Lot = { id: 'R', rate: 3600, shipFee: 600000, status: 'received', receivedAt: '2026-10-03' };
 const incoming: Lot = { id: 'I', rate: 3610, shipFee: null, status: 'vn_warehouse', receivedAt: null };
@@ -203,4 +204,14 @@ test('profitForMonth groups by shippedAt month', () => {
   ];
   assert.deepEqual(profitForMonth(os, costs, '2026-10'), { month: '2026-10', profit: 1800000, revenue: 5000000, orders: 1, returns: 0 });
   assert.deepEqual(profitForMonth(os, costs, '2026-09'), { month: '2026-09', profit: 560000, revenue: 5000000, orders: 1, returns: 0 });
+});
+
+test('CR-011: phí COD / phí khác trừ lãi đơn (đã gửi và hoàn hàng), bút toán order_fee khi đã gửi', () => {
+  const base = order({ status: 'shipped', shippedAt: '2026-11-01', shipFee: 30000, shipPayer: 'shop', fee: 5500,
+    lines: [{ unitId: 'i1', price: 5000000 }] });
+  const costs = new Map([['i1', 3600000]]);
+  assert.equal(orderProfit(base, costs), 5000000 - 3600000 - 30000 - 5500);
+  assert.equal(orderProfit({ ...base, fee: undefined }, costs), 5000000 - 3600000 - 30000);
+  assert.deepEqual(autoCashEntries([base], []).filter((e) => e.kind === 'order_fee').map((e) => `${e.amount}/${e.direction}/${e.date}`), ['5500/out/2026-11-01']);
+  assert.equal(autoCashEntries([{ ...base, status: 'confirmed' }], []).some((e) => e.kind === 'order_fee'), false);
 });

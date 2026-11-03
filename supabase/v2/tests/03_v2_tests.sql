@@ -9,6 +9,12 @@ select set_config('request.jwt.claim.sub', '11111111-1111-1111-1111-111111111111
 
 -- ========== 0. bootstrap_user ==========
 select public.bootstrap_user();
+-- CR-011 (010): tắt phí COD mặc định để số lãi / sổ quỹ của test cũ giữ nguyên (test 18 kiểm tra phí)
+do $$ begin
+  if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'settings' and column_name = 'default_cod_fee_vnd') then
+    execute 'update public.settings set default_cod_fee_vnd = 0';
+  end if;
+end $$;
 select public.bootstrap_user();   -- idempotent
 select t.eq((select string_agg(code_prefix || ':' || next_seq, ',' order by sort_order) from public.models),
             'ZP6:1,KU:1,JU:1', 'bootstrap: 3 model ZP6/KU/JU, next_seq = 1 (gọi 2 lần vẫn 3)');

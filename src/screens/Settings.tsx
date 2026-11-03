@@ -13,12 +13,13 @@ import { exportExcel } from './overview/exportData.ts'
 import { accountNameNorm, BANKS, QrImg, useVietQr } from './orders/vietqr.tsx'
 import { checkVietQr } from '../domain/vietqr.ts'
 import { vnd } from '../ui/format.ts'
+import { MoneyInput } from '../ui/MoneyInput.tsx'
 import '../styles/orders.css'
 
 /** main.tsx gọi trước khi render để áp giao diện Sáng / Tối đã chọn. */
 export { applyStoredTheme } from './overview/theme.ts'
 
-type SettingsPatch = Partial<Pick<SettingsRow, 'ai_scan_enabled' | 'ai_scan_monthly_cap' | 'ai_confidence_threshold' | 'default_ship_fee_payer' | 'default_buying_fee_pct' | 'aging_warn_days' | 'aging_alert_days' | 'lot_late_days' | 'bank_info' | 'bank_bin' | 'bank_account_no' | 'bank_account_name'>>
+type SettingsPatch = Partial<Pick<SettingsRow, 'ai_scan_enabled' | 'ai_scan_monthly_cap' | 'ai_confidence_threshold' | 'default_ship_fee_payer' | 'default_buying_fee_pct' | 'aging_warn_days' | 'aging_alert_days' | 'lot_late_days' | 'bank_info' | 'bank_bin' | 'bank_account_no' | 'bank_account_name' | 'default_cod_fee_vnd'>>
 /** Số tiền mẫu cho xem trước QR trong Cài đặt. */
 const QR_SAMPLE_VND = 100000
 
@@ -38,6 +39,7 @@ export default function Settings() {
   const [cap, setCap] = useState(String(st?.ai_scan_monthly_cap ?? 100))
   const [conf, setConf] = useState(String(Math.round((st?.ai_confidence_threshold ?? 0.7) * 100)))
   const [fee, setFee] = useState(pctStr(st?.default_buying_fee_pct))
+  const [codFee, setCodFee] = useState(String(st?.default_cod_fee_vnd ?? 5500))   // CR-011
   const [warn, setWarn] = useState(String(st?.aging_warn_days ?? 30))
   const [alert, setAlert] = useState(String(st?.aging_alert_days ?? 60))
   const [late, setLate] = useState(String(st?.lot_late_days ?? 21))
@@ -48,7 +50,7 @@ export default function Settings() {
   const [qBin, setQBin] = useState(st?.bank_bin ?? '')
   const [qNo, setQNo] = useState(st?.bank_account_no ?? '')
   const [qName, setQName] = useState(st?.bank_account_name ?? '')
-  const [errs, setErrs] = useState<{ cap?: string; conf?: string; fee?: string; warn?: string; alert?: string; late?: string; bank?: string; qBin?: string; qNo?: string; qName?: string; form?: string }>({})
+  const [errs, setErrs] = useState<{ cap?: string; conf?: string; fee?: string; codFee?: string; warn?: string; alert?: string; late?: string; bank?: string; qBin?: string; qNo?: string; qName?: string; form?: string }>({})
   const [busy, setBusy] = useState(false)
   const [scans, setScans] = useState<number | null>(null)
   const [exporting, setExporting] = useState(false)
@@ -59,6 +61,7 @@ export default function Settings() {
     setConf(String(Math.round((st?.ai_confidence_threshold ?? 0.7) * 100)))
   }, [st?.ai_scan_monthly_cap, st?.ai_confidence_threshold])
   useEffect(() => { setFee(pctStr(st?.default_buying_fee_pct)) }, [st?.default_buying_fee_pct])
+  useEffect(() => { setCodFee(String(st?.default_cod_fee_vnd ?? 5500)) }, [st?.default_cod_fee_vnd])
   useEffect(() => {
     setWarn(String(st?.aging_warn_days ?? 30)); setAlert(String(st?.aging_alert_days ?? 60)); setLate(String(st?.lot_late_days ?? 21))
   }, [st?.aging_warn_days, st?.aging_alert_days, st?.lot_late_days])
@@ -117,6 +120,13 @@ export default function Settings() {
       return
     }
     save({ default_buying_fee_pct: Math.round(v * 100) / 100 }, `Phí mua hộ mặc định: ${pct(v)}`)
+  }
+
+  /** CR-011: phí COD mặc định - gửi hàng có COD thì tự điền vào phí đơn (đơn cũ không đổi). */
+  function saveCodFee() {
+    const v = codFee.trim() ? parseNum(codFee) : 0
+    if (v == null || !Number.isInteger(v) || v < 0 || v > 10_000_000) { setErrs({ codFee: 'Nhập số đồng ≥ 0 (vd. 5.500), 0 = không tự trừ.' }); return }
+    save({ default_cod_fee_vnd: v }, `Phí COD mặc định: ${vnd(v)}`)
   }
 
   /** Ngưỡng ngày: số nguyên 1..3650, cam < đỏ (ràng buộc DB settings_aging_days_order). */
@@ -209,7 +219,7 @@ export default function Settings() {
         <p className="hint">Trường AI đọc có độ tin cậy dưới ngưỡng sẽ để trống và đánh dấu “kiểm tra” (BR-13).</p>
         <button className="btn btn-ghost" id="ai-save" style={{ alignSelf: 'flex-start' }} disabled={busy || !dirtyAi} onClick={saveAi}>Lưu cài đặt AI</button>
 
-        <p className="section-title">Lô nhập</p>
+        <p className="section-title">Nhập cối</p>
         <label className="f" style={{ maxWidth: 300 }}>Phí mua hộ mặc định %
           <input className={`input money ${errs.fee ? 'invalid' : ''}`} id="fee-default" inputMode="decimal" value={fee} placeholder="0"
             onChange={(e) => setFee(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && dirtyFee) saveFee() }} />
@@ -217,6 +227,14 @@ export default function Settings() {
         </label>
         <p className="hint">% trên tiền hàng (giá ¥ × tỷ giá), điền sẵn khi nhập cối mới và sửa được trên từng cối; cộng vào giá nhập ₫ từng chiếc và phải trả trung gian. Đổi ở đây không làm đổi lô đã có.</p>
         <button className="btn btn-ghost" id="fee-save" style={{ alignSelf: 'flex-start' }} disabled={busy || !dirtyFee} onClick={saveFee}>Lưu phí mua hộ mặc định</button>
+
+        <p className="section-title">Đơn bán</p>
+        <label className="f" style={{ maxWidth: 300 }}>Phí COD mặc định (₫)
+          <MoneyInput className={`input money ${errs.codFee ? 'invalid' : ''}`} id="cod-fee-default" value={codFee} placeholder="0" onValue={setCodFee} />
+          {errs.codFee && <span className="field-err">{errs.codFee}</span>}
+        </label>
+        <p className="hint">Gửi hàng có COD thì đơn tự có phí này (trừ vào lãi, ghi chi ở Sổ quỹ); sửa từng đơn ở ⋯ › Phí đơn. 0 = không tự trừ.</p>
+        <button className="btn btn-ghost" id="cod-fee-save" style={{ alignSelf: 'flex-start' }} disabled={busy || parseNum(codFee) === (st?.default_cod_fee_vnd ?? 5500)} onClick={saveCodFee}>Lưu phí COD mặc định</button>
 
         <p className="section-title">Ngưỡng ngày (tồn lâu, cối về trễ)</p>
         <div className="two ov-two">

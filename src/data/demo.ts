@@ -266,6 +266,8 @@ export function buildDemoData(): DbData {
       cancelled_at: o.cancelledAgo != null ? stamp(ago(o.cancelledAgo), 16) : null, note: o.note ?? null,
       cod_amount_vnd: o.cod ?? 0, returned_at: o.returnedAgo != null ? ago(o.returnedAgo) : null, return_ship_fee_vnd: o.returnShip ?? 0,
       keep_deposit: o.keepDeposit ?? false, return_note: o.returnNote ?? null,
+      // CR-011: đơn có COD đã gửi ⇒ phí COD mặc định 5.500 (như ship_order)
+      fee_vnd: (o.cod ?? 0) > 0 && o.shippedAgo != null ? 5500 : 0,
     })
     o.lines.forEach(([code, price], i) => {
       const u = unitByCode.get(code)
@@ -287,7 +289,7 @@ export function buildDemoData(): DbData {
     id: o.id, code: orderCode[o.id], orderDate: o.order_date, status: o.status, shippedAt: o.shipped_at, shipFee: o.ship_fee_vnd, shipPayer: o.ship_fee_payer,
     lines: orderLines.filter((l) => l.order_id === o.id).map((l) => ({ unitId: l.unit_id, price: l.unit_price_vnd })),
     payments: payments.filter((p) => p.order_id === o.id).map((p) => ({ kind: p.kind, amount: p.amount_vnd, date: p.paid_at, method: p.method })),
-    codAmount: o.cod_amount_vnd, returnedAt: o.returned_at, returnShipFee: o.return_ship_fee_vnd, keepDeposit: o.keep_deposit,
+    codAmount: o.cod_amount_vnd, returnedAt: o.returned_at, returnShipFee: o.return_ship_fee_vnd, keepDeposit: o.keep_deposit, fee: o.fee_vnd,
   }))
 
   // v_units
@@ -389,7 +391,7 @@ export function buildDemoData(): DbData {
       paid_vnd: orderPaid(d), receivable_vnd: orderReceivable(d), refund_due_vnd: orderRefundDue(d), profit_vnd: orderProfit(d, costs),
       cod_amount_vnd: o.cod_amount_vnd, cod_received_vnd: orderCodReceived(d), cod_pending_vnd: orderCodPending(d), deposit_vnd: orderDeposits(d),
       returned_at: o.returned_at, return_ship_fee_vnd: o.return_ship_fee_vnd, keep_deposit: o.keep_deposit, return_note: o.return_note,
-      kept_vnd: orderKept(d), profit_date: orderProfitDate(d),
+      kept_vnd: orderKept(d), profit_date: orderProfitDate(d), fee_vnd: o.fee_vnd,
     }
   })
 
@@ -418,6 +420,8 @@ export function buildDemoData(): DbData {
       cash(`demo-ce-ship-${o.id}`, o.shipped_at!, { direction: 'out', kind: 'ship_shop', amount_vnd: o.ship_fee_vnd, order_id: o.id, is_auto: true })
     if (o.status === 'returned' && o.return_ship_fee_vnd > 0)
       cash(`demo-ce-ret-${o.id}`, o.returned_at!, { direction: 'out', kind: 'return_ship', amount_vnd: o.return_ship_fee_vnd, order_id: o.id, is_auto: true })
+    if (['shipped', 'completed', 'returned'].includes(o.status) && o.fee_vnd > 0)
+      cash(`demo-ce-fee-${o.id}`, o.shipped_at!, { direction: 'out', kind: 'order_fee', amount_vnd: o.fee_vnd, order_id: o.id, is_auto: true })
   }
   for (const l of lots) {
     if (l.status !== 'cancelled' && (l.local_ship_vnd ?? 0) > 0)
@@ -437,7 +441,7 @@ export function buildDemoData(): DbData {
     return {
       month: m.month, in_vnd: m.in, out_vnd: m.out, net_vnd: m.net,
       customer_in_vnd: sumKind(rows, 'customer_payment'), refund_out_vnd: sumKind(rows, 'customer_refund'), intermediary_out_vnd: sumKind(rows, 'intermediary'),
-      ship_out_vnd: sumKind(rows, 'ship_shop', 'return_ship', 'local_ship'), expense_out_vnd: sumKind(rows, 'expense'), capital_in_vnd: sumKind(rows, 'capital_in'),
+      ship_out_vnd: sumKind(rows, 'ship_shop', 'return_ship', 'local_ship'), expense_out_vnd: sumKind(rows, 'expense', 'order_fee'), capital_in_vnd: sumKind(rows, 'capital_in'),
       capital_out_vnd: sumKind(rows, 'capital_out'),
       adjustment_net_vnd: rows.reduce((a, e) => a + (e.kind === 'adjustment' ? (e.direction === 'in' ? e.amount_vnd : -e.amount_vnd) : 0), 0),
     }
@@ -460,6 +464,7 @@ export function buildDemoData(): DbData {
     default_buying_fee_pct: 3, aging_warn_days: DEFAULT_AGING.warnDays, aging_alert_days: DEFAULT_AGING.alertDays,
     lot_late_days: DEFAULT_LOT_LATE_DAYS, bank_info: 'Vietcombank 0123456789, NGUYEN VAN A (mẫu)', updated_at: stamp(ago(30)), version: 1,
     bank_bin: '970436', bank_account_no: '0123456789', bank_account_name: 'NGUYEN VAN A', // CR-005 VietQR mẫu (Vietcombank)
+    default_cod_fee_vnd: 5500, // CR-011
   }
 
   const notes: NoteRow[] = NOTES.map((n, i) => {

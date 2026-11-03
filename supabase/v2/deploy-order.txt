@@ -9,3 +9,4 @@
 007_warehouses.sql
 008_local_ship.sql
 009_revert.sql
+010_order_fee.sql
