@@ -8,7 +8,7 @@ import { Icon } from '../ui/icons.tsx'
 import { CONDITION_LABEL, CONDITION_ORDER } from '../ui/status.tsx'
 import { tr } from '../ui/format.ts'
 import {
-  Profit, UNIT_SORTS, UnitChipShort, UnitRow, agingCls, daysSince, holderCode, sortUnits, sortedModelStock, unitMatch, unitPrice, useDesk, type UnitSort,
+  Profit, UNIT_SORTS, UnitChipShort, UnitRow, agingCls, daysSince, holderCode, sortUnits, sortedModelStock, unitMatch, useDesk, type UnitSort,
 } from './overview/common.tsx'
 import { LOT_SHORT, nextStatus } from './lots/common.tsx'
 import { useLotFlow } from './lots/LotFlow.tsx'
@@ -43,7 +43,6 @@ function UnitCard({ d, u, next }: { d: DbData; u: UnitViewRow; next?: ReactNode 
   const nav = useNavigate()
   const go = () => nav(`/kho/${u.unit_id}`)
   const key = (e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go() } }
-  const price = unitPrice(u)
   return (
     <div className="kcard" role="button" tabIndex={0} onClick={go} onKeyDown={key}>
       <span className="t">{u.code}, {u.model_name}</span>
@@ -54,8 +53,8 @@ function UnitCard({ d, u, next }: { d: DbData; u: UnitViewRow; next?: ReactNode 
         {!u.is_received && u.status !== 'cancelled' && <span className="small muted">đặt {daysSince(u.ordered_at) ?? 0} ngày</span>}
       </span>
       <span className="m">
-        <span>{price != null ? tr(price) : '-'}</span>
-        {u.status === 'sold' ? <Profit n={u.actual_profit_vnd} prefix="lãi " /> : <span className="muted">nhập {tr(u.cost_vnd)}</span>}
+        <span>nhập {tr(u.cost_vnd)}{u.cost_is_provisional && <span className="muted small"> tạm</span>}</span>
+        {u.status === 'sold' ? <Profit n={u.actual_profit_vnd} prefix="lãi " /> : u.order_unit_price_vnd != null ? <span className="muted">chốt {tr(u.order_unit_price_vnd)}</span> : null}
       </span>
       {next && <div className="acts">{next}</div>}
     </div>
