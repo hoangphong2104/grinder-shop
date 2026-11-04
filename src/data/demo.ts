@@ -267,7 +267,7 @@ export function buildDemoData(): DbData {
       cancelled_at: o.cancelledAgo != null ? stamp(ago(o.cancelledAgo), 16) : null, note: o.note ?? null,
       cod_amount_vnd: o.cod ?? 0, returned_at: o.returnedAgo != null ? ago(o.returnedAgo) : null, return_ship_fee_vnd: o.returnShip ?? 0,
       keep_deposit: o.keepDeposit ?? false, return_note: o.returnNote ?? null,
-      // CR-011: đơn có COD đã gửi ⇒ phí COD mặc định 5.500 (như ship_order)
+      // CR-011: đơn có COD đã gửi ⇒ phí rút tiền COD mặc định 5.500 (như ship_order)
       fee_vnd: (o.cod ?? 0) > 0 && o.shippedAgo != null ? 5500 : 0,
     })
     o.lines.forEach(([code, price], i) => {

@@ -271,7 +271,7 @@ export const CASH_KIND_LABEL: Readonly<Record<CashKind, string>> = {
   capital_out: 'Rút vốn',
   adjustment: 'Điều chỉnh',
   local_ship: 'Ship kho VN → Lumi',
-  order_fee: 'Phí đơn (COD…)',
+  order_fee: 'Phí rút tiền COD / phí đơn',
 };
 
 /** One cash-book line. `amount` > 0; the direction gives the sign. */

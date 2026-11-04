@@ -48,6 +48,6 @@ export const CASH_KIND_LABEL: Record<CashKindDb, string> = {
   customer_payment: 'Thu khách', customer_refund: 'Hoàn tiền khách', intermediary: 'Trả trung gian', ship_shop: 'Ship cho khách (shop chịu)',
   return_ship: 'Ship chiều về', expense: 'Chi phí khác', capital_in: 'Nạp vốn', capital_out: 'Rút vốn', adjustment: 'Điều chỉnh',
   local_ship: 'Ship kho VN → Lumi', // CR-009 tự sinh từ cối
-  order_fee: 'Phí đơn (COD…)', // CR-011 tự sinh từ đơn
+  order_fee: 'Phí rút tiền COD / phí đơn', // CR-011 tự sinh từ đơn
 }
 export const CASH_MANUAL_KINDS: CashKindDb[] = ['expense', 'capital_in', 'capital_out', 'adjustment']
