@@ -1,14 +1,14 @@
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useData, useStore } from '../data/store.tsx'
-import type { CashEntryRow, CashKindDb, DbData, TxnRow } from '../data/types.ts'
+import type { CashEntryRow, DbData, TxnRow } from '../data/types.ts'
 import { supabase } from '../lib/supabase.ts'
 import { Shell } from '../ui/Shell.tsx'
 import { Sheet, useToast } from '../ui/feedback.tsx'
 import { Icon } from '../ui/icons.tsx'
 import { CASH_KIND_LABEL, LOT_LABEL, LotChip } from '../ui/status.tsx'
 import { dmy, parseNum, todayVn, tr, vnd } from '../ui/format.ts'
-import { CONFLICT_MSG, Row2, Tx, lotHref, lotName, useDesk, writeError } from './overview/common.tsx'
+import { CONFLICT_MSG, cashViewKind, type CashViewKind, Row2, Tx, lotHref, lotName, useDesk, writeError } from './overview/common.tsx'
 import { errText } from './lots/rpc.ts'
 import { PayLotButton } from './lots/PayLot.tsx'
 import { MoneyInput } from '../ui/MoneyInput.tsx'
@@ -22,8 +22,8 @@ import { MoneyInput } from '../ui/MoneyInput.tsx'
 //   bút toán tự sinh 'local_ship' (ship kho VN → Lumi) nằm trong lọc Ship.
 
 type Filter = 'all' | 'thu' | 'tg' | 'ship' | 'hoan' | 'chi' | 'von'
-const FILTERS: [Filter, string, CashKindDb[]][] = [
-  ['all', 'Tất cả', []], ['thu', 'Thu khách', ['customer_payment']], ['tg', 'Trả trung gian', ['intermediary']], ['ship', 'Ship', ['ship_shop', 'return_ship', 'local_ship']],
+const FILTERS: [Filter, string, CashViewKind[]][] = [
+  ['all', 'Tất cả', []], ['thu', 'Thu khách', ['customer_payment']], ['tg', 'Trả trung gian', ['intermediary']], ['ship', 'Ship', ['cn_ship', 'local_ship', 'ship_shop', 'return_ship']],
   ['hoan', 'Hoàn tiền', ['customer_refund']], ['chi', 'Chi phí', ['expense', 'order_fee']], ['von', 'Vốn', ['capital_in', 'capital_out', 'adjustment']],
 ]
 type ManualKind = 'expense' | 'capital_in' | 'capital_out' | 'adjustment'
@@ -73,7 +73,7 @@ export default function Debt() {
   const month = todayVn().slice(0, 7)
   const cm = (d.cashMonthly ?? []).find((m) => m.month.slice(0, 7) === month)
   const kindsOf = (f: Filter) => FILTERS.find(([k]) => k === f)![2]
-  const match = (e: CashEntryRow, f: Filter) => f === 'all' || kindsOf(f).includes(e.kind)
+  const match = (e: CashEntryRow, f: Filter) => f === 'all' || kindsOf(f).includes(cashViewKind(d, e))
   const shown = entries.filter((e) => match(e, filter))
 
   // Công nợ trung gian theo cối
@@ -169,7 +169,7 @@ export default function Debt() {
             {shown.map((e, i) => {
               const head = i === 0 || shown[i - 1].entry_date !== e.entry_date
               const src = e.is_auto ? sourceOf(d, e) : null
-              const title = e.kind === 'expense' && e.expense_category ? e.expense_category : CASH_KIND_LABEL[e.kind]
+              const title = e.kind === 'expense' && e.expense_category ? e.expense_category : cashViewKind(d, e) === 'cn_ship' ? 'Ship TQ → VN' : CASH_KIND_LABEL[e.kind]
               const sub = e.is_auto ? [src?.text, e.note].filter(Boolean).join(', ') : [e.kind === 'expense' ? 'Chi phí khác' : null, e.note].filter(Boolean).join(', ')
               return (
                 <Fragment key={e.id}>

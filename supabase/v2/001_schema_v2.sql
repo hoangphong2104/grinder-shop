@@ -12,6 +12,8 @@
 -- Gộp thêm CR-010 (009_revert.sql): revert_lot / revert_order — lùi 1 bước trạng thái cối / đơn khi chuyển nhầm.
 -- Gộp thêm CR-011 (010_order_fee.sql): orders.fee_vnd (phí COD / phí khác shop chịu: trừ lãi + bút toán 'order_fee'),
 --   settings.default_cod_fee_vnd (mặc định 5.500 — ship_order có COD tự điền), set_order_fee.
+-- Gộp thêm CR-013 (011_cn_ship_flag.sql): intermediary_txns.is_cn_ship — khoản Đã chuyển là tất toán ship TQ → VN
+--   (settle_cn_ship ghi true) ⇒ báo cáo tách riêng khỏi tiền cối.
 -- Gộp thêm CR-002 (CR file §6): bảng public.notes (tab Ghi chú) — client ghi trực tiếp, RLS theo user, có realtime.
 -- Gộp thêm CR-003 (CR file §7, v0.3): phí mua hộ % — settings.default_buying_fee_pct, lots.buying_fee_pct (cột cuối
 --   bảng, để cài mới = v2 + 002_buying_fee.sql). DB đang chạy v2 có dữ liệu: chạy 002_buying_fee.sql (cộng thêm).
@@ -286,7 +288,8 @@ create table public.intermediary_txns (
   version     int not null default 1,
   foreign key (lot_id, user_id) references public.lots (id, user_id) on delete cascade,
   constraint itx_lot_by_kind check (kind = 'transfer' or (kind = 'payable') = (lot_id is not null)),   -- CR-005: Đã chuyển gắn lô tuỳ ý
-  constraint itx_sign check (kind = 'adjustment' or amount_vnd >= 0)
+  constraint itx_sign check (kind = 'adjustment' or amount_vnd >= 0),
+  is_cn_ship  boolean not null default false                                   -- CR-013: tất toán ship TQ → VN (settle_cn_ship)
 );
 create unique index itx_one_payable_per_lot on public.intermediary_txns (lot_id) where kind = 'payable';
 create index itx_user_date_idx on public.intermediary_txns (user_id, txn_date);
@@ -1662,8 +1665,8 @@ begin
     if v_share > 0 then
       update public.lots set ship_fee_vnd = coalesce(ship_fee_vnd, 0) + v_share where id = r.id;
       perform private.recalc_lot(r.id);
-      insert into public.intermediary_txns (user_id, txn_date, kind, amount_vnd, lot_id, note)
-      values (v_uid, coalesce(p_paid_at, private.today_vn()), 'transfer', v_share, r.id, v_note);
+      insert into public.intermediary_txns (user_id, txn_date, kind, amount_vnd, lot_id, note, is_cn_ship)
+      values (v_uid, coalesce(p_paid_at, private.today_vn()), 'transfer', v_share, r.id, v_note, true);
     end if;
     v_out := v_out || jsonb_build_object('lot_id', r.id, 'share_vnd', v_share);
   end loop;

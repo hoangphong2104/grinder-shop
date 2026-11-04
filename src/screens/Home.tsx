@@ -1,12 +1,12 @@
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useData } from '../data/store.tsx'
-import type { CashKindDb, OrderSummaryRow, UnitViewRow } from '../data/types.ts'
+import type { OrderSummaryRow, UnitViewRow } from '../data/types.ts'
 import { Shell } from '../ui/Shell.tsx'
 import { Icon } from '../ui/icons.tsx'
 import { dmy, todayVn, tr } from '../ui/format.ts'
 import {
-  Ident, unitPrice, OrderRow, Row2, Tx, UnitRow, codesText, daysSince, kpiAmount, lotHref, lotName, profitMonth, signed, sortedModelStock, thresholds, useDesk,
+  Ident, cashViewKind, type CashViewKind, unitPrice, OrderRow, Row2, Tx, UnitRow, codesText, daysSince, kpiAmount, lotHref, lotName, profitMonth, signed, sortedModelStock, thresholds, useDesk,
 } from './overview/common.tsx'
 import { PayLotButton } from './lots/PayLot.tsx'
 
@@ -280,7 +280,7 @@ export default function Home() {
     return true
   }
   const outs = (d.cashEntries ?? []).filter((e) => e.direction === 'out' && cashIn(e.entry_date))
-  const slices = CASH_SLICES.filter((c) => !(noGoods && c.key === 'coi')).map((c) => ({ ...c, v: outs.reduce((a, e) => a + (c.kinds.includes(e.kind) ? e.amount_vnd : 0), 0) })).filter((x) => x.v > 0)
+  const slices = CASH_SLICES.filter((c) => !(noGoods && c.key === 'coi')).map((c) => ({ ...c, v: outs.reduce((a, e) => a + (c.kinds.includes(cashViewKind(d, e)) ? e.amount_vnd : 0), 0) })).filter((x) => x.v > 0)
   const outTotal = slices.reduce((a, x) => a + x.v, 0)
   const cashBlock = (
     <div className="stack" id="home-cash">
@@ -357,12 +357,13 @@ export default function Home() {
 }
 
 /** CR-012 nhóm tiền ra cho biểu đồ Sổ quỹ - màu theo thứ tự cố định (token --cs-1..5, kiểm bằng validator dataviz). */
-const CASH_SLICES: { key: string; label: string; kinds: CashKindDb[]; color: string }[] = [
-  { key: 'coi', label: 'Tiền cối + ship TQ→VN (trả trung gian)', kinds: ['intermediary'], color: '--cs-1' },
-  { key: 'ship', label: 'Ship VN→Lumi, ship cho khách', kinds: ['local_ship', 'ship_shop', 'return_ship'], color: '--cs-2' },
-  { key: 'fee', label: 'Phí COD / phí đơn', kinds: ['order_fee'], color: '--cs-3' },
-  { key: 'chi', label: 'Chi phí khác', kinds: ['expense'], color: '--cs-4' },
-  { key: 'hoan', label: 'Hoàn tiền khách', kinds: ['customer_refund'], color: '--cs-5' },
+const CASH_SLICES: { key: string; label: string; kinds: CashViewKind[]; color: string }[] = [
+  { key: 'coi', label: 'Tiền cối (trả trung gian)', kinds: ['intermediary'], color: '--cs-1' },
+  { key: 'cn', label: 'Ship TQ → VN', kinds: ['cn_ship'], color: '--cs-2' },   // CR-013 tất toán theo đợt
+  { key: 'ship', label: 'Ship VN → Lumi, ship cho khách', kinds: ['local_ship', 'ship_shop', 'return_ship'], color: '--cs-3' },
+  { key: 'fee', label: 'Phí COD / phí đơn', kinds: ['order_fee'], color: '--cs-4' },
+  { key: 'chi', label: 'Chi phí khác', kinds: ['expense'], color: '--cs-5' },
+  { key: 'hoan', label: 'Hoàn tiền khách', kinds: ['customer_refund'], color: '--cs-6' },
 ]
 
 /** Donut tỷ lệ tiền ra: lát cách nhau 2px (viền màu nền), giữa là tổng; rê chuột / chạm lát hiện tên + số tiền. */
