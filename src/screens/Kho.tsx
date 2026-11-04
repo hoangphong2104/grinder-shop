@@ -18,6 +18,7 @@ import '../styles/lots.css'
 // CR-006 vòng 3: 1 lô = 1 cối ⇒ mọi cột đều là từng CỐI; ở Kho TQ / Kho VN có nút bước kế (chuyển cả lô của cối).
 // Máy tính: bảng 5 cột. Điện thoại: chip trạng thái + danh sách. Số đếm = số cối trong cột.
 // CR-009: chip "Tất cả" (mặc định) - mọi cối, nhóm theo trạng thái.
+// CR-012: không hiện mã cối / "tạm" ở danh sách; nút bước kế chỉ hiện khi rê chuột (máy tính) - điện thoại đổi trong trang cối.
 type Stage = 'tq' | 'vn' | 'lumi' | 'giao' | 'ban'
 const STAGES: [Stage, string, string][] = [
   ['tq', 'Kho TQ', 'var(--way)'], ['vn', 'Kho VN', 'var(--hold)'], ['lumi', 'Kho Lumi', 'var(--ok)'],
@@ -45,7 +46,7 @@ function UnitCard({ d, u, next }: { d: DbData; u: UnitViewRow; next?: ReactNode 
   const key = (e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go() } }
   return (
     <div className="kcard" role="button" tabIndex={0} onClick={go} onKeyDown={key}>
-      <span className="t">{u.code}, {u.model_name}</span>
+      <span className="t">{u.model_name}</span>
       <span className="row-wrap">
         {(u.status === 'reserved' || u.status === 'sold') && <UnitChipShort u={u} holder={holderCode(d, u)} />}
         {u.condition && u.condition !== 'new' && <span className={`pill ${u.condition === 'defect' ? 'bad' : 'neu'}`}>{CONDITION_LABEL[u.condition]}</span>}
@@ -53,7 +54,7 @@ function UnitCard({ d, u, next }: { d: DbData; u: UnitViewRow; next?: ReactNode 
         {!u.is_received && u.status !== 'cancelled' && <span className="small muted">đặt {daysSince(u.ordered_at) ?? 0} ngày</span>}
       </span>
       <span className="m">
-        <span>nhập {tr(u.cost_vnd)}{u.cost_is_provisional && <span className="muted small"> tạm</span>}</span>
+        <span>Giá nhập {tr(u.cost_vnd)}</span>
         {u.status === 'sold' ? <Profit n={u.actual_profit_vnd} prefix="lãi " /> : u.order_unit_price_vnd != null ? <span className="muted">chốt {tr(u.order_unit_price_vnd)}</span> : null}
       </span>
       {next && <div className="acts">{next}</div>}
@@ -180,8 +181,7 @@ export default function Kho() {
             <div className="ov-gh"><span>{t}</span><span className="muted">{cols[k].length} cối</span></div>
             {cols[k].map((u) => {
               const m = hit.get(u.unit_id)
-              return <UnitRow key={u.unit_id} d={d} u={u} sub={m === 'serial' && q.trim() ? <>seri {u.serial_no}</> : undefined}
-                right2={k === 'tq' || k === 'vn' ? nextBtn(u, 'btn btn-ghost nx') : undefined} />
+              return <UnitRow key={u.unit_id} d={d} u={u} sub={m === 'serial' && q.trim() ? <>seri {u.serial_no}</> : undefined} />
             })}
           </Fragment>
         ))}
@@ -197,8 +197,7 @@ export default function Kho() {
           return (
             <Fragment key={u.unit_id}>
               {head && <div className="ov-gh"><span>{u.model_name}</span><span className="muted">{us.filter((x) => x.model_id === u.model_id).length} cối</span></div>}
-              <UnitRow d={d} u={u} sub={m === 'serial' && q.trim() ? <>seri {u.serial_no}</> : undefined}
-                right2={stage === 'tq' || stage === 'vn' ? nextBtn(u, 'btn btn-ghost nx') : undefined} />
+              <UnitRow d={d} u={u} sub={m === 'serial' && q.trim() ? <>seri {u.serial_no}</> : undefined} />
             </Fragment>
           )
         })}

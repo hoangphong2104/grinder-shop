@@ -128,12 +128,17 @@ export function unitProfit(u: UnitViewRow): { value: number | null; actual: bool
   return { value: u.expected_profit_vnd, actual: false }
 }
 
-/** CR-009 bỏ khái niệm lô: tên hiển thị của 1 lô = mã các cối trong đó ("KU-007", "KU-007, KU-008 +1"); không có cối ⇒ "Cối". */
+/** CR-009 bỏ khái niệm lô; CR-012 không hiện mã cối ngoài trang chi tiết: tên hiển thị = tên model ("K Ultra"),
+ *  lô cũ nhiều cối ⇒ "2 × K Ultra, 1 × ZP6"; không có cối ⇒ "Cối". */
 export function lotName(d: DbData, lotId: string | null | undefined): string {
   if (!lotId) return 'Cối'
-  const codes = d.unitView.filter((u) => u.lot_id === lotId).map((u) => u.code).sort()
-  return codes.length ? codesText(codes, 2) : 'Cối'
+  const us = d.unitView.filter((u) => u.lot_id === lotId)
+  if (us.length === 1) return us[0].model_name
+  return us.length ? lotModelsText(d, lotId) : 'Cối'
 }
+/** Mã các cối của lô (chỉ dùng cho xuất Excel). */
+export const lotCodes = (d: DbData, lotId: string): string =>
+  codesText(d.unitView.filter((u) => u.lot_id === lotId).map((u) => u.code).sort(), 3)
 /** Link tới cối: lô 1 cối ⇒ trang cối; lô cũ nhiều cối ⇒ trang mua chung. */
 export function lotHref(d: DbData, lotId: string): string {
   const us = d.unitView.filter((u) => u.lot_id === lotId)
@@ -200,8 +205,8 @@ export function UnitRow({ d, u, right2, sub }: { d: DbData; u: UnitViewRow; righ
   const p = unitProfit(u)
   return (
     <Row2 to={`/kho/${u.unit_id}`}
-      a={<Ident id={u.code} text={u.model_name} />}
-      b={<>{tr(u.cost_vnd)}{u.cost_is_provisional && <span className="muted small"> tạm</span>}</>}
+      a={<span className="tx"><b>{u.model_name}</b></span>}
+      b={tr(u.cost_vnd)}
       c={<><UnitChipShort u={u} holder={holder} />{cond}<Tx>{sub ?? age}</Tx></>}
       d={right2 ?? (u.status === 'sold' ? <Profit n={p.value} prefix="lãi " /> : u.order_unit_price_vnd != null ? <>chốt {tr(u.order_unit_price_vnd)}</> : null)} />
   )
@@ -215,7 +220,7 @@ export function LotRow({ d, l, noChip }: { d: DbData; l: LotDbRow; noChip?: bool
   const warn = open && l.ship_fee_vnd == null && l.status === 'vn_warehouse' ? 'chưa tất toán ship' : s?.is_lot_late ? 'về trễ' : null
   return (
     <Row2 to={lotHref(d, l.id)}
-      a={<Ident id={lotName(d, l.id)} text={lotModelsText(d, l.id, 'short')} />}
+      a={<span className="tx"><b>{lotName(d, l.id)}</b></span>}
       b={tr(s?.payable_vnd ?? 0)}
       c={<>{!noChip && <LotChip s={l.status} />}<Tx className={s?.is_lot_late && open ? 'age-alert' : ''}>{when}{warn ? <>, <span className="neg">⚠ {warn}</span></> : null}</Tx></>}
       d={`${s?.total_qty ?? 0} chiếc`} />

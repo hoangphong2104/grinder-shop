@@ -8,7 +8,7 @@ import { Sheet, useToast } from '../ui/feedback.tsx'
 import { Icon } from '../ui/icons.tsx'
 import { CASH_KIND_LABEL, LOT_LABEL, LotChip } from '../ui/status.tsx'
 import { dmy, parseNum, todayVn, tr, vnd } from '../ui/format.ts'
-import { CONFLICT_MSG, Ident, Row2, Tx, lotHref, lotName, useDesk, writeError } from './overview/common.tsx'
+import { CONFLICT_MSG, Row2, Tx, lotHref, lotName, useDesk, writeError } from './overview/common.tsx'
 import { errText } from './lots/rpc.ts'
 import { PayLotButton } from './lots/PayLot.tsx'
 import { MoneyInput } from '../ui/MoneyInput.tsx'
@@ -45,7 +45,7 @@ function sourceOf(d: DbData, e: CashEntryRow): { text: string; to: string | null
     return { text: `${d.orderCode[orderId] ?? 'Đơn'}${o ? `, ${o.customer_name}` : ''}`, to: `/don/${orderId}` }
   }
   const lotId = e.lot_id ?? (e.txn_id ? d.txns.find((t) => t.id === e.txn_id)?.lot_id ?? null : null)
-  if (lotId) return { text: `${lotName(d, lotId)}, ${d.unitView.find((u) => u.lot_id === lotId)?.model_name ?? ''}`, to: lotHref(d, lotId) }
+  if (lotId) return { text: lotName(d, lotId), to: lotHref(d, lotId) }
   return { text: e.kind === 'intermediary' ? 'không gắn cối' : '', to: null }
 }
 
@@ -121,7 +121,7 @@ export default function Debt() {
           <div className="ov-list">
             {owing.map((s) => (
               <Row2 key={s.lot_id}
-                a={<Link className="row" style={{ gap: 8, minWidth: 0, color: 'inherit', textDecoration: 'none' }} to={lotHref(d, s.lot_id)}><Ident id={lotName(d, s.lot_id)} text={d.unitView.find((u) => u.lot_id === s.lot_id)?.model_name ?? ''} /></Link>}
+                a={<Link className="row" style={{ gap: 8, minWidth: 0, color: 'inherit', textDecoration: 'none' }} to={lotHref(d, s.lot_id)}><span className="tx"><b>{lotName(d, s.lot_id)}</b></span></Link>}
                 b={<span className="neg">{tr(s.outstanding_vnd)}</span>}
                 c={<><LotChip s={s.status} /><Tx>{s.paid_vnd > 0 ? `đã trả ${tr(s.paid_vnd)} / ${tr(s.payable_vnd)}` : `phải trả ${tr(s.payable_vnd)}`}</Tx></>}
                 d={<PayLotButton lotId={s.lot_id} id={`pay-${s.lot_id}`} />} />
@@ -417,7 +417,6 @@ function SettleShipSheet({ onClose }: { onClose: () => void }) {
   const [showAll, setShowAll] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const unitOf = (lotId: string) => d.unitView.find((u) => u.lot_id === lotId)
   const rows = d.lots
     .filter((l) => l.status !== 'cancelled' && (showAll || l.ship_fee_vnd == null || pick.has(l.id)))
     .sort((a, b) => a.ordered_at.localeCompare(b.ordered_at) || a.id.localeCompare(b.id))
@@ -463,11 +462,10 @@ function SettleShipSheet({ onClose }: { onClose: () => void }) {
         : (
           <div className="list settle-list">
             {rows.map((l) => {
-              const u = unitOf(l.id)
               return (
                 <label key={l.id} className="li" htmlFor={`st-${l.id}`}>
                   <input type="checkbox" id={`st-${l.id}`} checked={pick.has(l.id)} onChange={() => toggle(l.id)} />
-                  <span className="main"><b>{lotName(d, l.id)}</b><span className="s">{[u?.model_name, LOT_LABEL[l.status], l.ship_fee_vnd != null ? `đã có ship ${tr(l.ship_fee_vnd)}` : null].filter(Boolean).join(', ')}</span></span>
+                  <span className="main"><b>{lotName(d, l.id)}</b><span className="s">{[LOT_LABEL[l.status], `đặt ${dmy(l.ordered_at)}`, l.ship_fee_vnd != null ? `đã có ship ${tr(l.ship_fee_vnd)}` : null].filter(Boolean).join(', ')}</span></span>
                   {pick.has(l.id) && share != null && <span className="v">~{tr(share)}</span>}
                 </label>
               )

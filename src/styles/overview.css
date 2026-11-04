@@ -191,3 +191,17 @@ a.link-btn, a.btn { text-decoration: none; }
 /* CR-009 Tất toán ship TQ → VN: danh sách chọn cối tự cuộn */
 .settle-list { max-height: 45vh; overflow-y: auto; border-top: 1px solid var(--line-2); }
 .settle-list .li input[type=checkbox] { width: 20px; height: 20px; flex: none; }
+
+/* CR-012 Tổng quan: biểu đồ tiền ra theo loại (donut + chú thích có số) */
+.cash-pie { display: flex; gap: 16px; align-items: center; }
+.cash-pie .donut { width: 140px; height: 140px; flex: none; }
+.cash-pie .donut path { stroke: var(--surface); stroke-width: 2px; cursor: pointer; transition: opacity .15s; }
+.cash-pie .donut .donut-v { font: 600 14px var(--mono); fill: var(--fg); }
+.cash-pie .donut .donut-k { font-size: 11px; fill: var(--muted); }
+.cash-legend { flex: 1; min-width: 0; }
+.cash-legend .row2 { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; padding: 6px 0; border-bottom: 1px solid var(--line-2); text-decoration: none; color: var(--fg); font-size: 13px; }
+.cash-legend .l1 { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cash-legend .r1 { text-align: right; font-family: var(--mono); }
+.cash-legend .r2 { grid-column: 2; text-align: right; font-size: 12px; }
+.cash-legend .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+@media (max-width: 420px) { .cash-pie { flex-direction: column; align-items: stretch; } .cash-pie .donut { align-self: center; } }

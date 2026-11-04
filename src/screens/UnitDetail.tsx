@@ -110,8 +110,12 @@ function UnitView({ u }: { u: UnitViewRow }) {
           <div className="calc">
             <div className="ln"><span>Giá web, {cny(Number(u.price_cny))} × {Number(u.exchange_rate).toLocaleString('vi-VN')}</span><span>{vnd(roundVnd(Number(u.price_cny) * Number(u.exchange_rate)))}</span></div>
             <div className="ln"><span>Phí mua hộ {pct(feePct)}</span><span>{vnd(roundVnd(Number(u.price_cny) * Number(u.exchange_rate) * feePct / 100))}</span></div>
-            <div className="ln"><span>Ship TQ → VN{single ? '' : ` (${qty} chiếc, chia đều)`}</span><span>{ls?.ship_per_unit_vnd != null ? vnd(ls.ship_per_unit_vnd) : <span className="muted">chưa tất toán</span>}</span></div>
-            <div className="ln"><span>Ship kho VN → Lumi{single ? '' : ` (${qty} chiếc, chia đều)`}</span><span>{lot?.local_ship_vnd ? vnd(roundVnd(lot.local_ship_vnd / qty)) : <span className="muted">chưa có</span>}</span></div>
+            <button type="button" className="ln edit" id="u-cnship" disabled={!lot || lot.status === 'cancelled'} onClick={() => lot && flow.cnShip(lot)}>
+              <span>Ship TQ → VN{single ? '' : ` (${qty} chiếc, chia đều)`}</span><span>{ls?.ship_per_unit_vnd != null ? vnd(ls.ship_per_unit_vnd) : <span className="muted">chưa tất toán</span>} ✎</span>
+            </button>
+            <button type="button" className="ln edit" id="u-localship" disabled={!lot || lot.status === 'cancelled'} onClick={() => lot && flow.shipFee(lot)}>
+              <span>Ship kho VN → Lumi{single ? '' : ` (${qty} chiếc, chia đều)`}</span><span>{lot?.local_ship_vnd ? vnd(roundVnd(lot.local_ship_vnd / qty)) : <span className="muted">chưa có</span>} ✎</span>
+            </button>
             <div className="ln total"><span>Giá nhập</span><span><CostCell u={u} /></span></div>
             <div className="ln"><span>Giá bán dự kiến</span><span>{vnd(u.list_price_vnd)}</span></div>
             {u.order_unit_price_vnd != null && <div className="ln"><span>{u.status === 'sold' ? 'Giá chốt' : 'Giá chốt trên đơn'}</span><span>{vnd(u.order_unit_price_vnd)}</span></div>}

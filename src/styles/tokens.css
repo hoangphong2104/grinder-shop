@@ -21,6 +21,8 @@
   --hold: #2F4FA8; --hold-bg: #E7EDFB;
   --bad: #B42318;  --bad-bg: #FDE8E4;
   --neu: #4A515C;  --neu-bg: #EEF0F3;
+  /* CR-012 màu nhóm cho biểu đồ (thứ tự cố định, đã kiểm validator dataviz: sáng + tối) */
+  --cs-1: #2a78d6; --cs-2: #eb6834; --cs-3: #1baf7a; --cs-4: #eda100; --cs-5: #e87ba4;
   --scrim: rgba(16, 20, 26, .42);
   --shadow: 0 1px 2px rgba(16, 20, 26, .05);
   --font: "IBM Plex Sans", "Be Vietnam Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
@@ -34,6 +36,7 @@
     --bg: #0F1215; --surface: #171B20; --surface-2: #1F242B; --fg: #E6E9ED; --muted: #9AA3AE; --faint: #6F7883; --line: #2A3038; --line-2: #22272E;
     --accent: #EDEFF2; --accent-soft: #2A3038; --on-accent: #06201D; --fill: #EDEFF2; --on-fill: #111417;
     --ok: #6FD3A0; --ok-bg: #12301F; --way: #F2B866; --way-bg: #33250E; --hold: #9DB4F5; --hold-bg: #1B2540; --bad: #F7907F; --bad-bg: #3A1714; --neu: #B6BDC7; --neu-bg: #252A31;
+    --cs-1: #3987e5; --cs-2: #d95926; --cs-3: #199e70; --cs-4: #c98500; --cs-5: #d55181;
     --scrim: rgba(0, 0, 0, .6); --shadow: none;
     color-scheme: dark;
   }
@@ -42,6 +45,7 @@
   --bg: #0F1215; --surface: #171B20; --surface-2: #1F242B; --fg: #E6E9ED; --muted: #9AA3AE; --faint: #6F7883; --line: #2A3038; --line-2: #22272E;
   --accent: #EDEFF2; --accent-soft: #2A3038; --on-accent: #06201D; --fill: #EDEFF2; --on-fill: #111417;
   --ok: #6FD3A0; --ok-bg: #12301F; --way: #F2B866; --way-bg: #33250E; --hold: #9DB4F5; --hold-bg: #1B2540; --bad: #F7907F; --bad-bg: #3A1714; --neu: #B6BDC7; --neu-bg: #252A31;
+    --cs-1: #3987e5; --cs-2: #d95926; --cs-3: #199e70; --cs-4: #c98500; --cs-5: #d55181;
   --scrim: rgba(0, 0, 0, .6); --shadow: none;
   color-scheme: dark;
 }
