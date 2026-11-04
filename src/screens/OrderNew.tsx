@@ -8,8 +8,8 @@ import { errorMessage } from '../data/errors.ts'
 import type { DbData, OrderStatusDb, PaymentMethodDb, ShipPayerDb, UnitViewRow } from '../data/types.ts'
 import { Sheet, useToast } from '../ui/feedback.tsx'
 import { Shell } from '../ui/Shell.tsx'
-import { LOT_LABEL, ORDER_LABEL, PAY_METHOD_LABEL } from '../ui/status.tsx'
-import { parseNum, todayVn, vnd } from '../ui/format.ts'
+import { CONDITION_LABEL, LOT_LABEL, ORDER_LABEL, PAY_METHOD_LABEL } from '../ui/status.tsx'
+import { parseNum, todayVn, tr, vnd } from '../ui/format.ts'
 import { fold, makeLookup, profitStr, unitAvailability } from './orders/common.ts'
 import '../styles/orders.css'
 import { MoneyInput } from '../ui/MoneyInput.tsx'
@@ -222,12 +222,12 @@ function OrderForm({ editId }: { editId: string | null }) {
           <div key={r.l.unitId} className="full ord-line">
             <div className="lrow">
               <span className="ord-unit">
-                <b className="num">{r.u?.code ?? '?'}</b>, {r.u?.model_name ?? 'Không tìm thấy chiếc'}
+                <b>{r.u?.model_name ?? 'Không tìm thấy chiếc'}</b>
                 {r.where === 'in_stock' && <span className="pill ok">Kho Lumi</span>}
                 {r.where === 'incoming' && <span className="pill way">{LOT_LABEL[r.u!.lot_status]}</span>}
                 {!r.where && <span className="pill bad">Không còn chọn được</span>}
               </span>
-              <button type="button" className="link-btn" onClick={() => removeLine(r.l.unitId)} aria-label={`Bỏ ${r.u?.code ?? 'chiếc'}`}>Bỏ</button>
+              <button type="button" className="link-btn" onClick={() => removeLine(r.l.unitId)} aria-label={`Bỏ ${r.u?.model_name ?? 'chiếc'}`}>Bỏ</button>
             </div>
             <label className="f" htmlFor={`o-price-${r.l.unitId}`}>Giá chốt
               <MoneyInput className="input money" id={`o-price-${r.l.unitId}`} value={r.l.price} onValue={(v) => setPrice(r.l.unitId, v)}
@@ -337,7 +337,7 @@ function UnitPicker({ d, editId, chosen, full, onToggle, onClose }: {
   return (
     <Sheet title="Chọn chiếc" onClose={onClose}
       footer={<button className="btn btn-primary btn-block" onClick={onClose}>Xong{chosen.size ? `, đã chọn ${chosen.size}` : ''}</button>}>
-      <input className="input" id="up-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm mã (KU-007) hoặc số seri" aria-label="Tìm chiếc" />
+      <input className="input" id="up-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm model hoặc số seri" aria-label="Tìm chiếc" />
       {models.length > 1 && (
         <div className="chips" role="group" aria-label="Lọc theo model">
           <button type="button" className="chip" aria-pressed={!model} onClick={() => setModel('')}>Tất cả<span className="c">{avail.length}</span></button>
@@ -357,9 +357,11 @@ function UnitPicker({ d, editId, chosen, full, onToggle, onClose }: {
                   <button key={u.unit_id} type="button" className="li" aria-pressed={on} disabled={!on && full} onClick={() => onToggle(u)}>
                     <span className={`up-check ${on ? 'on' : ''}`} aria-hidden="true" />
                     <span className="main">
-                      <b className="num">{u.code}</b>, {u.model_name}
+                      <b>{u.model_name}</b>
                       <span className="s">
                         {u.is_received ? <span className="pill ok">Kho Lumi</span> : <span className="pill way">{LOT_LABEL[u.lot_status]}</span>}
+                        {` giá nhập ${tr(u.cost_vnd)}`}
+                        {u.condition && u.condition !== 'new' ? `, ${CONDITION_LABEL[u.condition].toLowerCase()}` : ''}
                         {u.serial_no ? `, seri ${u.serial_no}` : ''}
                       </span>
                     </span>
