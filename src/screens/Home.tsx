@@ -361,7 +361,7 @@ const CASH_SLICES: { key: string; label: string; kinds: CashViewKind[]; color: s
   { key: 'coi', label: 'Tiền cối (trả trung gian)', kinds: ['intermediary'], color: '--cs-1' },
   { key: 'cn', label: 'Ship TQ → VN', kinds: ['cn_ship'], color: '--cs-2' },   // CR-013 tất toán theo đợt
   { key: 'ship', label: 'Ship VN → Lumi, ship cho khách', kinds: ['local_ship', 'ship_shop', 'return_ship'], color: '--cs-3' },
-  { key: 'fee', label: 'Phí COD / phí đơn', kinds: ['order_fee'], color: '--cs-4' },
+  { key: 'fee', label: 'Phí rút tiền COD / phí đơn', kinds: ['order_fee'], color: '--cs-4' },
   { key: 'chi', label: 'Chi phí khác', kinds: ['expense'], color: '--cs-5' },
   { key: 'hoan', label: 'Hoàn tiền khách', kinds: ['customer_refund'], color: '--cs-6' },
 ]

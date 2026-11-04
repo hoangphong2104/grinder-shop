@@ -122,11 +122,11 @@ export default function Settings() {
     save({ default_buying_fee_pct: Math.round(v * 100) / 100 }, `Phí mua hộ mặc định: ${pct(v)}`)
   }
 
-  /** CR-011: phí COD mặc định - gửi hàng có COD thì tự điền vào phí đơn (đơn cũ không đổi). */
+  /** CR-011: phí rút tiền COD mặc định - gửi hàng có COD thì tự điền vào phí đơn (đơn cũ không đổi). */
   function saveCodFee() {
     const v = codFee.trim() ? parseNum(codFee) : 0
     if (v == null || !Number.isInteger(v) || v < 0 || v > 10_000_000) { setErrs({ codFee: 'Nhập số đồng ≥ 0 (vd. 5.500), 0 = không tự trừ.' }); return }
-    save({ default_cod_fee_vnd: v }, `Phí COD mặc định: ${vnd(v)}`)
+    save({ default_cod_fee_vnd: v }, `Phí rút tiền COD mặc định: ${vnd(v)}`)
   }
 
   /** Ngưỡng ngày: số nguyên 1..3650, cam < đỏ (ràng buộc DB settings_aging_days_order). */
@@ -229,12 +229,12 @@ export default function Settings() {
         <button className="btn btn-ghost" id="fee-save" style={{ alignSelf: 'flex-start' }} disabled={busy || !dirtyFee} onClick={saveFee}>Lưu phí mua hộ mặc định</button>
 
         <p className="section-title">Đơn bán</p>
-        <label className="f" style={{ maxWidth: 300 }}>Phí COD mặc định (₫)
+        <label className="f" style={{ maxWidth: 300 }}>Phí rút tiền COD mặc định (₫)
           <MoneyInput className={`input money ${errs.codFee ? 'invalid' : ''}`} id="cod-fee-default" value={codFee} placeholder="0" onValue={setCodFee} />
           {errs.codFee && <span className="field-err">{errs.codFee}</span>}
         </label>
-        <p className="hint">Gửi hàng có COD thì đơn tự có phí này (trừ vào lãi, ghi chi ở Sổ quỹ); sửa từng đơn ở ⋯ › Phí đơn. 0 = không tự trừ.</p>
-        <button className="btn btn-ghost" id="cod-fee-save" style={{ alignSelf: 'flex-start' }} disabled={busy || parseNum(codFee) === (st?.default_cod_fee_vnd ?? 5500)} onClick={saveCodFee}>Lưu phí COD mặc định</button>
+        <p className="hint">Phí rút tiền COD về tài khoản. Gửi hàng có COD thì đơn tự có phí này (trừ vào lãi, ghi chi ở Sổ quỹ); sửa từng đơn ở ⋯ › Phí đơn. Phí COD của hãng đã nằm trong phí giao hàng. 0 = không tự trừ.</p>
+        <button className="btn btn-ghost" id="cod-fee-save" style={{ alignSelf: 'flex-start' }} disabled={busy || parseNum(codFee) === (st?.default_cod_fee_vnd ?? 5500)} onClick={saveCodFee}>Lưu phí rút tiền COD</button>
 
         <p className="section-title">Ngưỡng ngày (tồn lâu, cối về trễ)</p>
         <div className="two ov-two">

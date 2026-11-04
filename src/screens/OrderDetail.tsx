@@ -213,7 +213,7 @@ function OrderDetailView({ id }: { id: string }) {
                   <div className="ln"><span>Shop giữ lại</span><span>{vnd(s.kept_vnd)}</span></div>
                   {o.ship_fee_payer === 'shop' && o.ship_fee_vnd > 0 && <div className="ln"><span>Ship đi shop chịu</span><span>−{vnd(o.ship_fee_vnd)}</span></div>}
                   {o.return_ship_fee_vnd > 0 && <div className="ln"><span>Ship chiều về</span><span>−{vnd(o.return_ship_fee_vnd)}</span></div>}
-                  <button type="button" className="ln edit" onClick={() => setSheet('fee')}><span>Phí COD / phí khác</span><span>{o.fee_vnd > 0 ? `−${vnd(o.fee_vnd)}` : <span className="muted">thêm</span>} ✎</span></button>
+                  <button type="button" className="ln edit" onClick={() => setSheet('fee')}><span>Phí rút tiền COD / phí khác</span><span>{o.fee_vnd > 0 ? `−${vnd(o.fee_vnd)}` : <span className="muted">thêm</span>} ✎</span></button>
                   <div className="ln total"><span>{profitLabel}</span><span>{profitText}</span></div>
                   <div className="formula">Chiếc đã về kho nên không trừ giá nhập. Lãi tính vào tháng hoàn hàng.</div>
                 </> : <>
@@ -227,7 +227,7 @@ function OrderDetailView({ id }: { id: string }) {
                     </div>
                   ))}
                   {o.ship_fee_payer === 'shop' && o.ship_fee_vnd > 0 && <div className="ln"><span>Ship shop chịu</span><span>−{vnd(o.ship_fee_vnd)}</span></div>}
-                  <button type="button" className="ln edit" onClick={() => setSheet('fee')}><span>Phí COD / phí khác</span><span>{o.fee_vnd > 0 ? `−${vnd(o.fee_vnd)}` : <span className="muted">thêm</span>} ✎</span></button>
+                  <button type="button" className="ln edit" onClick={() => setSheet('fee')}><span>Phí rút tiền COD / phí khác</span><span>{o.fee_vnd > 0 ? `−${vnd(o.fee_vnd)}` : <span className="muted">thêm</span>} ✎</span></button>
                   <div className="ln total"><span>{profitLabel}</span><span>{profitText}</span></div>
                   <div className="formula">Giá nhập theo từng chiếc - đổi khi tất toán ship / sửa ship / sửa tay.{provisional ? ' Có chiếc giá nhập tạm tính (chưa tất toán ship TQ → VN ship).' : ''}</div>
                 </>}
@@ -248,7 +248,7 @@ function OrderDetailView({ id }: { id: string }) {
               <button className="li" onClick={() => setSheet('cod')}><span className="main"><b>Sửa tiền COD</b><span className="s">{o.cod_amount_vnd > 0 ? `Shipper thu ${vnd(o.cod_amount_vnd)}` : 'Không thu COD'}</span></span><Icon name="chev" size={16} /></button>
             )}
             {o.status !== 'cancelled' && (
-              <button className="li" id="o-fee" onClick={() => setSheet('fee')}><span className="main"><b>Phí đơn (COD, rút tiền…)</b><span className="s">{o.fee_vnd > 0 ? `Shop chịu ${vnd(o.fee_vnd)}, trừ vào lãi` : 'Chưa có phí'}</span></span><Icon name="chev" size={16} /></button>
+              <button className="li" id="o-fee" onClick={() => setSheet('fee')}><span className="main"><b>Phí đơn (rút tiền COD…)</b><span className="s">{o.fee_vnd > 0 ? `Shop chịu ${vnd(o.fee_vnd)}, trừ vào lãi` : 'Chưa có phí'}</span></span><Icon name="chev" size={16} /></button>
             )}
             {canPay && (
               <button className="li" onClick={() => setSheet('pay')}><span className="main"><b>{closedMoney ? 'Ghi hoàn tiền' : 'Ghi khoản thu / hoàn tiền'}</b><span className="s">Chuyển khoản, Tiền mặt, COD</span></span><Icon name="chev" size={16} /></button>
@@ -381,7 +381,7 @@ function OrderDetailView({ id }: { id: string }) {
 
 function ShipSheet({ onClose, onOk, busy, tracking, shortText, codes, due, codFee }: {
   onClose: () => void; onOk: (tracking: string, date: string, cod: number) => void; busy: boolean; tracking: string; shortText: string; codes: string; due: number
-  /** CR-011 phí COD mặc định sẽ tự điền khi có COD (0 = không / đơn đã có phí) */ codFee: number
+  /** CR-011 phí rút tiền COD mặc định sẽ tự điền khi có COD (0 = không / đơn đã có phí) */ codFee: number
 }) {
   const [tk, setTk] = useState(tracking)
   const [date, setDate] = useState(todayVn())
@@ -405,7 +405,7 @@ function ShipSheet({ onClose, onOk, busy, tracking, shortText, codes, due, codFe
         <span className="hint">
           {codN != null && codN > due ? `Lớn hơn số còn phải thu (${vnd(due)}) - kiểm tra lại. ` : ''}
           Còn phải thu {vnd(due)}. Để 0 nếu khách đã chuyển khoản đủ.
-          {codN != null && codN > 0 && codFee > 0 ? ` Có COD ⇒ tự trừ phí COD ${vnd(codFee)} vào lãi (sửa ở ⋯ › Phí đơn).` : ''}
+          {codN != null && codN > 0 && codFee > 0 ? ` Có COD ⇒ tự trừ phí rút tiền COD ${vnd(codFee)} vào lãi (sửa ở ⋯ › Phí đơn).` : ''}
         </span>
       </label>
       <label className="f" htmlFor="sh-date">Ngày gửi<input className="input" id="sh-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
@@ -438,7 +438,7 @@ function CodSheet({ onClose, onOk, busy, cod, received, due, version }: {
   )
 }
 
-/** CR-011 phí COD / phí khác shop chịu của đơn: trừ lãi; đơn đã gửi ⇒ ghi chi ở Sổ quỹ (set_order_fee). */
+/** CR-011 phí rút tiền COD / phí khác shop chịu của đơn: trừ lãi; đơn đã gửi ⇒ ghi chi ở Sổ quỹ (set_order_fee). */
 function FeeSheet({ onClose, onOk, busy, fee, cod, codDefault, version, sent }: {
   onClose: () => void; onOk: (fee: number, version: number) => void; busy: boolean; fee: number; cod: number; codDefault: number; version: number; sent: boolean
 }) {
@@ -460,11 +460,11 @@ function FeeSheet({ onClose, onOk, busy, fee, cod, codDefault, version, sent }: 
         {err && <span className="err-text">{err}</span>}
       </label>
       <div className="chips" role="group" aria-label="Cộng nhanh">
-        {codDefault > 0 && <button type="button" className="chip" onClick={() => add(codDefault)}>+ Phí COD {vnd(codDefault)}</button>}
+        {codDefault > 0 && <button type="button" className="chip" onClick={() => add(codDefault)}>+ Phí rút tiền COD {vnd(codDefault)}</button>}
         <button type="button" className="chip" onClick={() => add(1000)}>+ 1.000</button>
         <button type="button" className="chip" onClick={() => add(5000)}>+ 5.000</button>
       </div>
-      <p className="hint">Gồm phí COD, phí rút tiền COD, phí khác của riêng đơn này. Trừ vào lãi đơn{sent ? ' và ghi chi ở Sổ quỹ (ngày gửi)' : '; ghi chi ở Sổ quỹ khi gửi hàng'}. Phí chung không thuộc đơn nào (rút tiền tài khoản, phí ngân hàng…) ghi ở Sổ quỹ › Chi phí.</p>
+      <p className="hint">Gồm phí rút tiền COD và phí khác của riêng đơn này (phí COD của hãng đã nằm trong phí giao hàng). Trừ vào lãi đơn{sent ? ' và ghi chi ở Sổ quỹ (ngày gửi)' : '; ghi chi ở Sổ quỹ khi gửi hàng'}. Phí chung không thuộc đơn nào (rút tiền tài khoản, phí ngân hàng…) ghi ở Sổ quỹ › Chi phí.</p>
     </Sheet>
   )
 }

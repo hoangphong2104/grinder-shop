@@ -30,8 +30,8 @@ type ManualKind = 'expense' | 'capital_in' | 'capital_out' | 'adjustment'
 const MANUAL: [ManualKind, string][] = [['expense', 'Chi phí'], ['capital_in', 'Nạp vốn'], ['capital_out', 'Rút vốn'], ['adjustment', 'Điều chỉnh']]
 /** CR-006: ghi mới chỉ Chi phí / Nạp vốn / Rút vốn - "Điều chỉnh" trùng ý với nạp / rút nên ẩn; khoản Điều chỉnh cũ vẫn hiện để sửa / xoá. */
 const MANUAL_NEW = MANUAL.filter(([k]) => k !== 'adjustment')
-// CR-011: các loại phí hay gặp (phí riêng của đơn - phí COD - ghi ở đơn › Phí đơn, tự vào đây)
-const EXPENSE_HINTS = ['Phí rút tiền', 'Phí chuyển khoản', 'Phí COD', 'Đóng gói', 'Phí sàn / quảng cáo', 'Ship nội thành', 'Sửa chữa', 'Dụng cụ']
+// CR-011: các loại phí hay gặp (phí rút tiền COD của đơn ghi ở đơn › Phí đơn, tự vào đây)
+const EXPENSE_HINTS = ['Phí rút tiền', 'Phí chuyển khoản', 'Đóng gói', 'Phí sàn / quảng cáo', 'Ship nội thành', 'Sửa chữa', 'Dụng cụ']
 const TXN_LABEL = { payable: 'Phải trả', transfer: 'Đã chuyển', adjustment: 'Điều chỉnh nợ' } as const
 
 const amountText = (e: CashEntryRow) => (e.direction === 'in' ? `+${tr(e.amount_vnd)}` : `−${tr(e.amount_vnd)}`)
