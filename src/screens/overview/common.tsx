@@ -2,7 +2,7 @@
 // CR-004: dòng danh sách 2 dòng (UI-M1, research §1.3) - Row2 + UnitRow / LotRow / OrderRow.
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import type { AgingLevelDb, DbData, LotRow as LotDbRow, ModelStockRow, OrderSummaryRow, UnitStatusDb, UnitViewRow } from '../../data/types.ts'
+import type { AgingLevelDb, CashEntryRow, DbData, LotRow as LotDbRow, ModelStockRow, OrderSummaryRow, UnitStatusDb, UnitViewRow } from '../../data/types.ts'
 import { supabase } from '../../lib/supabase.ts'
 import { CONDITION_LABEL, LotChip, OrderChip, unitLabel } from '../../ui/status.tsx'
 import { todayVn, tr, vnd } from '../../ui/format.ts'
@@ -126,6 +126,13 @@ export function unitProfit(u: UnitViewRow): { value: number | null; actual: bool
   if (u.status === 'sold') return { value: u.actual_profit_vnd, actual: true }
   if (u.status === 'cancelled') return { value: null, actual: false }
   return { value: u.expected_profit_vnd, actual: false }
+}
+
+/** CR-013 loại hiển thị của bút toán sổ quỹ: khoản trả trung gian là tất toán ship TQ → VN (is_cn_ship) ⇒ 'cn_ship'. */
+export type CashViewKind = CashEntryRow['kind'] | 'cn_ship'
+export function cashViewKind(d: DbData, e: CashEntryRow): CashViewKind {
+  if (e.kind === 'intermediary' && e.txn_id && d.txns.find((t) => t.id === e.txn_id)?.is_cn_ship) return 'cn_ship'
+  return e.kind
 }
 
 /** CR-009 bỏ khái niệm lô; CR-012 không hiện mã cối ngoài trang chi tiết: tên hiển thị = tên model ("K Ultra"),

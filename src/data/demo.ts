@@ -159,7 +159,7 @@ const ORDERS: OrderSpec[] = [
 
 // CR-005: amount 'payable' = trả đủ phải trả của lô; 'goods' = phải trả − phí ship (còn nợ ship); lot = khoản gắn lô.
 // Lô L-007 còn nợ ship 500.000, L-009 chưa trả (nút "Đã thanh toán"); khoản ago 3 không gắn lô.
-const TRANSFERS: { ago: number; kind: 'transfer' | 'adjustment'; amount: number | 'payable' | 'goods'; lot?: string; note: string | null }[] = [
+const TRANSFERS: { ago: number; kind: 'transfer' | 'adjustment'; amount: number | 'payable' | 'goods'; lot?: string; note: string | null; cnShip?: boolean }[] = [
   { ago: 59, kind: 'transfer', amount: 'payable', lot: 'demo-l-1', note: 'CK Vietcombank' },
   { ago: 44, kind: 'transfer', amount: 'payable', lot: 'demo-l-2', note: null },
   { ago: 29, kind: 'transfer', amount: 'payable', lot: 'demo-l-3', note: 'CK Techcombank - JU/ZP6/C3' },
@@ -170,6 +170,7 @@ const TRANSFERS: { ago: number; kind: 'transfer' | 'adjustment'; amount: number 
   { ago: 7, kind: 'adjustment', amount: -120000, note: 'Trung gian giảm phí do giao trễ' },
   { ago: 5, kind: 'transfer', amount: 'payable', lot: 'demo-l-8', note: 'Trả khi nhập cối' },
   { ago: 3, kind: 'transfer', amount: 2000000, note: 'Ứng trước cho trung gian' },
+  { ago: 2, kind: 'transfer', amount: 0, lot: 'demo-l-7', note: 'Ship TQ→VN', cnShip: true },   // CR-013 (số = ship của lô, xem transferAmount)
 ]
 
 // CR-005 sổ quỹ ghi tay (bút toán tự sinh dựng từ khoản thu / khoản trả / đơn bên dưới)
@@ -340,8 +341,8 @@ export function buildDemoData(): DbData {
   const transferAmount = (t: (typeof TRANSFERS)[number]) =>
     t.amount === 'payable' ? payable.get(t.lot!)! : t.amount === 'goods' ? payable.get(t.lot!)! - (lotById.get(t.lot!)!.ship_fee_vnd ?? 0) : t.amount
   const txns: TxnRow[] = [
-    ...lots.map((l): TxnRow => ({ ...base(`demo-t-pay-${l.id}`, l.ordered_at, 10, 30), txn_date: l.ordered_at, kind: 'payable', amount_vnd: payable.get(l.id)!, lot_id: l.id, note: 'Tự sinh từ lô' })),
-    ...TRANSFERS.map((t, i): TxnRow => ({ ...base(`demo-t-${i + 1}`, ago(t.ago), 11), txn_date: ago(t.ago), kind: t.kind, amount_vnd: transferAmount(t), lot_id: t.lot ?? null, note: t.note })),
+    ...lots.map((l): TxnRow => ({ ...base(`demo-t-pay-${l.id}`, l.ordered_at, 10, 30), txn_date: l.ordered_at, kind: 'payable', amount_vnd: payable.get(l.id)!, lot_id: l.id, note: 'Tự sinh từ lô', is_cn_ship: false })),
+    ...TRANSFERS.map((t, i): TxnRow => ({ ...base(`demo-t-${i + 1}`, ago(t.ago), 11), txn_date: ago(t.ago), kind: t.kind, amount_vnd: t.cnShip ? lotById.get(t.lot!)!.ship_fee_vnd ?? 0 : transferAmount(t), lot_id: t.lot ?? null, note: t.note, is_cn_ship: t.cnShip ?? false })),
   ].sort((a, b) => a.txn_date.localeCompare(b.txn_date) || a.created_at.localeCompare(b.created_at))
   const dTransfers: Transfer[] = txns.filter((t) => t.kind !== 'payable')
     .map((t) => ({ id: t.id, date: t.txn_date, kind: t.kind as Transfer['kind'], amount: t.amount_vnd, lotId: t.lot_id, note: t.note ?? undefined }))

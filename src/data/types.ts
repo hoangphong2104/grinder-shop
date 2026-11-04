@@ -29,7 +29,8 @@ export interface LotRow extends Row { goofish_url: string | null; goofish_item_i
   /** CR-009 ship Kho VN → Lumi (shop trả ngay - vào giá nhập + sổ quỹ, không vào nợ trung gian); ship_fee_vnd = ship TQ→VN */ local_ship_vnd: number | null }
 export interface UnitRow extends Row { code: string; model_id: string; lot_id: string; price_cny: number; cost_vnd_auto: number; cost_vnd_override: number | null; list_price_vnd: number | null; serial_no: string | null; note: string | null; /** CR-004 (sửa qua update_unit / receive_lot p_units) */ condition: UnitConditionDb }
 /** lot_id: payable luôn có; CR-005 transfer có thể gắn lô (client ghi / sửa được); adjustment luôn null. */
-export interface TxnRow extends Row { txn_date: string; kind: TxnKindDb; amount_vnd: number; lot_id: string | null; note: string | null }
+export interface TxnRow extends Row { txn_date: string; kind: TxnKindDb; amount_vnd: number; lot_id: string | null; note: string | null
+  /** CR-013: khoản Đã chuyển là tất toán ship TQ → VN (settle_cn_ship) - báo cáo tách khỏi tiền cối */ is_cn_ship: boolean }
 /**
  * CR-005 public.cash_entries. Client chỉ insert / update (entry_date, direction, amount_vnd, kind, expense_category, note) / delete
  * bút toán ghi tay (kind expense | capital_in | capital_out | adjustment, is_auto false); bút toán tự sinh (is_auto) chỉ đọc -
