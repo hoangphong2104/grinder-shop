@@ -143,7 +143,7 @@ function OrderDetailView({ id }: { id: string }) {
     <Shell section="don" title={code} back="/don" savebar={savebar}
       actions={<button className="icon-btn" onClick={() => setSheet('menu')} aria-label="Thao tác khác"><MoreIcon /></button>}>
       <div className="o-sub">
-        <span className="nm">{c ? <Link to={`/don?khach=${c.id}&f=all`}>{c.fb_name}</Link> : s.customer_name}</span>
+        <span className="nm">{c?.fb_name ?? s.customer_name}</span>
         <span className="o-chips"><OrderChip s={o.status} />{pay && <span className={`pill ${pay.tone}`}>{pay.long}</span>}</span>
       </div>
       <div className="cols">
@@ -179,7 +179,9 @@ function OrderDetailView({ id }: { id: string }) {
             ))}
             <div className="ln"><span>Đã thu</span><span>{vnd(s.paid_vnd)}</span></div>
             {o.cod_amount_vnd > 0 && <>
-              <div className="ln sub-ln"><span>COD shipper thu{o.status === 'shipped' && <>, <button className="link-btn" onClick={() => setSheet('cod')}>sửa</button></>}</span><span>{vnd(o.cod_amount_vnd)}</span></div>
+              {o.status === 'shipped'
+                ? <button type="button" className="ln sub-ln edit" id="o-cod-line" onClick={() => setSheet('cod')}><span>COD shipper thu</span><span>{vnd(o.cod_amount_vnd)} ✎</span></button>
+                : <div className="ln sub-ln"><span>COD shipper thu</span><span>{vnd(o.cod_amount_vnd)}</span></div>}
               {s.cod_received_vnd > 0 && <div className="ln sub-ln"><span>COD đã về</span><span>{vnd(s.cod_received_vnd)}</span></div>}
               {s.cod_pending_vnd > 0 && <div className="ln cod"><span>COD chờ hãng chuyển</span><span>{vnd(s.cod_pending_vnd)}</span></div>}
             </>}
@@ -193,7 +195,7 @@ function OrderDetailView({ id }: { id: string }) {
         </div>
         <div>
           <dl className="kv">
-            <dt>Khách</dt><dd>{c ? <Link to={`/don?khach=${c.id}&f=all`}>{c.fb_name}</Link> : s.customer_name}{c?.is_hidden ? <span className="muted small"> (đã ẩn)</span> : null}</dd>
+            <dt>Khách</dt><dd>{c?.fb_name ?? s.customer_name}{c?.is_hidden ? <span className="muted small"> (đã ẩn)</span> : null}</dd>
             <dt>Facebook</dt><dd className="small">{fbIsUrl ? <a href={c!.fb_url!} target="_blank" rel="noreferrer">{c!.fb_url}</a> : c?.fb_url || '-'}</dd>
             <dt>SĐT</dt><dd>{c?.phone ? <a href={`tel:${c.phone.replace(/\s/g, '')}`}>{c.phone}</a> : '-'}</dd>
             <dt>Địa chỉ</dt><dd className="small">{c?.address || '-'}</dd>
@@ -211,7 +213,7 @@ function OrderDetailView({ id }: { id: string }) {
                   <div className="ln"><span>Shop giữ lại</span><span>{vnd(s.kept_vnd)}</span></div>
                   {o.ship_fee_payer === 'shop' && o.ship_fee_vnd > 0 && <div className="ln"><span>Ship đi shop chịu</span><span>−{vnd(o.ship_fee_vnd)}</span></div>}
                   {o.return_ship_fee_vnd > 0 && <div className="ln"><span>Ship chiều về</span><span>−{vnd(o.return_ship_fee_vnd)}</span></div>}
-                  {o.fee_vnd > 0 && <div className="ln"><span>Phí COD / phí khác</span><span>−{vnd(o.fee_vnd)}</span></div>}
+                  <button type="button" className="ln edit" onClick={() => setSheet('fee')}><span>Phí COD / phí khác</span><span>{o.fee_vnd > 0 ? `−${vnd(o.fee_vnd)}` : <span className="muted">thêm</span>} ✎</span></button>
                   <div className="ln total"><span>{profitLabel}</span><span>{profitText}</span></div>
                   <div className="formula">Chiếc đã về kho nên không trừ giá nhập. Lãi tính vào tháng hoàn hàng.</div>
                 </> : <>
@@ -225,7 +227,7 @@ function OrderDetailView({ id }: { id: string }) {
                     </div>
                   ))}
                   {o.ship_fee_payer === 'shop' && o.ship_fee_vnd > 0 && <div className="ln"><span>Ship shop chịu</span><span>−{vnd(o.ship_fee_vnd)}</span></div>}
-                  {o.fee_vnd > 0 && <div className="ln"><span>Phí COD / phí khác</span><span>−{vnd(o.fee_vnd)}</span></div>}
+                  <button type="button" className="ln edit" onClick={() => setSheet('fee')}><span>Phí COD / phí khác</span><span>{o.fee_vnd > 0 ? `−${vnd(o.fee_vnd)}` : <span className="muted">thêm</span>} ✎</span></button>
                   <div className="ln total"><span>{profitLabel}</span><span>{profitText}</span></div>
                   <div className="formula">Giá nhập theo từng chiếc - đổi khi tất toán ship / sửa ship / sửa tay.{provisional ? ' Có chiếc giá nhập tạm tính (chưa tất toán ship TQ → VN ship).' : ''}</div>
                 </>}
@@ -425,8 +427,8 @@ function CodSheet({ onClose, onOk, busy, cod, received, due, version }: {
     onOk(n, ver)
   }
   return (
-    <Sheet title="Tiền COD" onClose={onClose}
-      footer={<button className="btn btn-primary btn-block" disabled={busy} onClick={submit}>Lưu</button>}>
+    <Sheet title="Tiền COD" onClose={onClose} closeLabel="Huỷ"
+      footer={<button className="btn btn-primary btn-block" id="cod-ok" disabled={busy} onClick={submit}>Xác nhận</button>}>
       <label className="f" htmlFor="cod-amt">Tiền COD shipper thu (₫)
         <MoneyInput className="input money" id="cod-amt" value={v} onValue={(v) => setV(v)} placeholder="0" aria-invalid={!!err} />
         {err && <span className="err-text">{err}</span>}
@@ -451,8 +453,8 @@ function FeeSheet({ onClose, onOk, busy, fee, cod, codDefault, version, sent }: 
   }
   const add = (n: number) => setV(fmt((money0(v) ?? 0) + n))
   return (
-    <Sheet title="Phí đơn" onClose={onClose}
-      footer={<button className="btn btn-primary btn-block" id="fee-save" disabled={busy} onClick={submit}>Lưu</button>}>
+    <Sheet title="Phí đơn" onClose={onClose} closeLabel="Huỷ"
+      footer={<button className="btn btn-primary btn-block" id="fee-save" disabled={busy} onClick={submit}>Xác nhận</button>}>
       <label className="f" htmlFor="fee-amt">Tổng phí shop chịu (₫)
         <MoneyInput className="input money" id="fee-amt" value={v} onValue={(x) => setV(x)} placeholder="0" aria-invalid={!!err} />
         {err && <span className="err-text">{err}</span>}

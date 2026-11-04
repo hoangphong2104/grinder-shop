@@ -1,12 +1,12 @@
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useData } from '../data/store.tsx'
-import type { OrderSummaryRow, UnitViewRow } from '../data/types.ts'
+import type { CashKindDb, OrderSummaryRow, UnitViewRow } from '../data/types.ts'
 import { Shell } from '../ui/Shell.tsx'
 import { Icon } from '../ui/icons.tsx'
 import { dmy, todayVn, tr } from '../ui/format.ts'
 import {
-  Ident, unitPrice, OrderRow, Row2, Tx, UnitRow, codesText, daysSince, kpiAmount, lotHref, lotModelsText, lotName, profitMonth, signed, sortedModelStock, thresholds, useDesk,
+  Ident, unitPrice, OrderRow, Row2, Tx, UnitRow, codesText, daysSince, kpiAmount, lotHref, lotName, profitMonth, signed, sortedModelStock, thresholds, useDesk,
 } from './overview/common.tsx'
 import { PayLotButton } from './lots/PayLot.tsx'
 
@@ -46,6 +46,8 @@ export default function Home() {
   const returnedN = inMonth.length - shippedN
   const rev = inMonth.filter((o) => o.status !== 'returned').reduce((a, o) => a + o.goods_vnd, 0)
   const [period, setPeriod] = useState<Period>('thang')
+  const [cashPeriod, setCashPeriod] = useState<Period>('thang')
+  const [noGoods, setNoGoods] = useState(false)   // CR-012: bỏ tiền cối để xem riêng ship / phí
   // Vốn đang nằm ở hàng (CR-005 ý 4): Kho Lumi + đang về (Kho TQ / Kho VN) - v_model_stock.total_capital_vnd
   const capital = d.modelStock.reduce((a, s) => a + (s.total_capital_vnd ?? s.stock_value_vnd), 0)
   const cash = d.cashBalance?.balance_vnd ?? 0
@@ -109,7 +111,7 @@ export default function Home() {
   const owing = d.lotSummary.filter((x) => x.status !== 'cancelled' && x.outstanding_vnd > 0).sort((a, b) => a.ordered_at.localeCompare(b.ordered_at))
   add({ key: 'pay', title: 'Trả trung gian', tone: 'bad', count: owing.length, sum: owing.reduce((a, x) => a + x.outstanding_vnd, 0), more: '/congno',
     rows: owing.slice(0, PER_GROUP).map((x) => (
-      <Row2 key={x.lot_id} a={<Link className="row" style={{ gap: 8, minWidth: 0, color: 'inherit', textDecoration: 'none' }} to={lotHref(d, x.lot_id)}><Ident id={lotName(d, x.lot_id)} text={lotModelsText(d, x.lot_id, 'short')} /></Link>}
+      <Row2 key={x.lot_id} a={<Link className="row" style={{ gap: 8, minWidth: 0, color: 'inherit', textDecoration: 'none' }} to={lotHref(d, x.lot_id)}><span className="tx"><b>{lotName(d, x.lot_id)}</b></span></Link>}
         b={<span className="neg">{tr(x.outstanding_vnd)}</span>} c={<Tx>{x.paid_vnd > 0 ? `đã trả ${tr(x.paid_vnd)} / ${tr(x.payable_vnd)}` : `phải trả ${tr(x.payable_vnd)}`}</Tx>}
         d={<PayLotButton lotId={x.lot_id} id={`home-pay-${x.lot_id}`} />} />
     )) })
@@ -204,9 +206,9 @@ export default function Home() {
             const left = eta ? dayDiff(today, eta) : null
             return (
               <Row2 key={u.unit_id} to={`/kho/${u.unit_id}`}
-                a={<Ident id={u.code} text={u.model_name} />}
-                b={left == null ? `đặt ${age} ngày` : left > 0 ? `còn ~${left} ngày` : left === 0 ? 'dự kiến hôm nay' : <span className="neg">trễ {-left} ngày</span>}
-                c={<Tx>{u.lot_status === 'vn_warehouse' ? 'Kho VN' : 'Kho TQ'}, đặt {dmy(u.ordered_at)}{eta ? `, về ~${dmy(eta)}` : ''}</Tx>} />
+                a={<Ident id={u.model_name} />}
+                b={left == null ? `đặt ${age} ngày` : left > 0 ? `dự kiến ${left} ngày` : left === 0 ? 'dự kiến hôm nay' : <span className="neg">trễ {-left} ngày</span>}
+                c={<Tx>{u.lot_status === 'vn_warehouse' ? 'Kho VN' : 'Kho TQ'}, đặt {dmy(u.ordered_at)}{eta ? `, dự kiến ${dmy(eta)}` : ''}</Tx>} />
             )
           })}
         </div>
@@ -269,25 +271,40 @@ export default function Home() {
     </div>
   )
 
-  // ---------- CR-008: Người bán Goofish - số cối đã mua, thời gian về TB, số cối có lỗi / đã dùng khi nhận
-  const sellerRows = d.sellers.map((sl) => {
-    const us = d.unitView.filter((u) => u.seller_id === sl.id && u.status !== 'cancelled')
-    const days = us.filter((u) => u.received_at).map((u) => dayDiff(u.ordered_at, u.received_at!)).filter((n) => n >= 0)
-    const bad = us.filter((u) => u.is_received && (u.condition === 'defect' || u.condition === 'used')).length
-    return { sl, n: us.length, avg: days.length ? Math.round(days.reduce((a, n) => a + n, 0) / days.length) : null, bad }
-  }).filter((x) => x.n > 0).sort((a, b) => Number(a.sl.is_avoided) - Number(b.sl.is_avoided) || a.bad - b.bad || b.n - a.n)
-  const sellerBlock = (
-    <div className="stack" id="home-sellers">
-      <p className="section-title">Người bán Goofish</p>
-      {sellerRows.length === 0 ? <p className="muted small" style={{ margin: 0 }}>Chưa có người bán nào - nhập cối kèm tên người bán để theo dõi.</p> : (
-        <div className="ov-list">
-          {sellerRows.slice(0, 6).map((x) => (
-            <Row2 key={x.sl.id} a={<Ident id={x.sl.nickname} text={x.sl.region ?? undefined} />} b={`${x.n} cối`}
-              c={<Tx>{x.avg != null ? `về TB ${x.avg} ngày` : 'chưa có cối về'}{x.sl.is_avoided ? ', đang đánh dấu tránh' : ''}</Tx>}
-              d={x.bad > 0 ? <span className="neg">{x.bad} cối lỗi / đã dùng</span> : x.avg != null ? <span className="pos">hàng ổn</span> : undefined} />
-          ))}
-        </div>
-      )}
+  // ---------- CR-012: Sổ quỹ - tiền ra theo loại (donut, thay "Người bán Goofish"), theo kỳ như Lãi theo model
+  const cashIn = (iso: string) => {
+    const m = iso.slice(0, 7)
+    if (cashPeriod === 'thang') return m === month
+    if (cashPeriod === '3thang') return m >= addMonths(month, -2)
+    if (cashPeriod === 'nam') return m.slice(0, 4) === month.slice(0, 4)
+    return true
+  }
+  const outs = (d.cashEntries ?? []).filter((e) => e.direction === 'out' && cashIn(e.entry_date))
+  const slices = CASH_SLICES.filter((c) => !(noGoods && c.key === 'coi')).map((c) => ({ ...c, v: outs.reduce((a, e) => a + (c.kinds.includes(e.kind) ? e.amount_vnd : 0), 0) })).filter((x) => x.v > 0)
+  const outTotal = slices.reduce((a, x) => a + x.v, 0)
+  const cashBlock = (
+    <div className="stack" id="home-cash">
+      <p className="section-title">Tiền ra theo loại</p>
+      <div className="chips" role="group" aria-label="Kỳ sổ quỹ">
+        {PERIODS.map(([k, t]) => <button key={k} className="chip" id={`home-cash-${k}`} aria-pressed={cashPeriod === k} onClick={() => setCashPeriod(k)}>{t}</button>)}
+        <button className="chip" id="home-cash-nogoods" aria-pressed={noGoods} onClick={() => setNoGoods((v) => !v)}>Bỏ tiền cối</button>
+      </div>
+      {outTotal === 0
+        ? <p className="muted small" style={{ margin: 0 }}>Chưa có khoản chi nào trong kỳ này.</p>
+        : (
+          <div className="cash-pie">
+            <Donut slices={slices} total={outTotal} />
+            <div className="ov-list cash-legend" role="table" aria-label="Tiền ra theo loại">
+              {slices.map((x) => (
+                <Link key={x.key} className="row2" role="row" to={`/congno`}>
+                  <span className="l1" role="cell"><span className="sw" style={{ background: `var(${x.color})` }} aria-hidden="true" />{x.label}</span>
+                  <span className="r1 num" role="cell">{tr(x.v)}</span>
+                  <span className="r2 muted" role="cell">{pctOf(x.v, outTotal)}</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
     </div>
   )
 
@@ -330,11 +347,54 @@ export default function Home() {
             {kpis}
             <div className="ov-dash">
               <div className="stack ov-left">{compareBlock}{arriveBlock}<section className="ov-panel todo">{todo}</section></div>
-              <div className="stack">{marginBlock}{sellerBlock}{priceBlock}</div>
+              <div className="stack">{marginBlock}{cashBlock}{priceBlock}</div>
             </div>
           </div>
         )
-        : <>{kpis}{compareBlock}{todo}{arriveBlock}{marginBlock}{priceBlock}{sellerBlock}</>}
+        : <>{kpis}{compareBlock}{todo}{arriveBlock}{marginBlock}{cashBlock}{priceBlock}</>}
     </Shell>
   )
 }
+
+/** CR-012 nhóm tiền ra cho biểu đồ Sổ quỹ - màu theo thứ tự cố định (token --cs-1..5, kiểm bằng validator dataviz). */
+const CASH_SLICES: { key: string; label: string; kinds: CashKindDb[]; color: string }[] = [
+  { key: 'coi', label: 'Tiền cối + ship TQ→VN (trả trung gian)', kinds: ['intermediary'], color: '--cs-1' },
+  { key: 'ship', label: 'Ship VN→Lumi, ship cho khách', kinds: ['local_ship', 'ship_shop', 'return_ship'], color: '--cs-2' },
+  { key: 'fee', label: 'Phí COD / phí đơn', kinds: ['order_fee'], color: '--cs-3' },
+  { key: 'chi', label: 'Chi phí khác', kinds: ['expense'], color: '--cs-4' },
+  { key: 'hoan', label: 'Hoàn tiền khách', kinds: ['customer_refund'], color: '--cs-5' },
+]
+
+/** Donut tỷ lệ tiền ra: lát cách nhau 2px (viền màu nền), giữa là tổng; rê chuột / chạm lát hiện tên + số tiền. */
+function Donut({ slices, total }: { slices: { key: string; label: string; v: number; color: string }[]; total: number }) {
+  const [hover, setHover] = useState<string | null>(null)
+  const R = 60, r = 38, C = 70
+  let a0 = -Math.PI / 2
+  const arcs = slices.map((x) => {
+    const a1 = a0 + (x.v / total) * Math.PI * 2
+    const big = a1 - a0 > Math.PI ? 1 : 0
+    const p = (rad: number, a: number) => `${C + rad * Math.cos(a)} ${C + rad * Math.sin(a)}`
+    const full = slices.length === 1
+    const dPath = full
+      ? `M ${C} ${C - R} A ${R} ${R} 0 1 1 ${C - 0.01} ${C - R} L ${C - 0.01} ${C - r} A ${r} ${r} 0 1 0 ${C} ${C - r} Z`
+      : `M ${p(R, a0)} A ${R} ${R} 0 ${big} 1 ${p(R, a1)} L ${p(r, a1)} A ${r} ${r} 0 ${big} 0 ${p(r, a0)} Z`
+    a0 = a1
+    return { ...x, dPath }
+  })
+  const cur = arcs.find((x) => x.key === hover)
+  return (
+    <svg className="donut" viewBox="0 0 140 140" role="img" aria-label={`Tổng tiền ra ${tr(total)}`}>
+      {arcs.map((x) => (
+        <path key={x.key} d={x.dPath} style={{ fill: `var(${x.color})`, opacity: hover && hover !== x.key ? 0.45 : 1 }}
+          onMouseEnter={() => setHover(x.key)} onMouseLeave={() => setHover(null)} onClick={() => setHover(hover === x.key ? null : x.key)}>
+          <title>{`${x.label}: ${tr(x.v)} (${pctOf(x.v, total)})`}</title>
+        </path>
+      ))}
+      <text x={C} y={C - 4} textAnchor="middle" className="donut-v">{tr(cur ? cur.v : total)}</text>
+      <text x={C} y={C + 12} textAnchor="middle" className="donut-k">{cur ? pctOf(cur.v, total) : 'tổng chi'}</text>
+    </svg>
+  )
+}
+
+/** Phần trăm làm tròn; phần nhỏ khác 0 thì "<1%" thay vì "0%". */
+const pctOf = (v: number, total: number) => { const p = (v / total) * 100; return p > 0 && p < 1 ? '<1%' : `${Math.round(p)}%` }

@@ -15,7 +15,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 }
 export const useToast = () => useContext(ToastCtx)
 
-export function Sheet({ title, children, onClose, footer }: { title: string; children: ReactNode; onClose: () => void; footer?: ReactNode }) {
+export function Sheet({ title, children, onClose, footer, closeLabel = 'Đóng' }: { title: string; children: ReactNode; onClose: () => void; footer?: ReactNode; closeLabel?: string }) {
   const ref = useRef<HTMLDivElement>(null)
   const closeRef = useRef(onClose)
   closeRef.current = onClose
@@ -34,7 +34,7 @@ export function Sheet({ title, children, onClose, footer }: { title: string; chi
         <h2>{title}</h2>
         {children}
         {footer}
-        <button className="btn btn-ghost btn-block" onClick={onClose} data-sheet-close>Đóng</button>
+        <button className="btn btn-ghost btn-block" onClick={onClose} data-sheet-close>{closeLabel}</button>
       </div>
     </div>
   )

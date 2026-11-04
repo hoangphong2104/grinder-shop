@@ -1,6 +1,6 @@
 // SC_07 Đơn bán - CR-004: ô tìm + 1 hàng chip lọc có đếm (DON-M2), dòng 2 dòng (DON-M1), chip trạng thái đơn và
 // thanh toán tách riêng (DON-M4). Máy tính: bảng hoặc "Theo trạng thái" (cột, gồm cột Hoàn hàng).
-// Trạng thái xem / lọc giữ trên URL (?v=board, ?f=todo|pre|wait|sent|cod|due|refund|ret|all, ?khach=<id>, ?q=) để quay lại không mất.
+// Trạng thái xem / lọc giữ trên URL (?v=list, ?f=todo|pre|wait|sent|cod|due|refund|ret|all, ?khach=<id>, ?q=) để quay lại không mất.
 import { useMemo } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useData } from '../data/store.tsx'
@@ -42,7 +42,8 @@ export default function Orders() {
   const nav = useNavigate()
   const [sp, setSp] = useSearchParams()
   // Bảng cột chỉ trên máy tính (DON-M2); điện thoại luôn là danh sách.
-  const view = desk && sp.get('v') === 'board' ? 'board' : 'list'
+  // CR-012: máy tính mặc định "Theo trạng thái"; ?v=list = bảng danh sách
+  const view = desk && sp.get('v') !== 'list' ? 'board' : 'list'
   const filter = parseOrderFilter(sp.get('f'))
   const khach = sp.get('khach')
   const q = sp.get('q') ?? ''
@@ -83,8 +84,8 @@ export default function Orders() {
         {search}
         {desk && (
           <div className="seg">
-            <button aria-pressed={view === 'list'} onClick={() => set('v', null)}>Danh sách</button>
-            <button aria-pressed={view === 'board'} onClick={() => set('v', 'board')}>Theo trạng thái</button>
+            <button aria-pressed={view === 'list'} onClick={() => set('v', 'list')}>Danh sách</button>
+            <button aria-pressed={view === 'board'} onClick={() => set('v', null)}>Theo trạng thái</button>
           </div>
         )}
       </div>

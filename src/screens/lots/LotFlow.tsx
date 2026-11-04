@@ -66,7 +66,7 @@ function CostPreview({ units, l, local }: { units: UnitViewRow[]; l: LotRow; loc
 }
 
 type Open =
-  | { kind: 'receive' | 'ship' | 'cancel'; lotId: string }
+  | { kind: 'receive' | 'ship' | 'cnship' | 'cancel'; lotId: string }
   | { kind: 'confirmed'; ids: string[] }
   | null
 
@@ -74,6 +74,8 @@ interface ReceiveResult { units?: { unit_id: string; code: string; cost_vnd: num
 
 export function useLotFlow(): {
   next: (l: LotRow) => void; receive: (l: LotRow) => void; shipFee: (l: LotRow) => void; cancel: (l: LotRow) => void
+  /** CR-012 pop-up ship TQ → VN của 1 cối */
+  cnShip: (l: LotRow) => void
   /** CR-010 lùi 1 bước khi chuyển nhầm (revert_lot): Kho VN → Kho TQ, Kho Lumi → Kho VN, Huỷ → Kho TQ */
   back: (l: LotRow) => void
   busy: string | null; sheets: ReactNode
@@ -108,6 +110,7 @@ export function useLotFlow(): {
   let sheets: ReactNode = null
   if (open?.kind === 'receive') sheets = <ReceiveSheet lotId={open.lotId} onClose={close} onDone={(ids) => setOpen(ids.length ? { kind: 'confirmed', ids } : null)} />
   else if (open?.kind === 'ship') sheets = <ShipFeeSheet lotId={open.lotId} onClose={close} />
+  else if (open?.kind === 'cnship') sheets = <CnShipSheet lotId={open.lotId} onClose={close} />
   else if (open?.kind === 'cancel') sheets = <CancelSheet lotId={open.lotId} onClose={close} />
   else if (open?.kind === 'confirmed') sheets = <AutoConfirmedSheet ids={open.ids} onClose={close} />
 
@@ -116,6 +119,7 @@ export function useLotFlow(): {
     back: (l) => { void back(l) },
     receive: (l) => setOpen({ kind: 'receive', lotId: l.id }),
     shipFee: (l) => setOpen({ kind: 'ship', lotId: l.id }),
+    cnShip: (l) => setOpen({ kind: 'cnship', lotId: l.id }),
     cancel: (l) => setOpen({ kind: 'cancel', lotId: l.id }),
     busy, sheets,
   }
@@ -246,14 +250,60 @@ function ShipFeeSheet({ lotId, onClose }: { lotId: string; onClose: () => void }
   }
 
   return (
-    <Sheet title="Ship kho VN → Lumi" onClose={onClose}
-      footer={<button className="btn btn-primary btn-block" disabled={sending} onClick={submit}>{sending ? <><span className="spin" /> Đang lưu…</> : 'Lưu'}</button>}>
+    <Sheet title="Ship kho VN → Lumi" onClose={onClose} closeLabel="Huỷ"
+      footer={<button className="btn btn-primary btn-block" id="sh-ok" disabled={sending} onClick={submit}>{sending ? <><span className="spin" /> Đang lưu…</> : 'Xác nhận'}</button>}>
       <label className="f">Phí ship (₫)
         <MoneyInput className="input money" id="sh-fee" value={fee} placeholder="0" onValue={(v) => setFee(v)} />
       </label>
       <p className="hint">Bạn trả ngay: cộng vào giá nhập và ghi chi ở Sổ quỹ (sửa / xoá theo). Không tính vào nợ trung gian.</p>
       {soldAuto > 0 && <div className="note-box way"><span>Cối đã bán: lãi của đơn đổi theo giá nhập mới (A3).</span></div>}
       {(val == null || !Number.isNaN(val)) && <CostPreview units={units} l={l} local={val} />}
+      {err && <p className="err-text" role="alert">{err}</p>}
+    </Sheet>
+  )
+}
+
+/** CR-012 ship TQ → VN của 1 cối (bấm dòng giá ship ở trang cối). Chưa tất toán ⇒ settle_cn_ship cho riêng cối này (ghi luôn
+ *  khoản đã trả, tiền ra Sổ quỹ). Đã có ⇒ sửa số ship (đã về kho: update_lot_ship_fee; chưa: save_lot) - khoản đã trả giữ nguyên. */
+function CnShipSheet({ lotId, onClose }: { lotId: string; onClose: () => void }) {
+  const d = useData()
+  const { rpc } = useStore()
+  const toast = useToast()
+  const l = d.lots.find((x) => x.id === lotId)
+  const [fee, setFee] = useState(l?.ship_fee_vnd != null ? String(l.ship_fee_vnd) : '')
+  const [date, setDate] = useState(todayVn())
+  const [err, setErr] = useState<string | null>(null)
+  const [sending, setSending] = useState(false)
+  if (!l) return null
+  const units = unitsOfLot(d, l.id)
+  const settled = l.ship_fee_vnd != null
+  const val = readFee(fee)
+
+  const submit = async () => {
+    if (val == null || Number.isNaN(val) || (!settled && val <= 0)) return setErr('Nhập phí ship là số đồng lớn hơn 0.')
+    setErr(null); setSending(true)
+    try {
+      if (!settled) await rpc('settle_cn_ship', { p_lot_ids: [l.id], p_total_vnd: val, p_paid_at: date, p_note: null })
+      else if (l.status === 'received') await rpc('update_lot_ship_fee', { p_lot_id: l.id, p_ship_fee_vnd: val, p_expected_version: l.version })
+      else await rpc('save_lot', saveLotArgs(l, units, { ship_fee_vnd: val }))
+      toast(settled ? `Đã sửa ship TQ → VN: ${vnd(val)}` : `Đã tất toán ship TQ → VN ${vnd(val)}`)
+      onClose()
+    } catch (e) { setErr(errText(e)); setSending(false) }
+  }
+
+  return (
+    <Sheet title="Ship TQ → VN" onClose={onClose} closeLabel="Huỷ"
+      footer={<button className="btn btn-primary btn-block" id="cn-ok" disabled={sending} onClick={submit}>{sending ? <><span className="spin" /> Đang lưu…</> : 'Xác nhận'}</button>}>
+      <div className={settled ? '' : 'two'}>
+        <label className="f">Phí ship (₫)
+          <MoneyInput className="input money" id="cn-fee" value={fee} placeholder="0" onValue={(v) => setFee(v)} />
+        </label>
+        {!settled && <label className="f">Ngày trả<input className="input" id="cn-date" type="date" max={todayVn()} value={date} onChange={(e) => setDate(e.target.value)} /></label>}
+      </div>
+      <p className="hint">{settled
+        ? 'Sửa số ship đã tất toán - giá nhập tính lại. Khoản đã trả trung gian giữ nguyên (sửa ở Sổ quỹ nếu cần).'
+        : 'Cộng vào giá nhập và ghi luôn khoản đã trả (tiền ra Sổ quỹ). Ship gộp nhiều cối: Sổ quỹ › Tất toán ship TQ → VN.'}</p>
+      {(val == null || !Number.isNaN(val)) && <CostPreview units={units} l={{ ...l, ship_fee_vnd: val }} local={l.local_ship_vnd} />}
       {err && <p className="err-text" role="alert">{err}</p>}
     </Sheet>
   )

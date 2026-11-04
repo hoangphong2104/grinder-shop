@@ -5,7 +5,7 @@ import type { DbData } from '../../data/types.ts'
 import { LOT_LABEL, ORDER_LABEL, UNIT_LABEL } from '../../ui/status.tsx'
 import { todayVn } from '../../ui/format.ts'
 import { downloadXlsx, type SheetData } from './xlsx.ts'
-import { lotName } from './common.tsx'
+import { lotCodes } from './common.tsx'
 
 const PAY_LABEL = { deposit: 'Cọc', payment: 'Thanh toán', refund: 'Hoàn tiền' } as const
 const TXN_LABEL = { payable: 'Phải trả (lô)', transfer: 'Đã chuyển', adjustment: 'Điều chỉnh' } as const
@@ -29,7 +29,7 @@ export function exportExcel(d: DbData): void {
       rows: [['Mã cối', 'Ngày đặt', 'Người bán', 'Trạng thái', 'Model', 'Số chiếc', 'Tỷ giá', 'Tổng ¥', 'Tiền hàng ₫', 'Phí mua hộ %', 'Phí mua hộ ₫', 'Ship TQ → VN ₫', 'Ship TQ → VN / chiếc ₫', 'Ship kho VN → Lumi ₫', 'Phải trả ₫', 'Tổng giá nhập ₫', 'Giá nhập tạm tính', 'Ngày nhận', 'Mã tin Goofish', 'Link', 'Tiêu đề tin', 'Ghi chú'],
         ...d.lots.map((l) => {
           const s = lotSum.get(l.id)
-          return [lotName(d, l.id), l.ordered_at, seller.get(l.seller_id ?? '') ?? '', LOT_LABEL[l.status],
+          return [lotCodes(d, l.id), l.ordered_at, seller.get(l.seller_id ?? '') ?? '', LOT_LABEL[l.status],
             (s?.models ?? []).map((m) => `${m.qty} × ${m.model_name}`).join(', '), s?.total_qty, Number(l.exchange_rate), Number(s?.total_cny ?? 0),
             s?.goods_vnd, feePct(l.id), s?.buying_fee_vnd ?? 0, l.ship_fee_vnd, s?.ship_per_unit_vnd, l.local_ship_vnd, s?.payable_vnd, s?.total_cost_vnd, s?.cost_is_provisional ?? false,
             day(l.received_at), l.goofish_item_id, l.goofish_url, l.listing_title, l.note]
@@ -83,7 +83,7 @@ export function exportExcel(d: DbData): void {
           ...asc.map((t) => {
             const eff = t.kind === 'transfer' ? -t.amount_vnd : t.amount_vnd
             bal += eff
-            return [t.txn_date, TXN_LABEL[t.kind], t.lot_id ? lotName(d, t.lot_id) : '', t.amount_vnd, eff, bal, t.note]
+            return [t.txn_date, TXN_LABEL[t.kind], t.lot_id ? lotCodes(d, t.lot_id) : '', t.amount_vnd, eff, bal, t.note]
           })]
       })(),
     },

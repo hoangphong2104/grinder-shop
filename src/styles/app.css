@@ -52,6 +52,10 @@ main.view { padding-block: 14px calc(96px + env(safe-area-inset-bottom, 0px)); p
 .calc .ln span:last-child { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
 .calc .ln.total { font-weight: 600; padding-top: 6px; border-top: 1px dashed var(--line); }
 .calc .ln.total span:first-child { color: var(--fg); }
+/* CR-012: dòng bấm được để sửa (pop-up) */
+.calc button.ln.edit { background: none; border: 0; padding: 4px 0; margin: -4px 0; font: inherit; color: inherit; width: 100%; text-align: left; cursor: pointer; border-radius: var(--r-sm, 6px); }
+.calc button.ln.edit:hover:not(:disabled) span:last-child, .calc button.ln.edit:focus-visible span:last-child { text-decoration: underline dotted; }
+.calc button.ln.edit:disabled { cursor: default; }
 .calc .formula { font-size: 12px; color: var(--muted); text-align: right; }
 
 /* AI quét */
@@ -85,6 +89,9 @@ main.view { padding-block: 14px calc(96px + env(safe-area-inset-bottom, 0px)); p
 .kcard .s { color: var(--muted); font-size: 12px; }
 .kcard .m { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 12px; }
 .kcard .acts { display: flex; gap: 6px; margin-top: 4px; }
+/* CR-012: nút bước kế chỉ hiện khi rê chuột / focus vào thẻ; thiết bị cảm ứng không hiện (đổi trong trang cối) */
+.kcard .acts { display: none; }
+@media (hover: hover) { .kcard:hover .acts, .kcard:focus-within .acts { display: flex; } }
 .kcard .acts .btn { flex: 1; }
 .bghost { border: 1.5px dashed var(--line); border-radius: var(--r-md); padding: 10px; text-align: center; color: var(--faint); font-size: 12px; }
 .stage-chips .chip[aria-pressed="true"] { background: var(--fill); border-color: var(--fill); color: var(--on-fill); }
